@@ -8,7 +8,7 @@ Copyright information for Twisted.
 """
 
 
-version="SVN-trunk"
+version="2.0.0a1"
 longversion="Twisted %s" % version
 copyright="""\
 Copyright (c) 2001-2004 Twisted Matrix Laboratories.
