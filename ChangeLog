@@ -1,3 +1,51 @@
+2003-12-09  Christopher Armstrong  <radix@twistedmatrix.com>
+
+	* .: Releasing Twisted 1.1.1, based on rc4.
+
+2003-12-06  Itamar Shtull-Trauring  <itamar@itamarst.org>
+
+	* twisted/internet/wxreactor.py: Added experimental wxPython reactor,
+	which seems to work better than the twisted.internet.wxsupport.
+
+2003-12-05  Paul Swartz  <z3p@twistedmatrix.com>
+
+	* twisted/conch/ssh/filetransfer.py, session.py: added SFTPv3 support
+	to the Conch server.
+
+2003-12-04  Christopher Armstrong  <radix@twistedmatrix.com>
+
+	* .: Releasing Twisted 1.1.1rc4, based on rc2. rc3 never happened!
+
+2003-12-04  Brian Warner  <warner@lothar.com>
+
+	* twisted/persisted/sob.py (Persistent): fix misspelled class name,
+	add compatibility binding to "Persistant" (sic).
+
+	* twisted/test/test_sob.py: use Persistent
+	* twisted/application/service.py (Application): use Persistent
+
+2003-12-03  Jp Calderone  <exarkun@twistedmatrix.com>
+
+	* twisted/python/log.py: Added exception handling to
+	log publishing code.  Observers which raise exceptions
+	will now be removed from the observer list.
+
+2003-12-02  Jp Calderone  <exarkun@twistedmatrix.com>
+
+	* .: Releasing Twisted 1.1.1rc3.
+
+2003-12-01  Christopher Armstrong  <radix@twistedmatrix.com>
+
+	* .: Releasing Twisted 1.1.1rc2 (from CVS HEAD).
+
+2003-12-01  Jp Calderone  <exarkun@twistedmatrix.com>
+
+	* twisted/python/runtime.py: Added seconds method to Platform
+	class.
+
+	* twisted/internet/base.py, twisted/internet/task.py: Changed
+	use of time.time() to use Platform.seconds() instead.
+
 2003-11-24  Jp Calderone  <exarkun@twistedmatrix.com>
 
 	* twisted/internet/abstract.py: Changed FileDescriptor's
@@ -40,7 +88,7 @@
 
 2003-11-18  Jonathan Simms  <jonathan@embassynetworks.com>
 
-	* twisted/protocols/ftp.py: refactored to add cred support, 
+	* twisted/protocols/ftp.py: refactored to add cred support,
 	pipelining, security.
 	* twisted/test/test_ftp.py: tests for the new ftp
 
@@ -232,7 +280,7 @@
 
 2003-9-18  Moshe Zadka <moshez@twistedmatrix.com>
 
-	* twisted/application/strports.py twisted/test/test_strports.py: 
+	* twisted/application/strports.py twisted/test/test_strports.py:
 	New API/mini-language for defining ports
 
 2003-9-18  Moshe Zadka <moshez@twistedmatrix.com>
@@ -312,7 +360,7 @@
 2003-09-12  Itamar Shtull-Trauring  <itamar@itamarst.org>
 
 	* twisted/spread/pb.py: new cred support for Perspective Broker.
-	
+
 2003-08-26  Dave Peticolas  <dave@krondo.com>
 
 	* doc/howto/xmlrpc.html: document sub-handler and introspection
@@ -498,18 +546,18 @@
 
 2003-07-19  Ying Li <cyli@ai.mit.edu>
 
-	* twisted/web/woven/form.py:  Changed form widgets so that if the 
-	template already has the widget coded, merges the template widget 
-	with the model widget (sets default values, etc.).  
+	* twisted/web/woven/form.py:  Changed form widgets so that if the
+	template already has the widget coded, merges the template widget
+	with the model widget (sets default values, etc.).
 
-	* twisted/web/woven/form.py, twisted/python/formmethod.py:  Can 
+	* twisted/web/woven/form.py, twisted/python/formmethod.py:  Can
 	format layout of checkgroups and radiogroups into tables, rows, or
 	columns.
-	
-	* twisted/web/woven/form.py, twisted/python/formmethod.py: Added 
-	file input widget (unable to retrieve filename or file type - have 
+
+	* twisted/web/woven/form.py, twisted/python/formmethod.py: Added
+	file input widget (unable to retrieve filename or file type - have
 	to ask for that separately).
-	
+
 2003-07-19  Christopher Armstrong  <radix@twistedmatrix.com>
 
 	* twisted/protocols/dns.py, twisted/names: Twisted Names can now
@@ -518,7 +566,7 @@
 
 2003-07-17  Christopher Armstrong  <radix@twistedmatrix.com>
 
-	* .: Releasing Twisted 1.0.7alpha2 (Debian packages should be 
+	* .: Releasing Twisted 1.0.7alpha2 (Debian packages should be
 	correct	now)
 
 2003-07-17  Dave Peticolas  <dave@krondo.com>
@@ -672,7 +720,7 @@
 	returns a Mailbox object. It now returns a 3-tuple. See
 	twisted.cred.portal.Portal.login for more details about the return
 	value.
-	
+
 2003-06-24  Brian Warner  <warner@lothar.com>
 
 	* doc/howto/upgrading.html: Explain Versioned and rebuild()
@@ -680,7 +728,7 @@
 2003-06-23  Christopher Armstrong  <radix@twistedmatrix.com>
 
 	* twisted/scripts/trial.py twisted/trial/reporter.py
-	doc/man/trial.1: 
+	doc/man/trial.1:
 
 	Added a --tbformat={plain,emacs} option to trial. Now the default
 	is to show the regular python traceback; if you want tracebacks
@@ -688,7 +736,7 @@
 
 2003-06-23  Cory Dodt <corydodt@yahoo.com>
 
-	* twisted/python/util.py twisted/web/microdom.py 
+	* twisted/python/util.py twisted/web/microdom.py
 	twisted/test/test_{util,xml}.py: preserveCase and caseInsensitive
 	work on attribute names as well as element names.
 
@@ -700,7 +748,7 @@
 
 2003-06-19  Paul Swartz  <z3p@twistedmatrix.com>
 
-	* twisted/conch/{checkers,credentials,realm}.py, 
+	* twisted/conch/{checkers,credentials,realm}.py,
 	twisted/conch/ssh/userauth.py: Moved the Conch user authentication
 	code to use the new version of Cred.
 
@@ -738,7 +786,7 @@
 	tearDownClass methods and invocations to twisted.trial. Implement
 	those methods in your TestCases if you want to manage resources on
 	a per-class level.
- 
+
 2003-06-09  Jp Calderone  <exarkun@twistedmatrix.com>
 
 	* twisted/mail/relay.py: Default relaying rule change from all
@@ -873,7 +921,7 @@
 	.rpy (for example), and then use a RootRelativeLink widget
 	(exactly the same way you use a Link widget) to get a link
 	relative to your root .rpy.
- 	
+
 2003-05-16  Brian Warner  <warner@lothar.com>
 
 	* twisted/scripts/trial.py: catch failures during import of test
@@ -902,7 +950,7 @@
 	cancelled.
 
 2003-05-13 Jonathan Lange <jml@twistedmatrix.com>
-	
+
 	* twisted/trial/unittest.py twisted/scripts/trial.py
       	doc/man/trial.1: Add --recurse option to make trial search within
 	sub-packages for test modules.
@@ -1082,7 +1130,7 @@
 
 	* twisted/test/test_compat.py: Tests for compat module, so we know if
 	it works or not now ;)
-	
+
 2003-04-22  Andrew Bennetts  <spiv@twistedmatrix.com>
 
 	* twisted/lore/latex.py: Handle cross-references and labels slightly
