@@ -1,3 +1,21 @@
+/*
+ * Twisted, the Framework of Your Internet
+ * Copyright (C) 2001-2002 Matthew W. Lefkowitz
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of version 2.1 of the GNU Lesser General Public
+ * License as published by the Free Software Foundation.
+ * 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ */
 /* cReactorTCP.c - Implementation of IReactorTCP. */
 
 /* includes */
@@ -17,15 +35,7 @@ staticforward PyTypeObject cReactorListeningPortType;
 typedef struct 
 {
     PyObject_HEAD
-
-    /* The reactor we are part of. */
-    PyObject *          reactor;
-
-    /* Our socket file descriptor. */
-    int                 fd;
-
-    /* The port we are listening on (for repr). */
-    int                 port;
+    cReactorTransport * transport;
 } cReactorListeningPort;
 
 
@@ -242,9 +252,21 @@ tcp_listen_do_read(cReactorTransport *transport)
 static void
 tcp_listen_do_close(cReactorTransport *transport)
 {
+    PyObject *result;
+
+    /* Call the "doStop" method on the factory. */
+    result = PyObject_CallMethod(transport->object, "doStop", NULL);
+    Py_XDECREF(result);
+    if (! result)
+    {
+        PyErr_Print();
+    }
+
+    /* The the file */
     close(transport->fd);
     transport->fd = -1;
 
+    /* Release the factory. */
     Py_DECREF(transport->object);
     transport->object = NULL;
 }
@@ -332,22 +354,20 @@ cReactorTCP_listenTCP(PyObject *self, PyObject *args, PyObject *kw)
 
     /* Create a read-only transport. */
     transport = cReactorTransport_New(reactor,
-                                       sock,
-                                       tcp_listen_do_read,
-                                       NULL,
-                                       tcp_listen_do_close);
+                                      sock,
+                                      tcp_listen_do_read,
+                                      NULL,
+                                      tcp_listen_do_close);
     Py_INCREF(factory);
     transport->object = factory;
 
     cReactor_AddTransport(reactor, transport);
 
-    /* TEMP: Create the ListeningPort object. */
+    /* Create the ListeningPort object. */
     port_obj = PyObject_New(cReactorListeningPort,
                             &cReactorListeningPortType);
-    Py_INCREF(self);
-    port_obj->reactor   = self;
-    port_obj->fd        = sock;
-    port_obj->port      = port;
+    Py_INCREF(transport);
+    port_obj->transport = transport;
 
     return (PyObject *)port_obj;
 }
@@ -369,7 +389,21 @@ cReactorTCP_clientTCP(PyObject *self, PyObject *args)
 static PyObject *
 cReactorListeningPort_stopListening(PyObject *self, PyObject *args)
 {
-    return cReactor_not_implemented(self, args, "cReactorListeningPort_stopListening");
+    cReactorListeningPort *port;
+
+    port = (cReactorListeningPort *)self;
+
+    if (!PyArg_ParseTuple(args, ":stopListening"))
+    {
+        return NULL;
+    }
+
+    /* Nuke the transport. */
+    port->transport->state = CREACTOR_TRANSPORT_STATE_CLOSED;
+    port->transport->reactor->pollfd_stale = 1;
+
+    Py_INCREF(Py_None);
+    return Py_None;
 }
 
 
@@ -378,9 +412,8 @@ cReactorListeningPort_dealloc(PyObject *self)
 {
     cReactorListeningPort *port;
 
-    /* Nothing to do in the destructor. */
     port = (cReactorListeningPort *)self;
-    Py_DECREF(port->reactor);
+    Py_DECREF(port->transport);
     PyObject_Del(self);
 }
 
@@ -400,16 +433,8 @@ cReactorListeningPort_getattr(PyObject *self, char *name)
 static PyObject *
 cReactorListeningPort_repr(PyObject *self)
 {
-    char buf[100];
-    cReactorListeningPort *port;
-
-    port = (cReactorListeningPort *)self;
-
-    snprintf(buf, sizeof(buf) - 1, "<cReactorListeningPort port=%d>",
-             port->port);
-    buf[sizeof(buf) - 1] = 0x00;
-    
-    return PyString_FromString(buf);
+    UNUSED(self);
+    return PyString_FromString("<cReactorListeningPort>");
 }
 
 /* The ListeningPort type. */

@@ -1,9 +1,27 @@
+/*
+ * Twisted, the Framework of Your Internet
+ * Copyright (C) 2001-2002 Matthew W. Lefkowitz
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of version 2.1 of the GNU Lesser General Public
+ * License as published by the Free Software Foundation.
+ * 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ */
 /* cReactor.h */
 
 /* includes */
 #include "Python.h"
-#include <time.h>
 #include <sys/poll.h>
+#include <pthread.h>
 
 /* Remove unused parameter warnings. */
 #define UNUSED(x) ((void)x)
@@ -48,25 +66,80 @@ typedef enum _cReactorTransportState
     CREACTOR_TRANSPORT_STATE_CLOSED     = 2,
 } cReactorTransportState;
 
-/* Timed method list (opaque type). */
+/* Forward delcare types. */
 typedef struct _cReactorMethod cReactorMethod;
-
-/* A simple read/write buffer. */
 typedef struct _cReactorBuffer cReactorBuffer;
-
-/* Forward declare Transport. */
 typedef struct _cReactorTransport cReactorTransport;
-
-/* Forward declare Reactor. */
 typedef struct _cReactor cReactor;
+typedef struct _cReactorJob cReactorJob;
+typedef struct _cReactorJobQueue cReactorJobQueue;
+typedef struct _cReactorThread cReactorThread;
+
+/* Job types */
+typedef enum _cReactorJobType
+{
+    CREACTOR_JOB_APPLY      = 1,
+    CREACTOR_JOB_EXIT       = 2,
+} cReactorJobType;
+
+struct _cReactorJob
+{
+    /* Linkage */
+    cReactorJob *       next;
+
+    /* The type of job (determines what to use out of the union) */
+    cReactorJobType     type;
+
+    union
+    {
+        struct 
+        {
+            PyObject *  callable;
+            PyObject *  args;
+            PyObject *  kw;
+        } apply;
+    } u;
+};
+
+/* Job queue. */
+struct _cReactorJobQueue
+{
+    /* The lock protecting the condition variable and the list of jobs. */
+    pthread_mutex_t     lock;
+
+    /* The condition variable that gets signaled when a job is placed onto the
+     * job queue.
+     */
+    pthread_cond_t      cond;
+
+    /* A list of jobs to run. */
+    cReactorJob *       jobs;
+};
+
+/* A thread. */
+struct _cReactorThread
+{
+    /* For thread pool linkage. */
+    cReactorThread *        next;
+
+    /* The pthread thread id. */
+    pthread_t               thread_id;
+
+    /* A link back to the reactor. */
+    cReactor *              reactor;
+
+    /* The shared interpreter state.  This is needed when creating a
+     * PyThreadState when this thread begins execution.
+     */
+    PyInterpreterState *    interp;
+};
 
 /* The transport functions. */
-typedef void (*cReactorTransportReadFunc)(cReactorTransport *transport);
-typedef void (*cReactorTransportWriteFunc)(cReactorTransport *transport);
-typedef void (*cReactorTransportCloseFunc)(cReactorTransport *transport);
-typedef PyObject * (*cReactorTransportGetPeerFunc)(cReactorTransport *transport);
-typedef PyObject * (*cReactorTransportGetHostFunc)(cReactorTransport *transport);
-
+typedef void (* cReactorTransportReadFunc)(cReactorTransport *transport);
+typedef void (* cReactorTransportWriteFunc)(cReactorTransport *transport);
+typedef void (* cReactorTransportCloseFunc)(cReactorTransport *transport);
+typedef PyObject * (* cReactorTransportGetPeerFunc)(cReactorTransport *transport);
+typedef PyObject * (* cReactorTransportGetHostFunc)(cReactorTransport *transport);
 
 /* The Transport object. */
 struct _cReactorTransport
@@ -117,6 +190,9 @@ struct _cReactor
     /* The state this reactor is in. */
     cReactorState       state;
 
+    /* The control pipe (for breaking out of poll). */
+    int                 ctrl_pipe;
+
     /* A dictionary of attributes. */
     PyObject *          attr_dict;
 
@@ -139,11 +215,33 @@ struct _cReactor
 
     /* A flag indicating that the pollfd array is stale. */
     int                 pollfd_stale;
+
+    /* Flag indicating whether we are in multithread mode. */
+    int                 multithreaded;
+
+    /* The main thread's job queue. */
+    cReactorJobQueue *  main_queue;
+
+    /* The thread pool, the worker thread job queue, and the requested pool
+     * size.
+     */
+    cReactorThread *    thread_pool;
+    cReactorJobQueue *  worker_queue;
+    int                 req_thread_pool_size;
 };
 
 
 /* Create a new cReactor. */
 PyObject * cReactor_New(void);
+
+PyObject * cReactor_resolve(PyObject *self, PyObject *args, PyObject *kw);
+PyObject * cReactor_run(PyObject *self, PyObject *args);
+PyObject * cReactor_stop(PyObject *self, PyObject *args);
+PyObject * cReactor_crash(PyObject *self, PyObject *args);
+PyObject * cReactor_iterate(PyObject *self, PyObject *args, PyObject *kw);
+PyObject * cReactor_fireSystemEvent(PyObject *self, PyObject *args);
+PyObject * cReactor_addSystemEventTrigger(PyObject *self, PyObject *args, PyObject *kw);
+PyObject * cReactor_removeSystemEventTrigger(PyObject *self, PyObject *args);
 
 /* Create a new Transport. */
 cReactorTransport * cReactorTransport_New(cReactor *reactor,
@@ -181,6 +279,12 @@ PyObject * cReactorUtil_FromImport(const char *name, const char *from_item);
 /* Create an __implements__ tuple from the given class names. */
 PyObject * cReactorUtil_MakeImplements(const char **names, unsigned int num_names);
 
+/* Create a new instance of a Deferred. */
+PyObject * cReactorUtil_CreateDeferred(void);
+
+/* Convert a python number object into a millisecond delay. */
+int cReactorUtil_ConvertDelay(PyObject *delay_obj);
+
 /* Add a method to the given method list.  Return the call ID of the method.
  */
 int cReactorUtil_AddMethod(cReactorMethod **list,
@@ -188,9 +292,9 @@ int cReactorUtil_AddMethod(cReactorMethod **list,
                            PyObject *args,
                            PyObject *kw);
 
-/* Add a method to the given list using the given delay (in seconds). */
+/* Add a method to the given list using the given delay (in milliseconds). */
 int cReactorUtil_AddDelayedMethod(cReactorMethod **list,
-                                  int delay,
+                                  int delay_ms,
                                   PyObject *callable,
                                   PyObject *args,
                                   PyObject *kw);
@@ -200,10 +304,11 @@ int cReactorUtil_AddDelayedMethod(cReactorMethod **list,
  */
 int cReactorUtil_RemoveMethod(cReactorMethod **list, int call_id);
 
-/* Run all methods up to 'now'.  This will return the time the next method
- * needs to be called, or 0 if there are no more methods.
+/* Run all methods up to now.  This will return the time difference between
+ * now and the next method (in milliseconds).  A negative value means
+ * there are no more methods.
  */
-time_t cReactorUtil_RunMethods(cReactorMethod **list, time_t now);
+int cReactorUtil_RunMethods(cReactorMethod **list);
 
 /* Iterate over the methods in the given method list. */
 typedef void (*cReactorMethodListIterator)(PyObject *callable,
@@ -246,5 +351,49 @@ PyObject * cReactorTCP_listenTCP(PyObject *self, PyObject *args, PyObject *kw);
 
 /* XXX: <itamar> clientTCP is in flux */
 PyObject * cReactorTCP_clientTCP(PyObject *self, PyObject *args);
+
+/* Apply a callable in the main thread. */
+PyObject * cReactorThread_callFromThread(PyObject *self, PyObject *args, PyObject *kw);
+
+/* Run a callable in another thread. */
+PyObject * cReactorThread_callInThread(PyObject *self, PyObject *args, PyObject *kw);
+
+/* Suggest the size of the thread pool. */
+PyObject * cReactorThread_suggestThreadPoolSize(PyObject *self, PyObject *args);
+
+/* Break the reactor out of poll. */
+PyObject * cReactorThread_wakeUp(PyObject *self, PyObject *args);
+
+PyObject * cReactorThread_initThreading(PyObject *self, PyObject *args);
+
+/* Create a new APPLY job. */
+cReactorJob * cReactorJob_NewApply(PyObject *callable, PyObject *args, PyObject *kw);
+
+/* Create a new EXIT job. */
+cReactorJob * cReactorJob_NewExit(void);
+
+/* Destroy a previously created job. */
+void cReactorJob_Destroy(cReactorJob *job);
+
+/* Create a new job queue. */
+cReactorJobQueue * cReactorJobQueue_New(void);
+
+/* Destroy a previously created job queue. */
+void cReactorJobQueue_Destroy(cReactorJobQueue *queue);
+
+/* Add the given job to the queue.  This function assumes ownership over the
+ * memory pointed to by 'job'.
+ */
+void cReactorJobQueue_AddJob(cReactorJobQueue *queue, cReactorJob *job);
+
+/* Pop the top job off the queue and return it.  If there are no jobs this
+ * returns NULL.
+ */
+cReactorJob * cReactorJobQueue_Pop(cReactorJobQueue *queue);
+
+/* Same as cReactorJobQueue_Pop but waits until there is a job placed on the
+ * queue.
+ */
+cReactorJob * cReactorJobQueue_PopWait(cReactorJobQueue *queue);
 
 /* vim: set sts=4 sw=4: */

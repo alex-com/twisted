@@ -1,17 +1,33 @@
+/*
+ * Twisted, the Framework of Your Internet
+ * Copyright (C) 2001-2002 Matthew W. Lefkowitz
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of version 2.1 of the GNU Lesser General Public
+ * License as published by the Free Software Foundation.
+ * 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ */
 /* cReactor.c - Implementation of the IReactorCore. */
 
 /* includes */
 #include "cReactor.h"
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <signal.h>
 #include <unistd.h>
-
-/* Named constants. */
-enum
-{
-    /* The initial size of the pollfd array. */
-    CREACTOR_STARTING_POLLFD_SIZE       = 8,
-};
+#include <netdb.h>
 
 
 /* Forward declare the cReactor type object. */
@@ -29,9 +45,56 @@ struct _SysEventInfo
     int                 got_defers;
 };
 
+/* Available methods on the cReactor. */
+static PyMethodDef cReactor_methods[] = 
+{
+    /* IReactorCore */
+    { "resolve",                    (PyCFunction)cReactor_resolve,
+      (METH_VARARGS | METH_KEYWORDS), "resolve" },
+    { "run",                        cReactor_run,
+      METH_VARARGS, "run" },
+    { "stop",                       cReactor_stop,
+      METH_VARARGS, "stop" },
+    { "crash",                      cReactor_crash,
+      METH_VARARGS, "crash" },
+    { "iterate",                    (PyCFunction)cReactor_iterate,
+      (METH_VARARGS | METH_KEYWORDS), "iterate" },
+    { "fireSystemEvent",            cReactor_fireSystemEvent,
+      METH_VARARGS, "fireSystemEvent" },
+    { "addSystemEventTrigger",      (PyCFunction)cReactor_addSystemEventTrigger,
+      (METH_VARARGS | METH_KEYWORDS), "addSystemEventTrigger" },
+    { "removeSystemEventTrigger",   cReactor_removeSystemEventTrigger,
+      METH_VARARGS, "removeSystemEventTrigger" },
 
-/* The currently running reactor, needed by the signal handlers. */
-static cReactor * running_reactor = NULL;
+    /* IReactorTime */
+    { "callLater",          (PyCFunction)cReactorTime_callLater,
+      (METH_VARARGS | METH_KEYWORDS), "callLater" },
+    { "cancelCallLater",    cReactorTime_cancelCallLater,
+      METH_KEYWORDS,  "cancelCallLater" },
+
+    /* IReactorTCP */
+    { "listenTCP",          (PyCFunction)cReactorTCP_listenTCP,
+      (METH_VARARGS | METH_KEYWORDS), "listenTCP" },
+    { "clientTCP",          cReactorTCP_clientTCP,
+      METH_VARARGS, "clientTCP" },
+
+    /* IReactorThread */
+    { "callFromThread",         (PyCFunction)cReactorThread_callFromThread,
+      (METH_VARARGS | METH_KEYWORDS),   "callFromThread" },
+    { "callInThread",           (PyCFunction)cReactorThread_callInThread,
+      (METH_VARARGS | METH_KEYWORDS),   "callInThread" },
+    { "suggestThreadPoolSize",  cReactorThread_suggestThreadPoolSize,
+      METH_VARARGS,                     "suggestThreadPoolSize" },
+    { "wakeUp",                 cReactorThread_wakeUp,
+      METH_VARARGS,                     "wakeUp" },
+
+    /* Custom addition to IReactorThread */
+    { "initThreading",          cReactorThread_initThreading,
+      METH_VARARGS,             "initThreading" },
+
+    { NULL, NULL, METH_VARARGS, NULL },
+};
+
 
 PyObject *
 cReactor_not_implemented(PyObject *self,
@@ -45,21 +108,100 @@ cReactor_not_implemented(PyObject *self,
     return NULL;
 }
 
-static PyObject *
+/* TODO: This blocks and I don't have a async resolver library.  However, the
+ * implementation in base.py also blocks :)
+ */
+PyObject *
 cReactor_resolve(PyObject *self, PyObject *args, PyObject *kw)
 {
+    cReactor *reactor;
     const char *name;
+    struct hostent *host;
+    PyObject *defer;
+    PyObject *defer_args;
+    PyObject *callback;
+    PyObject *errback;
+    struct in_addr addr;
     int type        = 1;
     int timeout     = 10;
     static char *kwlist[] = { "name", "type", "timeout", NULL };
 
+    reactor = (cReactor *)self;
+
+    /* Args */
     if (!PyArg_ParseTupleAndKeywords(args, kw, "s|ii:resolve", kwlist,
                                      &name, &type, &timeout))
     {
         return NULL;
     }
-                                     
-    return cReactor_not_implemented(self, args, "cReactor_resolve");
+        
+    /* Create a Deferred. */
+    defer = cReactorUtil_CreateDeferred();
+    if (!defer)
+    {
+        return NULL;
+    }
+
+    /* Get the err and callback methods. */
+    errback = PyObject_GetAttrString(defer, "errback");
+    if (!errback)
+    {
+        Py_DECREF(defer);
+        return NULL;
+    }
+
+    callback = PyObject_GetAttrString(defer, "callback");
+    if (!callback)
+    {
+        Py_DECREF(defer);
+        Py_DECREF(errback);
+        return NULL;
+    }
+
+    /* Only type 1 is supported.  TODO: What is type 1? */
+    if (type == 1)
+    {
+        /* Attempt the lookup. */
+        host = gethostbyname(name);
+
+        /* Schedule a method to call the "callback" or "errback" method on the
+         * derferred whether or not we resolved the name.
+         */
+        if (host)
+        {
+            /* Verify the address length. */
+            if (host->h_length == sizeof(addr))
+            {
+                memcpy(&addr, host->h_addr_list[0], host->h_length);
+                defer_args = Py_BuildValue("(s)", inet_ntoa(addr));
+                cReactorUtil_AddMethod(&reactor->timed_methods, callback, defer_args, NULL);
+            }
+            else
+            {
+                defer_args = Py_BuildValue("(s)", "h_length != sizeof(addr)");
+                cReactorUtil_AddMethod(&reactor->timed_methods, errback, defer_args, NULL);
+            }
+            Py_DECREF(defer_args);
+        }
+        else
+        {
+            defer_args = Py_BuildValue("(s)", hstrerror(h_errno));
+            cReactorUtil_AddMethod(&reactor->timed_methods, errback, defer_args, NULL);
+            Py_DECREF(defer_args);
+        }
+    }
+    else
+    {
+        /* Type was not 1, schedule an errback call. */
+        defer_args = Py_BuildValue("(s)", "only type 1 is supported");
+        cReactorUtil_AddMethod(&reactor->timed_methods, errback, defer_args, NULL);
+        Py_DECREF(defer_args);
+    }
+
+    Py_DECREF(errback);
+    Py_DECREF(callback);
+
+    return defer;
 }
 
 
@@ -288,7 +430,7 @@ fireSystemEvent_internal(cReactor *reactor, cReactorEventType event)
 
 }
 
-static PyObject *
+PyObject *
 cReactor_fireSystemEvent(PyObject *self, PyObject *args)
 {
     cReactor *reactor;
@@ -323,7 +465,7 @@ stop_internal(cReactor *reactor)
 }
 
 
-static PyObject *
+PyObject *
 cReactor_stop(PyObject *self, PyObject *args)
 {
     /* No args. */
@@ -358,9 +500,12 @@ iterate_rebuild_pollfd_arrray(cReactor *reactor)
     /* Make sure we have enough space to hold everything. */
     if (reactor->pollfd_size < reactor->num_transports)
     {
-        free(reactor->pollfd_array);
+        if (reactor->pollfd_array)
+        {
+            free(reactor->pollfd_array);
+        }
         reactor->pollfd_size    = reactor->num_transports * 2;
-        reactor->pollfd_array   = (struct pollfd *)malloc(sizeof(struct pollfd *) * reactor->pollfd_size);
+        reactor->pollfd_array   = (struct pollfd *)malloc(sizeof(struct pollfd) * reactor->pollfd_size);
     }
 
     /* Fill in the pollfd event struct using the transport info. */
@@ -418,7 +563,8 @@ iterate_rebuild_pollfd_arrray(cReactor *reactor)
 
             ++pfd;
             ++num_transports;
-            transport = transport->next;
+            shadow      = transport;
+            transport   = transport->next;
         }
     }
 
@@ -441,6 +587,12 @@ iterate_process_pollfd_array(cReactor *reactor)
          transport;
          ++pfd, transport = transport->next)
     {
+        /* Verify */
+        if (pfd->fd != transport->fd)
+        {
+            kill(0, SIGTRAP);
+        }
+
         /* Check for any flags. */
         if (! pfd->revents)
         {
@@ -467,36 +619,127 @@ iterate_process_pollfd_array(cReactor *reactor)
     }
 }
 
+
+static void
+ctrl_pipe_do_read(cReactorTransport *transport)
+{
+    char buf[16];
+    read(transport->fd, buf, sizeof(buf));
+}
+
+
+static int
+iterate_internal_init(cReactor *reactor)
+{
+    cReactorTransport *transport;
+    int ctrl_pipes[2];
+
+    /* Clear the received signal. */
+    received_signal = 0;
+
+    /* Install signal handlers. */
+    signal(SIGINT, cReactor_sighandler);
+    signal(SIGTERM, cReactor_sighandler);
+
+    /* Create the control pipe. */
+    if (pipe(ctrl_pipes) < 0)
+    {
+        PyErr_SetFromErrno(PyExc_RuntimeError);
+        return -1; 
+    }
+
+    /* Make the read descriptor non-blocking. */
+    if (fcntl(ctrl_pipes[0], F_SETFL, O_NONBLOCK) < 0)
+    {
+        close(ctrl_pipes[0]);
+        close(ctrl_pipes[1]);
+        PyErr_SetFromErrno(PyExc_RuntimeError);
+        return -1;
+    }
+
+    /* Save the write descriptor. */
+    reactor->ctrl_pipe = ctrl_pipes[1];
+
+    /* Create a control transport for reading. */
+    transport = cReactorTransport_New(reactor,
+                                      ctrl_pipes[0], 
+                                      ctrl_pipe_do_read,
+                                      NULL,
+                                      NULL);
+    cReactor_AddTransport(reactor, transport);
+
+    /* Change our state to running. */
+    reactor->state = CREACTOR_STATE_RUNNING;
+
+    /* Fire the the startup system event. */
+    fireSystemEvent_internal(reactor, CREACTOR_EVENT_TYPE_STARTUP);
+
+    return 0;
+}
+
+static void
+iterate_internal_finalize(cReactor *reactor)
+{
+    cReactorThread *thread;
+    PyThreadState *thread_state;
+
+    /* No cleanup needed if we aren't using threads. */
+    if (! reactor->multithreaded)
+    {
+        return;
+    }
+
+    /* Release the Python interpreter lock in case there are APPLY jobs still
+     * in the worker queue.
+     */
+    thread_state = PyThreadState_Swap(NULL);
+    PyEval_ReleaseLock();
+
+    /* Issue EXIT jobs, one for each thread. */
+    thread = reactor->thread_pool;
+    while (thread)
+    {
+        cReactorJobQueue_AddJob(reactor->worker_queue, cReactorJob_NewExit());
+        thread = thread->next;
+    }
+
+    /* Wait for them to finish. */
+    thread = reactor->thread_pool;
+    while (thread)
+    {
+        pthread_join(thread->thread_id, NULL);
+        thread = thread->next;
+    }
+
+    /* Reacquire the lock. */
+    PyEval_AcquireLock();
+    PyThreadState_Swap(thread_state);
+}
+
+
 static int
 iterate_internal(cReactor *reactor, int delay)
 {
     int method_delay;
-    time_t now;
     int sleep_delay;
-
-    /* Record the currently running reactor. */
-    if (running_reactor)
-    {
-        PyErr_Format(PyExc_RuntimeError, "a cReactor is currently running!");
-        return -1;
-    }
-    running_reactor = reactor;
+    PyObject *result;
+    cReactorJob *job;
+    int poll_res;
+    PyThreadState *thread_state = NULL;
 
     /* Special one-time init handling. */
     if (reactor->state == CREACTOR_STATE_INIT)
     {
-        /* Fire the the startup system event. */
-        fireSystemEvent_internal(reactor, CREACTOR_EVENT_TYPE_STARTUP);
-
-        /* Clear the received signal. */
-        received_signal = 0;
-
-        /* Install signal handlers. */
-        signal(SIGINT, cReactor_sighandler);
-        signal(SIGTERM, cReactor_sighandler);
-
-        /* Change our state to running. */
-        reactor->state = CREACTOR_STATE_RUNNING;
+        if (iterate_internal_init(reactor) < 0)
+        {
+            return -1;
+        }
+    }
+    else if (reactor->state == CREACTOR_STATE_DONE)
+    {
+        /* Exception. */
+        PyErr_SetString(PyExc_RuntimeError, "the reactor is shut down!");
+        return -1;
     }
 
     /* Figure out the method delay. */
@@ -523,10 +766,27 @@ iterate_internal(cReactor *reactor, int delay)
         iterate_rebuild_pollfd_arrray(reactor);
     }
 
+    /* If in threaded mode release the global interpreter lock. */
+    if (reactor->multithreaded)
+    {
+        thread_state = PyThreadState_Swap(NULL);
+        PyEval_ReleaseLock(); 
+    }
+
     /* Look for activity. */
-    if (poll(reactor->pollfd_array,
-             reactor->num_transports,
-             (sleep_delay * 1000)) < 0)
+    poll_res = poll(reactor->pollfd_array,
+                    reactor->num_transports,
+                    sleep_delay);
+
+    /* Acquire the lock if we are using threads. */
+    if (reactor->multithreaded)
+    {
+        PyEval_AcquireLock();
+        PyThreadState_Swap(thread_state);
+    }
+
+    /* Check the poll() result. */
+    if (poll_res < 0)
     {
         /* Anything other an EINTR raises an exception. */
         if (errno != EINTR)
@@ -541,8 +801,41 @@ iterate_internal(cReactor *reactor, int delay)
     }
 
     /* Run all the methods that need to run. */ 
-    time(&now);
-    cReactorUtil_RunMethods(&reactor->timed_methods, now);
+    cReactorUtil_RunMethods(&reactor->timed_methods);
+
+    /* Check our job queue -- if there is one. */
+    if (reactor->main_queue)
+    {
+        /* Run all scheduled jobs.  This might not be the safest idea. */
+        for ( ; ; )
+        {
+            job = cReactorJobQueue_Pop(reactor->main_queue);
+            if (! job)
+            {
+                break;
+            }
+
+            switch (job->type)
+            {
+                case CREACTOR_JOB_APPLY:
+                    /* Run the callable. */
+                    result = PyEval_CallObjectWithKeywords(job->u.apply.callable,
+                                                           job->u.apply.args,
+                                                           job->u.apply.kw);
+                    Py_XDECREF(result);
+                    if (! result)
+                    {
+                        PyErr_Print();
+                    }
+                    break;
+
+                case CREACTOR_JOB_EXIT:
+                    /* No one can tell the reactor to quit! */
+                    break;
+            }
+            cReactorJob_Destroy(job);
+        }
+    }
 
     /* Lame signal handling for now. */
     if (received_signal)
@@ -554,25 +847,40 @@ iterate_internal(cReactor *reactor, int delay)
         }
     }
 
-    running_reactor = NULL;
+    /* Check for the DONE state and do any cleanup. */
+    if (reactor->state == CREACTOR_STATE_DONE)
+    {
+        iterate_internal_finalize(reactor); 
+    }
+
     return 0;
 }
 
 
-static PyObject *
+PyObject *
 cReactor_iterate(PyObject *self, PyObject *args, PyObject *kw)
 {
     cReactor *reactor;
-    int delay   = 0;
-    static char *kwlist[] = { "delay", NULL };
+    PyObject *delay_obj     = NULL;
+    int delay               = 0;
+    static char *kwlist[]   = { "delay", NULL };
+
+    reactor = (cReactor *)self;
 
     /* Args. */
-    if (!PyArg_ParseTupleAndKeywords(args, kw, "|i:delay", kwlist, &delay))
+    if (!PyArg_ParseTupleAndKeywords(args, kw, "|O:delay", kwlist, &delay_obj))
     {
         return NULL;
     }
 
-    reactor = (cReactor *)self;
+    if (delay_obj)
+    {
+        delay = cReactorUtil_ConvertDelay(delay_obj);
+        if (delay < 0)
+        {
+            return NULL;
+        }
+    }
 
     /* Run once. */
     if (iterate_internal(reactor, delay) < 0)
@@ -585,7 +893,7 @@ cReactor_iterate(PyObject *self, PyObject *args, PyObject *kw)
 }
 
 
-static PyObject *
+PyObject *
 cReactor_run(PyObject *self, PyObject *args)
 {
     cReactor *reactor;
@@ -599,32 +907,41 @@ cReactor_run(PyObject *self, PyObject *args)
     }
 
     /* Keep running until we hit the DONE state. */
-    while (reactor->state != CREACTOR_STATE_DONE)
+    do
     {
         if (iterate_internal(reactor, -1) < 0)
         {
             return NULL;
         }
-    }
+    } while (reactor->state < CREACTOR_STATE_DONE);
 
     Py_INCREF(Py_None);
     return Py_None;
 }
 
 
-static PyObject *
+PyObject *
 cReactor_crash(PyObject *self, PyObject *args)
 {
-    return cReactor_not_implemented(self, args, "cReactor_crash");
+    cReactor *reactor;
+
+    reactor = (cReactor *)self;
+
+    /* Args */
+    if (!PyArg_ParseTuple(args, ":crash"))
+    {
+        return NULL;
+    }
+
+    /* Move the state to done. */
+    reactor->state = CREACTOR_STATE_DONE;
+
+    Py_INCREF(Py_None);
+    return Py_None;
 }
 
-static PyObject *
-cReactor_callFromThread(PyObject *self, PyObject *args)
-{
-    return cReactor_not_implemented(self, args, "cReactor_callFromThread");
-}
 
-static PyObject *
+PyObject *
 cReactor_addSystemEventTrigger(PyObject *self, PyObject *args, PyObject *kw)
 {
     cReactor *reactor;
@@ -688,7 +1005,7 @@ cReactor_addSystemEventTrigger(PyObject *self, PyObject *args, PyObject *kw)
 }
 
 
-static PyObject *
+PyObject *
 cReactor_removeSystemEventTrigger(PyObject *self, PyObject *args)
 {
     return cReactor_not_implemented(self, args, "cReactor_removeSystemEventTrigger");
@@ -711,12 +1028,15 @@ cReactor_AddTransport(cReactor *reactor, cReactorTransport *transport)
 static int
 cReactor_init(cReactor *reactor)
 {
+    PyObject *when_threaded;
+    PyObject *init_threading;
     PyObject *obj;
     static const char * interfaces[] = 
     {
         "IReactorCore",
         "IReactorTime",
         "IReactorTCP",
+        "IReactorThreads",
     };
 
     /* Create the __implements__ attribute. */
@@ -742,6 +1062,35 @@ cReactor_init(cReactor *reactor)
 
     /* Set our state. */
     reactor->state = CREACTOR_STATE_INIT;
+
+    /* We need to know when threading has begun. */
+    when_threaded = cReactorUtil_FromImport("twisted.python.threadable",
+                                            "whenThreaded");
+    if (! when_threaded)
+    {
+        return -1;
+    }
+
+    /* Get our initThreading method. */
+    init_threading = Py_FindMethod(cReactor_methods,
+                                   (PyObject *)reactor,
+                                   "initThreading");
+    if (! init_threading)
+    {
+        Py_DECREF(when_threaded);
+        return -1;
+    }
+
+    /* Register a callback. */
+    obj = PyObject_CallFunction(when_threaded, "(O)", init_threading);
+    Py_DECREF(when_threaded);
+    Py_DECREF(init_threading);
+    Py_XDECREF(obj);
+    if (! obj)
+    {
+        return -1;
+    }
+
     return 0;
 }
 
@@ -753,6 +1102,9 @@ cReactor_New(void)
 
     /* Create a new object. */
     reactor = PyObject_New(cReactor, &cReactorType);
+
+    /* No control pipe descriptors. */
+    reactor->ctrl_pipe = -1;
 
     /* The object's attribute dictionary. */
     reactor->attr_dict = PyDict_New();
@@ -769,10 +1121,16 @@ cReactor_New(void)
     reactor->num_transports     = 0;
 
     /* Array of pollfd structs. */
-    reactor->pollfd_array       = (struct pollfd *)malloc(  sizeof(struct pollfd *)
-                                                          * CREACTOR_STARTING_POLLFD_SIZE);
-    reactor->pollfd_size        = CREACTOR_STARTING_POLLFD_SIZE;
+    reactor->pollfd_array       = NULL;
+    reactor->pollfd_size        = 0;
     reactor->pollfd_stale       = 0;
+
+    /* No thread job queue, or thread pool to start with. */
+    reactor->multithreaded      = 0;
+    reactor->main_queue         = NULL;
+    reactor->thread_pool        = NULL;
+    reactor->worker_queue       = NULL;
+    reactor->req_thread_pool_size = 3;
 
     /* Attempt to initialize it. */
     if (   (! reactor->attr_dict)
@@ -829,44 +1187,6 @@ cReactor_dealloc(PyObject *self)
 
     PyObject_Del(self);
 }
-
-/* Available methods on the cReactor. */
-static PyMethodDef cReactor_methods[] = 
-{
-    /* IReactorCore */
-    { "resolve",                    (PyCFunction)cReactor_resolve,
-      (METH_VARARGS | METH_KEYWORDS), "resolve" },
-    { "run",                        cReactor_run,
-      METH_VARARGS, "run" },
-    { "stop",                       cReactor_stop,
-      METH_VARARGS, "stop" },
-    { "crash",                      cReactor_crash,
-      METH_VARARGS, "crash" },
-    { "iterate",                    (PyCFunction)cReactor_iterate,
-      (METH_VARARGS | METH_KEYWORDS), "iterate" },
-    { "callFromThread",             cReactor_callFromThread,
-      METH_VARARGS, "callFromThread" },
-    { "fireSystemEvent",            cReactor_fireSystemEvent,
-      METH_VARARGS, "fireSystemEvent" },
-    { "addSystemEventTrigger",      (PyCFunction)cReactor_addSystemEventTrigger,
-      (METH_VARARGS | METH_KEYWORDS), "addSystemEventTrigger" },
-    { "removeSystemEventTrigger",   cReactor_removeSystemEventTrigger,
-      METH_VARARGS, "removeSystemEventTrigger" },
-
-    /* IReactorTime */
-    { "callLater",          (PyCFunction)cReactorTime_callLater,
-      (METH_VARARGS | METH_KEYWORDS), "callLater" },
-    { "cancelCallLater",    cReactorTime_cancelCallLater,
-      METH_KEYWORDS,  "cancelCallLater" },
-
-    /* IReactorTCP */
-    { "listenTCP",          (PyCFunction)cReactorTCP_listenTCP,
-      (METH_VARARGS | METH_KEYWORDS), "listenTCP" },
-    { "clientTCP",          cReactorTCP_clientTCP,
-      METH_VARARGS, "clientTCP" },
-
-    { NULL, NULL, METH_VARARGS, NULL },
-};
 
 static PyObject *
 cReactor_getattr(PyObject *self, char *attr_name)
