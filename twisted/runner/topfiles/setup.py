@@ -19,7 +19,7 @@ if __name__ == '__main__':
         twisted_subproject="runner",
         # metadata
         name="Twisted Runner",
-        version="SVN-Trunk",
+        version="2.0.0",
         description="Twisted Runner is a process management library and inetd replacement.",
         author="Twisted Matrix Laboratories",
         author_email="twisted-python@twistedmatrix.com",

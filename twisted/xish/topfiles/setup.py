@@ -7,7 +7,7 @@ if __name__ == '__main__':
         twisted_subproject="xish",
         # metadata
         name="Twisted Xish",
-        version="SVN-Trunk",
+        version="2.0.0",
         description="Twisted Xish is an XML library with XPath-ish and DOM-ish support.",
         author="Twisted Matrix Laboratories",
         author_email="twisted-python@twistedmatrix.com",

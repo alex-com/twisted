@@ -8,7 +8,7 @@ if __name__ == '__main__':
         scripts=dist.getScripts("lore"),
         # metadata
         name="Twisted Lore",
-        version="SVN-Trunk",
+        version="2.0.0",
         description="Twisted documentation system",
         author="Twisted Matrix Laboratories",
         author_email="twisted-python@twistedmatrix.com",

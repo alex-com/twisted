@@ -93,7 +93,7 @@ TwSources += twisted/lore/template.mgp
 
 # only run setup.py when needed
 build/scripts-$(pyversion) build/lib.win32-$(pyversion): $TwSources
-    :sys $(pyexe) setup.py all -q build --compiler=mingw32 install --root=win32dist
+    :sys $(pyexe) setup.py all -q build --compiler=mingw32 install --root=win32dist --no-compile
 
 # build with inno
 ExeDeps=py$(pyversion)-$(DoDocs).iss

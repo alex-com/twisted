@@ -8,7 +8,7 @@ if __name__ == '__main__':
         scripts=dist.getScripts("conch"),
         # metadata
         name="Conch",
-        version="SVN-Trunk",
+        version="2.0.0",
         description="Twisted SSHv2 implementation.",
         author="Twisted Matrix Laboratories",
         author_email="twisted-python@twistedmatrix.com",
