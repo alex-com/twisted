@@ -2,4 +2,4 @@
 # See LICENSE for details.
 
 """Resolving Internet Names"""
-__version__ = 'SVN-Trunk'
+__version__ = '0.1.0'

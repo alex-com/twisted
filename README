@@ -17,17 +17,17 @@ This release of Twisted Sumo, constructed on SUMO-Date,
 contains the following:
 
 Twisted Core-2.0.0
-Twisted Conch Conch-2.0.0
-Twisted Flow Flow-2.0.0
-Twisted Lore Lore-2.0.0
-Twisted Mail Mail-2.0.0
-Twisted Names Names-2.0.0
-Twisted News News-2.0.0
-Twisted Pair Pair-2.0.0
-Twisted Runner Runner-2.0.0
-Twisted Web Web-2.0.0
-Twisted Words Words-2.0.0
-Twisted Xish Xish-2.0.0
+Twisted Conch Conch-0.5.0
+Twisted Flow Flow-0.1.0
+Twisted Lore Lore-0.1.0
+Twisted Mail Mail-0.1.0
+Twisted Names Names-0.1.0
+Twisted News News-0.1.0
+Twisted Pair Pair-0.1.0
+Twisted Runner Runner-0.1.0
+Twisted Web Web-0.5.0
+Twisted Words Words-0.1.0
+Twisted Xish Xish-0.1.0
 
 Below is an explanation of the layout of this tarball (as well as the
 SVN repository).

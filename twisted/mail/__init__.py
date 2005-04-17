@@ -10,4 +10,4 @@ Twisted Mail: a Twisted E-Mail Server.
 Maintainer: U{Jp Calderone<mailto:exarkun@twistedmatrix.com>}
 
 """
-__version__ = 'SVN-Trunk'
+__version__ = '0.1.0'

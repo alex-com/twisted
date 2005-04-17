@@ -17,4 +17,4 @@ Maintainer: U{Andrew Bennetts<spiv@twistedmatrix.com>}
 # Numbered headers
 # Navigational aides
 
-__version__ = 'SVN-Trunk'
+__version__ = '0.1.0'

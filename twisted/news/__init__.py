@@ -8,4 +8,4 @@
 Twisted News: an NNTP-based news service.
 
 """
-__version__ = 'SVN-Trunk'
+__version__ = '0.1.0'

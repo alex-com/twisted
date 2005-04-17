@@ -8,6 +8,6 @@
 Twisted Web: a Twisted Web Server.
 
 """
-__version__ = 'SVN-Trunk'
+__version__ = '0.1.0'
 version = __version__
 

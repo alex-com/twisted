@@ -7,7 +7,7 @@ if __name__ == '__main__':
         twisted_subproject="pair",
         # metadata
         name="Twisted Pair",
-        version="2.0.0",
+        version="0.1.0",
         description="Twisted Pair contains low-level networking support.",
         author="Twisted Matrix Laboratories",
         author_email="twisted-python@twistedmatrix.com",

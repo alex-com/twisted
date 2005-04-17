@@ -7,7 +7,7 @@ if __name__ == '__main__':
         twisted_subproject="news",
         # metadata
         name="Twisted News",
-        version="2.0.0",
+        version="0.1.0",
         description="Twisted News is an NNTP server and programming library.",
         author="Twisted Matrix Laboratories",
         author_email="twisted-python@twistedmatrix.com",

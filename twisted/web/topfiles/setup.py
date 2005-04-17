@@ -8,7 +8,7 @@ if __name__ == '__main__':
         scripts=dist.getScripts("web"),
         # metadata
         name="Twisted Web",
-        version="2.0.0",
+        version="0.5.0",
         description="Twisted web server, programmable in Python.",
         author="Twisted Matrix Laboratories",
         author_email="twisted-python@twistedmatrix.com",

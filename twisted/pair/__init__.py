@@ -16,4 +16,4 @@ Maintainer: U{Tommi Virtanen <mailto:tv@twistedmatrix.com>}
 
 """
 
-__version__ = 'SVN-Trunk'
+__version__ = '0.1.0'

@@ -8,7 +8,7 @@ if __name__ == '__main__':
         scripts=dist.getScripts("words"),
         # metadata
         name="Twisted Words",
-        version="2.0.0",
+        version="0.1.0",
         description="Twisted Words contains Instant Messaging implementations.",
         author="Twisted Matrix Laboratories",
         author_email="twisted-python@twistedmatrix.com",
