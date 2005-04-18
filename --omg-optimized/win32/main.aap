@@ -1,0 +1,131 @@
+
+SCP=bash admin/aapscp
+HERE=`os.getcwd()`
+:python
+    from __future__ import generators
+    import winreg
+    from aapwin import getValueFromReg, pathdb
+
+    # sys.path.insert(0, os.path.join(os.getcwd(), 'twisted', 'topfiles'))
+    sys.path.insert(0, os.getcwd())
+
+
+    def geniss(iss_template, dodocs):
+        """Return the inno setup file"""
+        tdct = dict(setupbase=_top.setupbase, version=_top.Version,
+                    pyversion=_top.pyversion)
+        template = '%(setupbase)s-%(version)s.win32-py%(pyversion)s' % tdct
+
+        import setup
+
+        docdct = dict(pyversion=_top.pyversion,
+                      pyversion10=_top.pyversion10, twversion=_top.Version, 
+                      twhome=_recipe.HERE, 
+                      docfile=r'Source: "%s\doc\twisteddoc.zip"; DestDir: "{app}"' % _recipe.HERE,
+                      outputbasefilename=template,
+                      )
+        nodocdct = docdct.copy()
+        nodocdct['docfile'] = ''
+
+        if dodocs:
+            dct = docdct
+        else:
+            dct = nodocdct
+
+        return iss_template % dct
+
+    def getBuildingTwistedVersion():
+        """Return the version of Twisted in $HERE, which may be
+        different from the version of Twisted in sys.path.
+        """
+        globs=globals().copy()
+        execfile("./twisted/copyright.py", globs)
+        return globs['version']
+
+# get the version of twisted from the tree being built, not sys.path
+Version=`getBuildingTwistedVersion()`
+
+# PyVersion is variant rather than a regular string variable so the script
+# will accept only one of these two values
+:variant PyVersion
+    py2.2
+        pyversion=2.2
+        pyversion10=22
+        pyhome=`_no.pathdb["python22"]`
+        pyexe=$(pyhome)\python.exe
+    py2.3
+        pyversion=2.3
+        pyversion10=23
+        pyhome=`_no.pathdb["python23"]`
+        pyexe=$(pyhome)\python.exe
+    py2.4
+        pyversion=2.4
+        pyversion10=24
+        pyhome=`_no.pathdb["python24"]`
+        pyexe=$(pyhome)\python.exe
+
+:variant DoDocs
+    nodocs
+        setupbase=Twisted_NoDocs
+    withdocs
+        setupbase=Twisted
+
+
+all: dist/$(setupbase)-$(Version).win32-py$(pyversion).exe
+    :print : Done building $(target)
+
+# find all the files that can cause a rebuild with setup.py
+:syseval find twisted -name '*.c' -o -name '*.h' | :assign CSources
+# don't try to build the .c files automatically...
+:attr {filetype = ignore} $(CSources)
+
+:syseval find twisted -name '*.py' -o -name '*.sql' -o -name '*.glade*'  | :assign TwSources
+TwSources += twisted/lore/template.mgp
+             twisted/test/server.pem
+             twisted/web/woven/FlashConduit*
+             twisted/web/woven/WebConduit*
+             twisted/xish/xpathparser.g
+             $(CSources)
+             win32/twisted_postinstall.py
+
+# publish to sf.net
+:attr {publish=scp://shell.sf.net//home/groups/t/tw/twisted/htdocs/$(setupbase)-$(Version).win32-py$(pyversion).exe} dist/$(setupbase)-$(Version).win32-py$(pyversion).exe
+
+# only run setup.py when needed
+build/scripts-$(pyversion) build/lib.win32-$(pyversion): $TwSources
+    :sys $(pyexe) setup.py all -q build --compiler=mingw32 install --root=win32dist
+
+# build with inno
+ExeDeps=py$(pyversion)-$(DoDocs).iss
+        build/lib.win32-$(pyversion)
+        build/scripts-$(pyversion)
+        $(TwSources)
+
+iscc=`pathdb["iscc"]`
+dist/Twisted-$(Version).win32-py$(pyversion).exe: doc/twisteddoc.zip $(ExeDeps)
+    :sys "$(iscc)" py$(pyversion)-withdocs.iss
+
+# build with inno
+dist/Twisted_NoDocs-$(Version).win32-py$(pyversion).exe: $(ExeDeps)
+    :sys "$(iscc)" py$(pyversion)-nodocs.iss
+
+
+# fetch docs from latest release (this better be there)
+:attr {fetch=http://twisted.sf.net/TwistedDocs-$(Version).tar.bz2} doc/TwistedDocs-$(Version).tar.bz2
+
+# uncompress and rezip doc
+doc/twisteddoc.zip: doc/TwistedDocs-$(Version).tar.bz2
+    :chdir doc
+    @if not os.path.isdir('TwistedDocs-%s' % _no.Version):
+        :sys tar xfj TwistedDocs-$(Version).tar.bz2
+    :chdir TwistedDocs-$(Version)
+    :sys zip -rq ../twisteddoc.zip *
+
+# generate iss files
+py$(pyversion)-$(DoDocs).iss: win32/pyx.x-foo.iss.template twisted/copyright.py
+    @docs=(_top.DoDocs == 'withdocs')
+    # file2string is fucked, don't use
+    @tmpl=file('win32/pyx.x-foo.iss.template').read()
+    @iss=_top.geniss(tmpl, docs)
+    @file(target, 'w').write(iss)
+
