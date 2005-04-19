@@ -30,7 +30,7 @@ cdef object _marker
 _marker = object()
 
 cdef object PyClass_Type
-PyClass_Type = types.ClassType
+PyInstance_Type = types.InstanceType
 
 # enable .debug to record creation/first-invoker call stacks, and they
 # will be added to any AlreadyCalledErrors we raise
@@ -168,7 +168,7 @@ cdef class Deferred:
         Passing a string as `fail' is deprecated, and will be punished with
         a warning message.
         """
-        if not (Pyrex_GETTYPE(fail) is PyClass_Type and fail.__class__ is Failure):
+        if not (Pyrex_GETTYPE(fail) is PyInstance_Type and fail.__class__ is Failure):
             fail = Failure(fail)
 
         self._startRunCallbacks(fail)
@@ -196,7 +196,7 @@ cdef class Deferred:
     cdef _startRunCallbacks(self, result):
         if self.result is not _marker:
             if self.debugInfo is not None:
-                extra = "\n" + self.debugInfo._debugInfo()
+                extra = "\n" + self.debugInfo._getDebugTracebacks()
                 raise AlreadyCalledError(extra)
             raise AlreadyCalledError
         
@@ -216,8 +216,10 @@ cdef class Deferred:
             for i from 0 <= i < size:
                 item = PyList_GET_ITEM(cb, i)
                 Py_INCREF(item)
-                if (Pyrex_GETTYPE(self.result) is PyClass_Type and self.result.__class__ is Failure):
+                if (Pyrex_GETTYPE(self.result) is PyInstance_Type and self.result.__class__ is Failure):
                     offset = 3
+                else:
+                    offset = 0
                 callback = PyTuple_GET_ITEM(item, offset+0)
                 Py_INCREF(callback)
                 args = PyTuple_GET_ITEM(item, offset+1)
@@ -257,7 +259,7 @@ cdef class Deferred:
             else:
                 PyList_SetSlice(cb, 0, PyList_GET_SIZE(cb), NULL)
         
-        if (Pyrex_GETTYPE(self.result) is PyClass_Type and self.result.__class__ is Failure):
+        if (Pyrex_GETTYPE(self.result) is PyInstance_Type and self.result.__class__ is Failure):
             if self.debugInfo is None:
                 self.isFailure = 1
             else:
@@ -291,7 +293,13 @@ cdef class Deferred:
     def _timeout(self, timeoutFunc, args, kw):
         if not self.called:
             timeoutFunc(self, *args, **kw)
-    
+
+    def _cancelTimeout(self, result, timeoutCall):
+        try:
+            timeoutCall.cancel()
+        except:
+            pass
+        return result
     def setTimeout(self, seconds, timeoutFunc=timeout, *args, **kw):
         """Set a timeout function to be triggered if I am not called.
 
@@ -314,5 +322,7 @@ cdef class Deferred:
             return
 
         from twisted.internet import reactor
-        return reactor.callLater(seconds, self._timeout, timeoutFunc, args, kw)
-
+        timeoutCall = reactor.callLater(seconds, self._timeout, timeoutFunc, args, kw)
+        self.callbacks.insert(0, (self._cancelTimeout, (timeoutCall,), None,
+                                  self._cancelTimeout, (timeoutCall,), None))
+        return timeoutCall

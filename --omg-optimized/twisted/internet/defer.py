@@ -144,9 +144,6 @@ def timeout(deferred):
 def passthru(arg):
     return arg
 
-def isDeferred(d):
-    return isinstance(d, Deferred)
-
 def setDebugging(on):
     """Enable or disable Deferred debugging.
 
@@ -436,9 +433,7 @@ try:
     import cdefer
     Deferred = cdefer.Deferred
     setDebugging=cdefer.setDebugging
-    isDeferred=cdefer.isDeferred
-    print >> sys.stderr, "Using C Deferred"
-    pass
+    #import sys; print >> sys.stderr, "Using C Deferred"
 except ImportError:
     pass
 

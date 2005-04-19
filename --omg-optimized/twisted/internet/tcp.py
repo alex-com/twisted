@@ -27,17 +27,17 @@ except ImportError:
     fcntl = None
 from zope.interface import implements, classImplements
 
-#try:
-#    import iovec
-#    print >> sys.stderr, "Using iovec"
-#except ImportError:
-iovec = None
+try:
+    import iovec
+    print >> sys.stderr, "Using iovec"
+except ImportError:
+    iovec = None
 
-#try:
-#    import crecv
-#    print >> sys.stderr, "Using crecv"
-#except ImportError:
-crecv = None
+try:
+    import crecv
+    print >> sys.stderr, "Using crecv"
+except ImportError:
+    crecv = None
 
 try:
     from OpenSSL import SSL
@@ -312,7 +312,6 @@ class Connection(abstract.FileDescriptor, _SocketCloser):
     if SSL:
 
         def startTLS(self, ctx):
-            print "startTLS"
             assert not self.TLS
             error=False
             if self._tempDataBuffer:
@@ -334,7 +333,6 @@ class Connection(abstract.FileDescriptor, _SocketCloser):
                 return
 
         def _startTLS(self, ctx):
-            print "_startTLS"
             self.TLS = 1
             klass = self.__class__
             class TLSConnection(_TLSMixin, klass):
