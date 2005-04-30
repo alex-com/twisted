@@ -99,9 +99,12 @@ build/scripts-$(pyversion) build/lib.win32-$(pyversion):  \
     :sys $(pyexe) setup.py all  build --compiler=mingw32 \
                                 install --root=win32dist --no-compile
     @1
-    :sys $(pyexe) ZopeInterface-$(ZIVersion)/setup.py \
-                                build --compiler=mingw32 \
-                                install --root=win32dist --no-compile
+    :pushdir ZopeInterface-$(ZIVersion)
+    @try:
+        :sys $(pyexe) setup.py build --compiler=mingw32 \
+                               install --root=../win32dist --no-compile
+    @finally:
+        :popdir
 
 ZopeInterface-$(ZIVersion).tgz:
     err = "Please download the ZopeInterface $ZIVersion tarball"
