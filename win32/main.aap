@@ -96,6 +96,8 @@ TwSources += twisted/lore/template.mgp
 build/scripts-$(pyversion) build/lib.win32-$(pyversion):  \
                                                 $TwSources 
                                                 ZopeInterface-$ZIVersion
+    :mkdir {f} build/scripts-$(pyversion)
+    :copy win32/twisted_postinstall.py  build/scripts-$(pyversion)/.
     :sys $(pyexe) setup.py all  build --compiler=mingw32 \
                                 install --root=win32dist --no-compile
     @1
@@ -140,9 +142,9 @@ doc/twisteddoc.zip: doc/TwistedDocs-$(Version).tar.bz2
 
 # generate iss files
 py$(pyversion)-$(DoDocs).iss: win32/pyx.x-foo.iss.template twisted/copyright.py
-    @docs=(_top.DoDocs == 'withdocs')
+    @docs = (_top.DoDocs == 'withdocs')
     # file2string is fucked, don't use
-    @tmpl=file('win32/pyx.x-foo.iss.template').read()
-    @iss=_top.geniss(tmpl, docs)
+    @tmpl = file('win32/pyx.x-foo.iss.template').read()
+    @iss = _top.geniss(tmpl, docs)
     @file(target, 'w').write(iss)
 
