@@ -44,7 +44,6 @@ innohome = getValueFromReg(r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall
 
 pathdb = dict(innohome=innohome,
               iscc=os.path.join(innohome, "ISCC.exe"),
-              python22=getPythonHomeForVersion('2.2'),
               python23=getPythonHomeForVersion('2.3'),
               python24=getPythonHomeForVersion('2.4'),
               )
