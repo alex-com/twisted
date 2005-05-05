@@ -2,7 +2,6 @@
 SCP=bash admin/aapscp
 HERE=`os.getcwd()`
 :python
-    from __future__ import generators
     import winreg
     from aapwin import getValueFromReg, pathdb
 
