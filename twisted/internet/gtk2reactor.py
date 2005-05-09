@@ -40,6 +40,16 @@ import gobject
 from twisted.python import log, threadable, runtime, failure, components
 from twisted.internet.interfaces import IReactorFDSet
 
+if hasattr(gobject, "threads_init"):
+    # initialize threads early, otherwise timers added before the reactor
+    # starts cause all sorts of problems
+    
+    # recent versions of python-gtk expose this. python-gtk=2.4.1
+    # (wrapping glib-2.4.7) does. python-gtk=2.0.0 (wrapping
+    # glib-2.2.3) does not.
+    gobject.threads_init()
+    threadable.init(1)
+
 # Sibling Imports
 from twisted.internet import main, posixbase, error, selectreactor
 
@@ -93,14 +103,6 @@ class Gtk2Reactor(posixbase.PosixReactorBase):
             self.__crash = _our_mainquit
             self.__run = gtk.main
 
-    def _initThreads(self):
-        if hasattr(gobject, "threads_init"):
-            # recent versions of python-gtk expose this. python-gtk=2.4.1
-            # (wrapping glib-2.4.7) does. python-gtk=2.0.0 (wrapping
-            # glib-2.2.3) does not.
-            gobject.threads_init()
-        posixbase.PosixReactorBase._initThreads(self)
-    
     # The input_add function in pygtk1 checks for objects with a
     # 'fileno' method and, if present, uses the result of that method
     # as the input source. The pygtk2 input_add does not do this. The
