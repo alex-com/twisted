@@ -183,7 +183,7 @@ class Deferred:
     paused = 0
     timeoutCall = None
     _debugInfo = None
-    suppressAlreadyCalled = 0
+    _suppressAlreadyCalled = 0
 
     # Keep this class attribute for now, for compatibility with code that
     # sets it directly.
@@ -319,14 +319,14 @@ class Deferred:
 
         Otherwise, raise AlreadyCalledError.
         """
-        canceller=self.canceller
+        canceller = self.canceller
         if not self.called:
             if canceller:
                 canceller(self)
             else:
                 # Eat the callback that will eventually be fired
                 # since there was no real canceller.
-                self.suppressAlreadyCalled = 1
+                self._suppressAlreadyCalled = 1
 
             if not self.called:
                 # The canceller didn't do an errback of its own
@@ -347,11 +347,11 @@ class Deferred:
 
     def _startRunCallbacks(self, result):
         # Canceller is no longer relevant
-        self.canceller=None
+        self.canceller = None
 
         if self.called:
-            if self.suppressAlreadyCalled:
-                self.suppressAlreadyCalled = False
+            if self._suppressAlreadyCalled:
+                self._suppressAlreadyCalled = 0
                 return
             if self.debug:
                 if self._debugInfo is None:
