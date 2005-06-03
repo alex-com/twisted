@@ -184,7 +184,7 @@ class Deferred:
     timeoutCall = None
     _debugInfo = None
     suppressAlreadyCalled = 0
-    
+
     # Keep this class attribute for now, for compatibility with code that
     # sets it directly.
     debug = False
@@ -340,7 +340,7 @@ class Deferred:
         else:
             # Called and not waiting for another deferred
             raise AlreadyCalledError
-    
+
     def _continue(self, result):
         self.result = result
         self.unpause()
@@ -348,7 +348,7 @@ class Deferred:
     def _startRunCallbacks(self, result):
         # Canceller is no longer relevant
         self.canceller=None
-        
+
         if self.called:
             if self.suppressAlreadyCalled:
                 self.suppressAlreadyCalled = False
@@ -762,7 +762,7 @@ class DeferredLock(_ConcurrencyPrimitive):
 
     def _cancelAcquire(self, d):
         self.waiting.remove(d)
-        
+
     def acquire(self):
         """Attempt to acquire the lock.
 
@@ -800,10 +800,10 @@ class DeferredSemaphore(_ConcurrencyPrimitive):
         _ConcurrencyPrimitive.__init__(self)
         self.tokens = tokens
         self.limit = tokens
-        
+
     def _cancelAcquire(self, d):
         self.waiting.remove(d)
-        
+
     def acquire(self):
         """Attempt to acquire the token.
 
@@ -866,7 +866,7 @@ class DeferredQueue(object):
 
     def _cancelGet(self, d):
         self.waiting.remove(d)
-    
+
     def put(self, obj):
         """Add an object to this queue.
 
