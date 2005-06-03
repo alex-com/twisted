@@ -1,0 +1,25 @@
+- More Tests!
+ - Check if closing input stream does right thing (should close connection after response is written)
+
+- Low level protocol:
+ - Proper POST support (need psudeo-MIME parser)
+ - Authentication (basic and digest)
+ - Close connection if resource doesn't read entire input stream
+
+ - sendfile (initial sketch in stream.py, but needs work in twisted, too)
+ - Add parsers/generators for the rest of the headers:
+  - Cache-Control, Pragma, Trailer, Upgrade, Via, Warning
+  - Authorization, WWW-Authenticate
+
+ - Cookies
+
+- Application server:
+ - Create default log observers for the log.msg's that we send.
+ - Other useful filters: content-encoding, caching, others?
+
+- Convert proxy?
+- Client library *LATER*
+- Internal request submission API
+
+
+

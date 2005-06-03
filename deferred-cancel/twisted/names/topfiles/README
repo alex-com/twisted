@@ -1,0 +1,5 @@
+Twisted Names SVN-Trunk
+
+Names was recently split out of Twisted.
+
+Twisted Names depends on Twisted Core.
