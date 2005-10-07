@@ -1,0 +1,2 @@
+
+raise ZeroDivisionError("fake error")
