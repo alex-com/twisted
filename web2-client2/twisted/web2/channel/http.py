@@ -38,71 +38,56 @@ class StringTransport:
 class AbortedException(Exception):
     pass
 
-class HTTPChannelRequest:
-    """This class handles the state and parsing for one HTTP request.
-    It is responsible for all the low-level connection oriented behavior.
-    Thus, it takes care of keep-alive, de-chunking, etc., and passes
-    the non-connection headers on to the user-level Request object."""
+
+class HTTPParser(object):
+    """This class handles the parsing side of HTTP processing. With a suitable
+    subclass, it can parse either the client side or the server side of the
+    connection.
+    """
     
+    # Class config:
+    parseCloseAsEnd = False
+    
+    # Instance vars
+    chunkedIn = False
     headerlen = 0
     length = None
-    chunkedIn = False
-    reqHeaders = None
-    command = path = version = None
+    inHeaders = None
     partialHeader = ''
-    queued = 0
+    connHeaders = None
     finishedReading = False
+    persistent = True
     
+
     channel = None
-    request = None
+
+    # For subclassing...
+    # Needs attributes:
+    #  version
+
+    # Needs functions:
+    #  createRequest()
+    #  processRequest()
+    #  _abortWithError()
+    #  handleContentChunk(data)
+    #  handleContentComplete()
+
+    # Needs functions to exist on .channel
+    #  channel.maxHeaderLength
+    #  channel.requestReadFinished(self, self.persistent)
+    # (from LineReceiver):
+    #  channel.setRawMode()
+    #  channel.setLineMode(extraneous)
+    #  channel.pauseProducing()
+    #  channel.resumeProducing()
+    #  channel.stopProducing()
     
-    out_version = "HTTP/1.1"
     
-    def __init__(self, channel, initialLine, queued=0):
-        self.reqHeaders = http_headers.Headers()
+    def __init__(self, channel, persistent=True):
+        self.inHeaders = http_headers.Headers()
         self.channel = channel
-        self.queued=queued
-
-        # Buffer writes to a string until we're first in line
-        # to write a response
-        if queued:
-            self.transport = StringTransport()
-        else:
-            self.transport = self.channel.transport
-
-
-        parts = initialLine.split()
-        # set the version to a fallback for error generation
-        self.version = (1,0)
-
-        # Parse the initial request line
-        if len(parts) != 3:
-            if len(parts) == 1:
-                parts.append('/')
-            if len(parts) == 2 and parts[1][0] == '/':
-                parts.append('HTTP/0.9')
-            else:
-                self._abortWithError(responsecode.BAD_REQUEST, 'Bad request line: %s' % initialLine)
-
-        self.command, self.path, strversion = parts
-        try:
-            protovers = http.parseVersion(strversion)
-        except ValueError:
-            self._abortWithError(responsecode.BAD_REQUEST, "Unknown protocol: %s" % strversion)
+        self.persistent = persistent
         
-        if protovers[0] != 'http':
-            self._abortWithError(responsecode.BAD_REQUEST, "Unknown protocol: %s" % strversion)
-        
-        self.version = protovers[1:3]
-        
-        # Ensure HTTP 0 or HTTP 1.
-        if self.version[0] > 1:
-            self._abortWithError(responsecode.HTTP_VERSION_NOT_SUPPORTED, 'Only HTTP 0.9 and HTTP 1.x are supported.')
-
-        if self.version[0] == 0:
-            # simulate end of headers, as HTTP 0 doesn't have headers.
-            self.lineReceived('')
-
     def lineReceived(self, line):
         if self.chunkedIn:
             # Parsing a chunked input
@@ -145,6 +130,7 @@ class HTTPChannelRequest:
                 self.headerReceived(self.partialHeader)
             self.partialHeader = ''
             self.allHeadersReceived()    # can set chunkedIn
+            self.createRequest()
             if self.chunkedIn:
                 # stay in linemode waiting for chunk header
                 pass
@@ -155,26 +141,28 @@ class HTTPChannelRequest:
                 # await raw data as content
                 self.channel.setRawMode()
                 # Should I do self.pauseProducing() here?
-            self.request.process()
-
-        elif line[0] in ' \t':
-            # Append a header continuation
-            self.partialHeader = self.partialHeader+line
+            self.processRequest()
         else:
-            if self.partialHeader:
-                self.headerReceived(self.partialHeader)
-            self.partialHeader = line
+            self.headerlen += len(line)
+            if self.headerlen > self.channel.maxHeaderLength:
+                self._abortWithError(responsecode.BAD_REQUEST, 'Headers too long.')
+            
+            if line[0] in ' \t':
+                # Append a header continuation
+                self.partialHeader += line
+            else:
+                if self.partialHeader:
+                    self.headerReceived(self.partialHeader)
+                self.partialHeader = line
 
     def rawDataReceived(self, data):
         """Handle incoming content."""
         datalen = len(data)
         if datalen < self.length:
-            if not self.finished:
-                self.request.handleContentChunk(data)
+            self.handleContentChunk(data)
             self.length = self.length - datalen
         else:
-            if not self.finished:
-                self.request.handleContentChunk(data[:self.length])
+            self.handleContentChunk(data[:self.length])
             extraneous = data[self.length:]
             channel = self.channel # could go away from allContentReceived.
             if not self.chunkedIn:
@@ -186,10 +174,6 @@ class HTTPChannelRequest:
             
             channel.setLineMode(extraneous)
 
-    def lineLengthExceeded(self, line, wasFirst=False):
-        code = wasFirst and responsecode.REQUEST_URI_TOO_LONG or responsecode.BAD_REQUEST
-        self._abortWithError(code, 'Header line too long.')
-        
     def headerReceived(self, line):
         """Store this header away. Check for too much header data
            (> channel.maxHeaderLength) and abort the connection if so.
@@ -200,43 +184,30 @@ class HTTPChannelRequest:
         
         name, val = nameval
         val = val.lstrip(' \t')
-        self.reqHeaders.addRawHeader(name, val)
+        self.inHeaders.addRawHeader(name, val)
         
-        self.headerlen = self.headerlen+ len(line)
-        
-        if self.headerlen > self.channel.maxHeaderLength:
-            self._abortWithError(responsecode.BAD_REQUEST, 'Headers too long.')
-            
+
     def allHeadersReceived(self):
         # Split off connection-related headers
         connHeaders = self.splitConnectionHeaders()
 
         # Set connection parameters from headers
         self.setConnectionParams(connHeaders)
-
-        self.channel.queueRequest(self)
-        request = self.channel.requestFactory(self, self.command, self.path, self.version, self.reqHeaders)
-        
-        # Reset header state variables
-        del self.reqHeaders
-        
         self.connHeaders = connHeaders
-        self.request = request
         
     def allContentReceived(self):
         self.finishedReading = True
         self.channel.requestReadFinished(self, self.persistent)
-        if not self.finished:
-            self.request.handleContentComplete()
+        self.handleContentComplete()
         
         
     def splitConnectionHeaders(self):
         # Split off headers for the connection from headers for the request.
         
         def move(name):
-            h = reqHeaders.getRawHeaders(name, None)
+            h = inHeaders.getRawHeaders(name, None)
             if h is not None:
-                reqHeaders.removeHeader(name)
+                inHeaders.removeHeader(name)
                 connHeaders.setRawHeaders(name, h)
 
         # NOTE: According to HTTP spec, we're supposed to eat the
@@ -247,7 +218,7 @@ class HTTPChannelRequest:
         # 'Proxy-Connection' is an undocumented HTTP 1.0 abomination.
         connHeaderNames = ['connection', 'keep-alive', 'te', 'trailers',
                            'transfer-encoding', 'upgrade', 'proxy-connection']
-        reqHeaders = self.reqHeaders
+        inHeaders = self.inHeaders
         connHeaders = http_headers.Headers()
         
         move('connection')
@@ -255,8 +226,8 @@ class HTTPChannelRequest:
             # Remove all headers mentioned in Connection, because a HTTP 1.0
             # proxy might have erroneously forwarded it from a 1.1 client.
             for name in connHeaders.getHeader('connection', ()):
-                if reqHeaders.hasHeader(name):
-                    reqHeaders.removeHeader(name)
+                if inHeaders.hasHeader(name):
+                    inHeaders.removeHeader(name)
         else:
             # Otherwise, just add the headers listed to the list of those to move
             connHeaderNames.extend(connHeaders.getHeader('connection', ()))
@@ -266,7 +237,7 @@ class HTTPChannelRequest:
         
         # Content-Length is both a connection header (defining length of
         # transmission, and a content header (defining length of content).
-        h = reqHeaders.getRawHeaders('content-length', None)
+        h = inHeaders.getRawHeaders('content-length', None)
         if h is not None:
             connHeaders.setRawHeaders('content-length', h)
         
@@ -274,7 +245,7 @@ class HTTPChannelRequest:
 
     def setConnectionParams(self, connHeaders):
         # Figure out persistent connection stuff
-        if not self.channel.allowPersistentConnections:
+        if not self.persistent:
             pass
         elif self.version >= (1,1):
             self.persistent = not 'close' in connHeaders.getHeader('connection', ())
@@ -292,14 +263,14 @@ class HTTPChannelRequest:
             if transferEncoding[-1] == 'chunked':
                 # Chunked
                 self.chunkedIn = 1
-            else:
+                # Cut off the chunked encoding (cause it's special)
+                transferEncoding = transferEncoding[:-1]
+            elif not self.parseCloseAsEnd:
                 # Would close on end of connection, except this can't happen for
                 # client->server data. (Well..it could actually, since TCP has half-close
                 # but the HTTP spec says it can't, so we'll pretend it's right.)
                 self._abortWithError(responsecode.BAD_REQUEST, "Transfer-Encoding received without chunked in last position.")
             
-            # Cut off the chunked encoding (cause it's special)
-            transferEncoding = transferEncoding[:-1]
             # TODO: support gzip/etc encodings.
             # FOR NOW: report an error if the client uses any encodings.
             # They shouldn't, because we didn't send a TE: header saying it's okay.
@@ -307,10 +278,115 @@ class HTTPChannelRequest:
                 self._abortWithError(responsecode.NOT_IMPLEMENTED, "Transfer-Encoding %s not supported." % transferEncoding)
         else:
             # No transfer-coding.
-            # If no Content-Length either, assume no content.
-            self.length = connHeaders.getHeader('content-length', 0)
             self.chunkedIn = 0
+            if self.parseCloseAsEnd:
+                # If no Content-Length, indeterminate length data
+                # (unless the responsecode was one of the special ones, or
+                #  the request method was HEAD.
+                # If the request was HEAD, self.length has been set to 0 by
+                # HTTPClientRequest.submit)
+                if self.code in http.NO_BODY_CODES:
+                    self.length = 0
+                else:
+                    self.length = connHeaders.getHeader('content-length', self.length)
+            else:
+                # If no Content-Length either, assume no content.
+                self.length = connHeaders.getHeader('content-length', 0)
+
+    def abortParse(self):
+        # If we're erroring out while still reading the request
+        if not self.finishedReading:
+            self.finishedReading = True
+            self.persistent = False
+            self.channel.requestReadFinished(self, self.persistent)
+        
+    # producer interface
+    def pauseProducing(self):
+        if not self.finishedReading:
+            self.channel.pauseProducing()
+        
+    def resumeProducing(self):
+        if not self.finishedReading:
+            self.channel.resumeProducing()
+       
+    def stopProducing(self):
+        if not self.finishedReading:
+            self.channel.stopProducing()
+
+class HTTPChannelRequest(HTTPParser):
+    """This class handles the state and parsing for one HTTP request.
+    It is responsible for all the low-level connection oriented behavior.
+    Thus, it takes care of keep-alive, de-chunking, etc., and passes
+    the non-connection headers on to the user-level Request object."""
     
+    command = path = version = None
+    queued = 0
+    request = None
+    
+    out_version = "HTTP/1.1"
+    
+    def __init__(self, channel, queued=0, persistent=True):
+        HTTPParser.__init__(self, channel, persistent)
+        self.queued=queued
+
+        # Buffer writes to a string until we're first in line
+        # to write a response
+        if queued:
+            self.transport = StringTransport()
+        else:
+            self.transport = self.channel.transport
+        
+        # set the version to a fallback for error generation
+        self.version = (1,0)
+
+
+    def gotInitialLine(self, initialLine):
+        parts = initialLine.split()
+        
+        # Parse the initial request line
+        if len(parts) != 3:
+            if len(parts) == 1:
+                parts.append('/')
+            if len(parts) == 2 and parts[1][0] == '/':
+                parts.append('HTTP/0.9')
+            else:
+                self._abortWithError(responsecode.BAD_REQUEST, 'Bad request line: %s' % initialLine)
+
+        self.command, self.path, strversion = parts
+        try:
+            protovers = http.parseVersion(strversion)
+            if protovers[0] != 'http':
+                raise ValueError()
+        except ValueError:
+            self._abortWithError(responsecode.BAD_REQUEST, "Unknown protocol: %s" % strversion)
+        
+        self.version = protovers[1:3]
+        
+        # Ensure HTTP 0 or HTTP 1.
+        if self.version[0] > 1:
+            self._abortWithError(responsecode.HTTP_VERSION_NOT_SUPPORTED, 'Only HTTP 0.9 and HTTP 1.x are supported.')
+
+        if self.version[0] == 0:
+            # simulate end of headers, as HTTP 0 doesn't have headers.
+            self.lineReceived('')
+
+    def lineLengthExceeded(self, line, wasFirst=False):
+        code = wasFirst and responsecode.REQUEST_URI_TOO_LONG or responsecode.BAD_REQUEST
+        self._abortWithError(code, 'Header line too long.')
+
+    def createRequest(self):
+        self.request = self.channel.requestFactory(self, self.command, self.path, self.version, self.inHeaders)
+        del self.inHeaders
+
+    def processRequest(self):
+        self.request.process()
+        
+    def handleContentChunk(self, data):
+        self.request.handleContentChunk(data)
+        
+    def handleContentComplete(self):
+        self.request.handleContentComplete()
+        
 ############## HTTPChannelRequest *RESPONSE* methods #############
     producer = None
     chunkedOut = False
@@ -392,15 +468,7 @@ class HTTPChannelRequest:
         
         Otherwise, completely shut down the connection.
         """
-        # If we're erroring out while still reading the request
-        if not self.finishedReading:
-            self.finishedReading = True
-            # and if we haven't even gotten all the headers
-            if not self.request:
-                self.channel.queueRequest(self)
-            self.persistent = False
-            self.channel.requestReadFinished(self, self.persistent)
-        
+        self.abortParse()
         if closeWrite:
             if self.producer:
                 self.producer.stopProducing()
@@ -502,19 +570,6 @@ class HTTPChannelRequest:
             self.producer = None
         if self.request:
             self.request.connectionLost(reason)
-
-    # producer interface
-    def pauseProducing(self):
-        if not self.finishedReading:
-            self.channel.pauseProducing()
-        
-    def resumeProducing(self):
-        if not self.finishedReading:
-            self.channel.resumeProducing()
-       
-    def stopProducing(self):
-        if not self.finishedReading:
-            self.channel.stopProducing()
     
 class HTTPChannel(basic.LineReceiver, policies.TimeoutMixin, object):
     """A receiver for HTTP requests. Handles splitting up the connection
@@ -589,7 +644,10 @@ class HTTPChannel(basic.LineReceiver, policies.TimeoutMixin, object):
             
             self._first_line = 0
             try:
-                self.chanRequest = self.chanRequestFactory(self, line, len(self.requests))
+                self.chanRequest = self.chanRequestFactory(self, len(self.requests),
+                                                           self.allowPersistentConnections)
+                self.requests.append(self.chanRequest)
+                self.chanRequest.gotInitialLine(line)
             except AbortedException:
                 pass
         else:
@@ -601,8 +659,11 @@ class HTTPChannel(basic.LineReceiver, policies.TimeoutMixin, object):
     def lineLengthExceeded(self, line):
         if self._first_line:
             # Fabricate a request object to respond to the line length violation.
-            self.chanRequest = self.chanRequestFactory(self, "GET fake HTTP/1.0",
-                                                       len(self.requests))
+            self.chanRequest = self.chanRequestFactory(self, 
+                                                       len(self.requests),
+                                                       self.allowPersistentConnections)
+            self.requests.append(self.chanRequest)
+            self.chanRequest.gotInitialLine("GET fake HTTP/1.0")
         try:
             self.chanRequest.lineLengthExceeded(line, self._first_line)
         except AbortedException:
@@ -615,10 +676,6 @@ class HTTPChannel(basic.LineReceiver, policies.TimeoutMixin, object):
         except AbortedException:
             pass
 
-    def queueRequest(self, request):
-        # create a new Request object
-        self.requests.append(request)
-        
     def requestReadFinished(self, request, persist):
         self.persistent = persist
         if(self.persistent == PERSIST_NO_PIPELINE or

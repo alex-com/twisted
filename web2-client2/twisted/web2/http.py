@@ -80,6 +80,9 @@ class Response(object):
         if stream is not None:
             self.stream = IByteStream(stream)
 
+    def __repr__(self):
+        return "<%s.%s code=%d, streamlen=%s>" % (self.__module__, self.__class__.__name__, self.code, self.stream.length)
+        
 def NotModifiedResponse(oldResponse=None):
     if oldResponse is not None:
         headers=http_headers.Headers()
@@ -284,7 +287,7 @@ class Request(object):
                 raise HTTPError(responsecode.EXPECTATION_FAILED)
     
     def process(self):
-        """called by __init__ to let you process the request.
+        """Called by channel to let you process the request.
         
         Can be overridden by a subclass to do something useful."""
         pass
