@@ -32,23 +32,9 @@ def setup(**kw):
                                "toplevel source directory.")
         projname = kw['twisted_subproject']
         projdir = os.path.join('twisted', projname)
-
         kw['packages'] = getPackages(projdir, parent='twisted')
-
-        plugin = "twisted/plugins/twisted_" + projname + ".py"
-        if os.path.exists(plugin):
-            kw.setdefault('py_modules', []).append(plugin.replace("/", ".")[:-3])
-
         kw['data_files'] = getDataFiles(projdir, parent='twisted')
-
         del kw['twisted_subproject']
-    else:
-        if 'plugins' in kw:
-            py_modules = []
-            for plg in kw['plugins']:
-                py_modules.append("twisted.plugins." + plg)
-            kw.setdefault('py_modules', []).extend(py_modules)
-            del kw['plugins']
 
     if 'cmdclass' not in kw:
         kw['cmdclass'] = {
@@ -111,16 +97,11 @@ def relativeTo(base, relativee):
     raise ValueError("%s is not a subpath of %s" % (relativee, basepath))
 
 
-def getDataFiles(dname, ignore=None, parent=None):
+def getDataFiles(dname, parent=None):
     """
     Get all the data files that should be included in this distutils Project.
 
     'dname' should be the path to the package that you're distributing.
-
-    'ignore' is a list of sub-packages to ignore.  This facilitates
-    disparate package hierarchies.  That's a fancy way of saying that
-    the 'twisted' package doesn't want to include the 'twisted.conch'
-    package, so it will pass ['conch'] as the value.
 
     'parent' is necessary if you're distributing a subpackage like
     twisted.conch.  'dname' should point to 'twisted/conch' and 'parent'
@@ -130,16 +111,12 @@ def getDataFiles(dname, ignore=None, parent=None):
     The default 'parent' is the current working directory.
     """
     parent = parent or "."
-    ignore = ignore or []
     result = []
     for directory, subdirectories, filenames in os.walk(dname):
         resultfiles = []
         for exname in EXCLUDE_NAMES:
             if exname in subdirectories:
                 subdirectories.remove(exname)
-        for ig in ignore:
-            if ig in subdirectories:
-                subdirectories.remove(ig)
         for filename in _filterNames(filenames):
             resultfiles.append(filename)
         if resultfiles:
@@ -149,7 +126,7 @@ def getDataFiles(dname, ignore=None, parent=None):
                             for filename in resultfiles]))
     return result
 
-def getPackages(dname, pkgname=None, results=None, ignore=None, parent=None):
+def getPackages(dname, pkgname=None, results=None, parent=None):
     """
     Get all packages which are under dname. This is necessary for
     Python 2.2's distutils. Pretty similar arguments to getDataFiles,
@@ -160,9 +137,6 @@ def getPackages(dname, pkgname=None, results=None, ignore=None, parent=None):
     if parent:
         prefix = [parent]
     bname = os.path.basename(dname)
-    ignore = ignore or []
-    if bname in ignore:
-        return []
     if results is None:
         results = []
     if pkgname is None:
@@ -173,7 +147,7 @@ def getPackages(dname, pkgname=None, results=None, ignore=None, parent=None):
         results.append(prefix + pkgname + [bname])
         for subdir in filter(os.path.isdir, abssubfiles):
             getPackages(subdir, pkgname=pkgname + [bname],
-                        results=results, ignore=ignore,
+                        results=results,
                         parent=parent)
     res = ['.'.join(result) for result in results]
     return res
@@ -186,11 +160,7 @@ def getScripts(projname):
     any of an SVN checkout, a project-specific tarball, or the Sumo
     tarball.
     """
-    scriptdir = os.path.join('bin', projname)
-    if not os.path.isdir(scriptdir):
-        # Probably a project-specific tarball, in which case only this
-        # project's bins are included in 'bin'
-        scriptdir = 'bin'
+    scriptdir = 'bin'
     thingies = os.listdir(scriptdir)
     if '.svn' in thingies:
         thingies.remove('.svn')
