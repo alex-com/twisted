@@ -33,7 +33,11 @@ def setup(**kw):
         # we need to explicitly include twisted and twisted.plugins,
         # because subproject SVN directories don't have __init__.py,
         # so they get overlooked by getPackages.
-        kw['packages'] = ['twisted', 'twisted.plugins'] + getPackages('twisted')
+        subdir = os.path.join('twisted', kw['twisted_subproject'])
+        pkgs = ['twisted', 'twisted.plugins']
+        pkgs += ['twisted.' + sub for sub in getPackages(subdir)]
+        kw['packages'] = pkgs
+        print "Fuck you!", kw['packages']
         kw['data_files'] = getDataFiles('twisted')
         del kw['twisted_subproject']
 
