@@ -9,5 +9,9 @@ __path__=[os.path.abspath(os.path.join(os.path.dirname(__file__),
 import copyright
 __version__ = copyright.version
 
+import plugins
+plugins.__path__.extend([os.path.abspath(os.path.join(x, 'plugins')) for x in __path__])
+
+
 from twisted.python import compat
-del compat, os
+del compat, os, glob
