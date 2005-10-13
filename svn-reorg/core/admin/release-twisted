@@ -1,0 +1,290 @@
+#!/usr/bin/env python
+
+# Copyright (c) 2001-2004 Twisted Matrix Laboratories.
+# See LICENSE for details.
+
+
+from __future__ import nested_scopes
+
+### Twisted Preamble
+# This makes sure that users don't have to set up their environment
+# specially in order to run these programs from bin/.
+import sys, os, string
+if string.find(os.path.abspath(sys.argv[0]), os.sep+'Twisted') != -1:
+    sys.path.insert(0, os.path.normpath(os.path.join(os.path.abspath(sys.argv[0]), os.pardir, os.pardir)))
+sys.path.insert(0, os.curdir)
+### end of preamble
+
+from twisted.python import usage, dist, reflect
+from twisted.python.release import runChdirSafe, sh, DirectoryExists, DirectoryDoesntExist
+
+import time, glob
+
+packaged_projects = dist.twisted_subprojects[:]
+packaged_projects.remove('web2')
+
+core_blacklist = ['vfs']
+
+# FIXME:
+# 2. If we ever do a sumo release on the same day, the version will
+#    conflict, since we just use %Y-%m-%d as the version...
+
+
+
+def makeCommands():
+    # Yeah, I could do dynamic lookups and for loops and shit, but
+    # this makes the code greppable.
+    return {
+        'exportTemp': exportTemp,
+        'makeDocAll': makeDocAll,
+        'makeDocCore': makeDocCore,
+        'makeBallAll': makeBallAll,
+        'makeBallCore': makeBallCore,
+        'makeBallSumo': makeBallSumo,
+
+        'makeDocConch': makeMakeDoc('conch'),
+        'makeDocFlow': makeMakeDoc('flow'),
+        'makeDocLore': makeMakeDoc('lore'),
+        'makeDocMail': makeMakeDoc('mail'),
+        'makeDocNames': makeMakeDoc('names'),
+        'makeDocNews': makeMakeDoc('news'),
+        'makeDocPair': makeMakeDoc('pair'),
+        'makeDocRunner': makeMakeDoc('runner'),
+        'makeDocWeb': makeMakeDoc('web'),
+        'makeDocWeb2': makeMakeDoc('web2'),
+        'makeDocWords': makeMakeDoc('words'),
+        'makeDocXish': makeMakeDoc('xish'),
+
+        'makeBallConch': makeMakeBall('conch'),
+        'makeBallFlow': makeMakeBall('flow'),
+        'makeBallLore': makeMakeBall('lore'),
+        'makeBallMail': makeMakeBall('mail'),
+        'makeBallNames': makeMakeBall('names'),
+        'makeBallNews': makeMakeBall('news'),
+        'makeBallPair': makeMakeBall('pair'),
+        'makeBallRunner': makeMakeBall('runner'),
+        'makeBallWeb': makeMakeBall('web'),
+        'makeBallWeb2': makeMakeBall('web2'),
+        'makeBallWords': makeMakeBall('words'),
+        'makeBallXish': makeMakeBall('xish'),
+        }
+
+
+class Options(usage.Options):
+    optParameters = [
+        ['commands', None, 'exportTemp,makeDocAll,makeBallAll,makeBallSumo',
+         "(optional) Comma-separated list of individual steps to run"],
+        ['release-source', None, '/trunk',
+         "SVN path to be released."]
+        ]
+
+
+    _desc = """
+Things appropriate for --command are:
+
+%s
+
+Generally, the release manager will want to run this from a checkout
+of a branch of Twisted that has been given version numbers with
+admin/change-versions.
+"""
+
+    longdesc = property(lambda s: s._desc
+                        % ', '.join(sorted(ALL_COMMANDS)))
+
+    def postOptions(self):
+        commands = self['commands'].split(',')
+        commands = [ALL_COMMANDS[x] for x in commands]
+        self['commands'] = commands
+        print "GOING TO DO", ','.join([x.__name__ for x in commands])
+
+
+def main():
+    try:
+        opts = Options()
+        opts.parseOptions()
+    except usage.UsageError, ue:
+        print "%s: %s (see --help)" % (sys.argv[0], ue)
+        sys.exit(2)
+
+    for command in opts['commands']:
+        print
+        print command.__name__
+        print "="*len(command.__name__)
+        runChdirSafe(command, opts)
+
+##
+# Utilities
+##
+def lore(ver, docdir):
+    # We get an arg like "doc/<blah>/", "doc/<blah>/sub/", and so
+    # forth. We need to pass -l to lore such that, in http/html terms,
+    # we get from a given file in one of these directories to
+    # doc/<blah>/howto.
+
+    # doc/<blat>/howto -> ../howto (for ease of implementation)
+    # doc/<blat>/ -> howto
+    # doc/<blat>/foo -> ../howto
+    # doc/<blat>/foo/bar -> ../../howto
+    # we always get doc/<blat>/ at least
+    relativity = list(os.path.normpath(docdir)).count('/') - 1 
+    homelink = ('../' * relativity) + 'howto/'
+    sh("./bin/lore/lore -p --config template=doc/core/howto/template.tpl "
+       "--config ext=.html --config version=%(ver)s "
+       "--config noapi=please -l %(homelink)s "
+       "%(docdir)s/*.xhtml" % {'ver': ver, 'docdir': docdir,
+                               'homelink': homelink})
+    sh("rm -f %(docdir)s/*.xhtml" % {'docdir': docdir})
+
+def tar(tdir):
+    sh('find Twisted.exp %(tdir)s -name "*.pyc" | xargs rm -f' % locals())
+    sh('tar cjhf %(tdir)s.tar.bz2 %(tdir)s' % locals())
+
+def getVersion(projdesc):
+    if projdesc == 'core':
+        return reflect.namedModule('twisted').__version__
+    else:
+        return reflect.namedModule('twisted.'+projdesc).__version__
+
+##
+# The MEAT.
+##
+
+def exportTemp(opts):
+    if os.path.exists('Twisted.exp'):
+        raise DirectoryExists("ExportTemp: 'Twisted.exp' already exists")
+    sh('svn export . Twisted.exp')
+
+
+def makeDocCore(opts):
+    ver = getVersion('core')
+    os.chdir('Twisted.exp')
+
+    for docdir in ['howto', 'howto/tutorial', 'howto/policy', 'upgrades',
+                   'examples',
+                   'upgrades/2.0', # ugh
+                   'specifications', 'vision', '']:
+        lore(ver, os.path.join('doc/core', docdir))
+
+    #shwack the crap
+
+def makeMakeDoc(projname):
+    def makeDoc(opts):
+        os.chdir('Twisted.exp')
+        base = 'doc/%s' % (projname,)
+        for sub in ('howto', 'examples'):
+            sub = os.path.join(base, sub)
+            if os.path.exists(sub):
+                lore(getVersion(projname), sub)
+    return makeDoc
+
+
+def makeDocAll(opts):
+    runChdirSafe(makeDocCore, opts)
+    for sub in packaged_projects:
+        runChdirSafe(ALL_COMMANDS['makeDoc%s' % sub.capitalize()],
+                     opts)
+
+def makeBallAll(opts):
+    runChdirSafe(makeBallCore, opts)
+    for sub in packaged_projects:
+        runChdirSafe(ALL_COMMANDS['makeBall%s' % sub.capitalize()],
+                     opts)
+
+
+def makeBallCore(opts):
+    ver = getVersion('core')
+    tdir = "Twisted-%s" % (ver,)
+    if not os.path.exists('Twisted.exp'):
+        raise DirectoryDoesntExist("MakeBalls: Twisted.exp doesn't exist")
+
+    os.makedirs(os.path.join(tdir, 'twisted'))
+    os.makedirs(os.path.join(tdir, 'bin'))
+
+    twisted_subprojects = ','.join(dist.twisted_subprojects)
+    package_blacklist = ','.join(core_blacklist + dist.twisted_subprojects)
+
+    sh('''
+    ln -s `pwd`/Twisted.exp/twisted/* %(tdir)s/twisted/
+    rm -f %(tdir)s/twisted/{%(package_blacklist)s}
+    rm -f %(tdir)s/twisted/topfiles
+    ln -s `pwd`/Twisted.exp/LICENSE %(tdir)s/
+    ln -s `pwd`/Twisted.exp/twisted/topfiles/* %(tdir)s/
+    mkdir %(tdir)s/doc
+    ln -s `pwd`/Twisted.exp/doc/core/* %(tdir)s/doc/
+    ln -s `pwd`/Twisted.exp/doc/fun %(tdir)s/doc/fun
+    ln -s `pwd`/Twisted.exp/bin/* %(tdir)s/bin
+    rm -f %(tdir)s/bin/{%(twisted_subprojects)s}
+
+    ''' % locals())
+
+    tar(tdir)
+
+
+def makeBallSumo(opts):
+    ver = time.strftime('%Y-%m-%d')
+    basever = getVersion('core')
+    tdir = "TwistedSumo-%s" % (ver,)
+    if not os.path.exists('Twisted.exp'):
+        raise DirectoryDoesntExist("MakeBalls: Twisted.exp doesn't exist")
+    zig = glob.glob('ZopeInterface-*.tgz')
+    if not zig:
+        raise Exception(
+            "Creating sumo distribution rquires a ZopeInterface tarball - "
+            "Please download one from <http://www.zope.org/Products/ZopeInterface>.")
+    zi = zig[0]
+    os.makedirs(tdir)
+    sh('''
+    ln -s `pwd`/Twisted.exp/bin %(tdir)s/
+    cp -r `pwd`/Twisted.exp/twisted %(tdir)s/
+    rm -rf `pwd`/Twisted.exp/twisted/web2 # XXX
+    ln -s `pwd`/Twisted.exp/doc %(tdir)s/
+    cp    `pwd`/Twisted.exp/README %(tdir)s/
+    ln -s `pwd`/Twisted.exp/LICENSE %(tdir)s/
+    ln -s `pwd`/Twisted.exp/setup.py %(tdir)s/
+    ln -s `pwd`/%(zi)s %(tdir)s/
+    ''' % locals())
+    tar(tdir)
+
+
+def createSubprojectDirectory(proj, version):
+    sdir = 'Twisted%s-%s' % (proj.capitalize(), version)
+    os.makedirs(sdir+'/twisted/%s' % (proj,))
+    os.makedirs(sdir+'/twisted/plugins')
+
+    sh("""
+    ln -s `pwd`/Twisted.exp/twisted/%(proj)s/* %(sdir)s/twisted/%(proj)s
+    rm %(sdir)s/twisted/%(proj)s/topfiles
+    rm %(sdir)s/twisted/%(proj)s/__init__.py
+    cp `pwd`/Twisted.exp/twisted/%(proj)s/__init__.py %(sdir)s/twisted/%(proj)s/
+    ln -s `pwd`/Twisted.exp/LICENSE %(sdir)s
+    ln -s `pwd`/Twisted.exp/twisted/%(proj)s/topfiles/* %(sdir)s
+    """ % locals())
+    
+    if os.path.exists('Twisted.exp/twisted/plugins/twisted_%s.py' % (proj,)):
+        sh("ln -s `pwd`/Twisted.exp/twisted/plugins/twisted_%(proj)s.py "
+           "%(sdir)s/twisted/plugins" % locals())
+    
+    if os.path.exists('Twisted.exp/doc/'+proj):
+        sh('ln -s `pwd`/Twisted.exp/doc/%(proj)s %(sdir)s/doc' % locals())
+    if os.path.exists('Twisted.exp/bin/'+proj):
+        sh('ln -s `pwd`/Twisted.exp/bin/%(proj)s %(sdir)s/bin' % locals())
+
+
+def makeMakeBall(proj):
+    def makeBall(opts):
+        projver = getVersion(proj)
+        if not projver:
+            raise "NEED --%s-version!" % (proj,)
+        projdir = 'Twisted%s-%s' % (proj.capitalize(), projver,)
+        createSubprojectDirectory(proj, projver)
+        tar(projdir)
+    return makeBall
+
+
+
+ALL_COMMANDS = makeCommands()
+
+if __name__=='__main__':
+    main()
+
