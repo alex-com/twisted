@@ -2,7 +2,7 @@
 Distutils convenience functionality.
 """
 
-import sys, os, types
+import sys, os, types, warnings
 from distutils import sysconfig
 from distutils.command import build_scripts, install_data, build_ext, build_py
 from distutils.errors import CompileError
@@ -30,10 +30,11 @@ def setup(**kw):
         if 'twisted' not in os.listdir('.'):
             raise RuntimeError("Sorry, you need to run setup.py from the "
                                "toplevel source directory.")
-        projname = kw['twisted_subproject']
-        projdir = os.path.join('twisted', projname)
-        kw['packages'] = getPackages(projdir, parent='twisted')
-        kw['data_files'] = getDataFiles(projdir, parent='twisted')
+        # we need to explicitly include twisted and twisted.plugins,
+        # because subproject SVN directories don't have __init__.py,
+        # so they get overlooked by getPackages.
+        kw['packages'] = ['twisted', 'twisted.plugins'] + getPackages('twisted')
+        kw['data_files'] = getDataFiles('twisted')
         del kw['twisted_subproject']
 
     if 'cmdclass' not in kw:
@@ -74,43 +75,13 @@ def _filterNames(names):
                  if (not fnmatch.fnmatch(n, pattern)) and (not n.endswith('.py'))]
     return names
 
-def relativeTo(base, relativee):
-    """
-    Gets 'relativee' relative to 'basepath'.
 
-    i.e.,
-
-    >>> relativeTo('/home/', '/home/radix/')
-    'radix'
-    >>> relativeTo('.', '/home/radix/Projects/Twisted') # curdir is /home/radix
-    'Projects/Twisted'
-
-    The 'relativee' must be a child of 'basepath'.
-    """
-    basepath = os.path.abspath(base)
-    relativee = os.path.abspath(relativee)
-    if relativee.startswith(basepath):
-        relative = relativee[len(basepath):]
-        if relative.startswith(os.sep):
-            relative = relative[1:]
-        return os.path.join(base, relative)
-    raise ValueError("%s is not a subpath of %s" % (relativee, basepath))
-
-
-def getDataFiles(dname, parent=None):
+def getDataFiles(dname):
     """
     Get all the data files that should be included in this distutils Project.
 
     'dname' should be the path to the package that you're distributing.
-
-    'parent' is necessary if you're distributing a subpackage like
-    twisted.conch.  'dname' should point to 'twisted/conch' and 'parent'
-    should point to 'twisted'.  This ensures that your data_files are
-    generated correctly, only using relative paths for the first element
-    of the tuple ('twisted/conch/*').
-    The default 'parent' is the current working directory.
     """
-    parent = parent or "."
     result = []
     for directory, subdirectories, filenames in os.walk(dname):
         resultfiles = []
@@ -120,22 +91,16 @@ def getDataFiles(dname, parent=None):
         for filename in _filterNames(filenames):
             resultfiles.append(filename)
         if resultfiles:
-            result.append((relativeTo(parent, directory),
-                           [relativeTo(parent,
-                                       os.path.join(directory, filename))
+            result.append((directory,
+                           [os.path.join(directory, filename)
                             for filename in resultfiles]))
     return result
 
-def getPackages(dname, pkgname=None, results=None, parent=None):
+def getPackages(dname, pkgname=None, results=None):
     """
     Get all packages which are under dname. This is necessary for
-    Python 2.2's distutils. Pretty similar arguments to getDataFiles,
-    including 'parent'.
+    Python 2.2's distutils. Pretty similar arguments to getDataFiles.
     """
-    parent = parent or ""
-    prefix = []
-    if parent:
-        prefix = [parent]
     bname = os.path.basename(dname)
     if results is None:
         results = []
@@ -144,22 +109,25 @@ def getPackages(dname, pkgname=None, results=None, parent=None):
     subfiles = os.listdir(dname)
     abssubfiles = [os.path.join(dname, x) for x in subfiles]
     if '__init__.py' in subfiles:
-        results.append(prefix + pkgname + [bname])
+        results.append(pkgname + [bname])
         for subdir in filter(os.path.isdir, abssubfiles):
             getPackages(subdir, pkgname=pkgname + [bname],
                         results=results,
-                        parent=parent)
+                        )
     res = ['.'.join(result) for result in results]
     return res
 
 
 
-def getScripts(projname):
+def getScripts(projname=None):
     """
     Returns a list of scripts for a Twisted subproject; this works in
     any of an SVN checkout, a project-specific tarball, or the Sumo
     tarball.
     """
+    if projname:
+        warnings.warn("You don't need to do that dogg!", DeprecationWarning,
+                      stacklevel=2)
     scriptdir = 'bin'
     thingies = os.listdir(scriptdir)
     if '.svn' in thingies:
