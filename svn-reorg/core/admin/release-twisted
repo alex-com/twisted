@@ -117,19 +117,19 @@ def main():
 # Utilities
 ##
 def lore(ver, docdir):
-    # We get an arg like "doc/<blah>/", "doc/<blah>/sub/", and so
+    # We get an arg like "doc/", "doc/sub/", and so
     # forth. We need to pass -l to lore such that, in http/html terms,
     # we get from a given file in one of these directories to
-    # doc/<blah>/howto.
+    # doc/howto.
 
-    # doc/<blat>/howto -> ../howto (for ease of implementation)
-    # doc/<blat>/ -> howto
-    # doc/<blat>/foo -> ../howto
-    # doc/<blat>/foo/bar -> ../../howto
-    # we always get doc/<blat>/ at least
+    # doc/howto -> ../howto (for ease of implementation)
+    # doc/ -> howto
+    # doc/foo -> ../howto
+    # doc/foo/bar -> ../../howto
+    # we always get doc/ at least
     relativity = list(os.path.normpath(docdir)).count('/') - 1 
     homelink = ('../' * relativity) + 'howto/'
-    sh("./bin/lore/lore -p --config template=doc/core/howto/template.tpl "
+    sh("./lore/bin/lore -p --config template=core/doc/howto/template.tpl "
        "--config ext=.html --config version=%(ver)s "
        "--config noapi=please -l %(homelink)s "
        "%(docdir)s/*.xhtml" % {'ver': ver, 'docdir': docdir,
@@ -164,18 +164,17 @@ def makeDocCore(opts):
                    'examples',
                    'upgrades/2.0', # ugh
                    'specifications', 'vision', '']:
-        lore(ver, os.path.join('doc/core', docdir))
+        lore(ver, os.path.join('core/doc', docdir))
 
     #shwack the crap
 
 def makeMakeDoc(projname):
     def makeDoc(opts):
         os.chdir('Twisted.exp')
-        base = 'doc/%s' % (projname,)
         for sub in ('howto', 'examples'):
-            sub = os.path.join(base, sub)
+            sub = os.path.join('doc', sub)
             if os.path.exists(sub):
-                lore(getVersion(projname), sub)
+                lore(getVersion(projname), os.path.join(projname, sub))
     return makeDoc
 
 
