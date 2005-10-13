@@ -193,29 +193,21 @@ def makeBallAll(opts):
 
 
 def makeBallCore(opts):
-    ver = getVersion('core')
-    tdir = "Twisted-%s" % (ver,)
     if not os.path.exists('Twisted.exp'):
         raise DirectoryDoesntExist("MakeBalls: Twisted.exp doesn't exist")
+    ver = getVersion('core')
+    tdir = "Twisted-%s" % (ver,)
+    os.mkdir(tdir)
+    package_blacklist = ','.join(core_blacklist)
 
-    os.makedirs(os.path.join(tdir, 'twisted'))
-    os.makedirs(os.path.join(tdir, 'bin'))
-
-    twisted_subprojects = ','.join(dist.twisted_subprojects)
-    package_blacklist = ','.join(core_blacklist + dist.twisted_subprojects)
-
+    # Do some sym-linkery so we can remove the blacklisted
+    # packages. (symlinks are nice because they're quick)
     sh('''
-    ln -s `pwd`/Twisted.exp/twisted/* %(tdir)s/twisted/
+    ln -s `pwd`/Twisted.exp/core/* %(tdir)s/
+    rm %(tdir)s/twisted
+    mkdir %(tdir)s/twisted
+    ln -s `pwd`/Twisted.exp/core/twisted/* %(tdir)s/twisted/
     rm -f %(tdir)s/twisted/{%(package_blacklist)s}
-    rm -f %(tdir)s/twisted/topfiles
-    ln -s `pwd`/Twisted.exp/LICENSE %(tdir)s/
-    ln -s `pwd`/Twisted.exp/twisted/topfiles/* %(tdir)s/
-    mkdir %(tdir)s/doc
-    ln -s `pwd`/Twisted.exp/doc/core/* %(tdir)s/doc/
-    ln -s `pwd`/Twisted.exp/doc/fun %(tdir)s/doc/fun
-    ln -s `pwd`/Twisted.exp/bin/* %(tdir)s/bin
-    rm -f %(tdir)s/bin/{%(twisted_subprojects)s}
-
     ''' % locals())
 
     tar(tdir)
@@ -247,37 +239,12 @@ def makeBallSumo(opts):
     tar(tdir)
 
 
-def createSubprojectDirectory(proj, version):
-    sdir = 'Twisted%s-%s' % (proj.capitalize(), version)
-    os.makedirs(sdir+'/twisted/%s' % (proj,))
-    os.makedirs(sdir+'/twisted/plugins')
-
-    sh("""
-    ln -s `pwd`/Twisted.exp/twisted/%(proj)s/* %(sdir)s/twisted/%(proj)s
-    rm %(sdir)s/twisted/%(proj)s/topfiles
-    rm %(sdir)s/twisted/%(proj)s/__init__.py
-    cp `pwd`/Twisted.exp/twisted/%(proj)s/__init__.py %(sdir)s/twisted/%(proj)s/
-    ln -s `pwd`/Twisted.exp/LICENSE %(sdir)s
-    ln -s `pwd`/Twisted.exp/twisted/%(proj)s/topfiles/* %(sdir)s
-    """ % locals())
-    
-    if os.path.exists('Twisted.exp/twisted/plugins/twisted_%s.py' % (proj,)):
-        sh("ln -s `pwd`/Twisted.exp/twisted/plugins/twisted_%(proj)s.py "
-           "%(sdir)s/twisted/plugins" % locals())
-    
-    if os.path.exists('Twisted.exp/doc/'+proj):
-        sh('ln -s `pwd`/Twisted.exp/doc/%(proj)s %(sdir)s/doc' % locals())
-    if os.path.exists('Twisted.exp/bin/'+proj):
-        sh('ln -s `pwd`/Twisted.exp/bin/%(proj)s %(sdir)s/bin' % locals())
-
-
 def makeMakeBall(proj):
     def makeBall(opts):
         projver = getVersion(proj)
-        if not projver:
-            raise "NEED --%s-version!" % (proj,)
         projdir = 'Twisted%s-%s' % (proj.capitalize(), projver,)
-        createSubprojectDirectory(proj, projver)
+        sdir = 'Twisted%s-%s' % (proj.capitalize(), projver)
+        os.symlink('Twisted.exp/'+proj, sdir)
         tar(projdir)
     return makeBall
 
