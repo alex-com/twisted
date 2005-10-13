@@ -166,15 +166,13 @@ def makeDocCore(opts):
                    'specifications', 'vision', '']:
         lore(ver, os.path.join('core/doc', docdir))
 
-    #shwack the crap
-
 def makeMakeDoc(projname):
     def makeDoc(opts):
         os.chdir('Twisted.exp')
         for sub in ('howto', 'examples'):
-            sub = os.path.join('doc', sub)
+            sub = os.path.join(projname, 'doc', sub)
             if os.path.exists(sub):
-                lore(getVersion(projname), os.path.join(projname, sub))
+                lore(getVersion(projname), sub)
     return makeDoc
 
 
