@@ -9,7 +9,7 @@
 
 from __future__ import generators
 import pdb
-import os, glob, types, warnings, sys, inspect, imp
+import os, glob, types, warnings, sys, inspect, imp, stat
 import fnmatch, random, inspect, doctest
 from os.path import join as opj
 
@@ -387,26 +387,59 @@ class TestLoader(object):
             suite.addTest(self.loadModule(module))
         return suite
 
-    def _packageRecurse(self, suite, dirname, names):
-        if not isPackageDirectory(dirname):
-            names[:] = []
-            return
-        testModuleNames = fnmatch.filter(names, self.moduleGlob)
-        modules = []
-        for name in testModuleNames:
+    def _listdir(self, top):
+        files = []
+        dirs = []
+        try:
+            names = os.listdir(top)
+        except os.error:
+            return files, dirs
+        for name in names:
+            fullname = os.path.join(top, name)
             try:
-                modules.append(filenameToModule(opj(dirname, name)))
-            except:
-                # Importing a module can raise any kind of error. Get them all.
-                self.addImportError(name, failure.Failure())
+                st = os.lstat(fullname)
+            except os.error:
                 continue
-        for module in dsu(modules, self.sorter):
-            suite.addTest(self.loadModule(module))
-
+            if stat.S_ISDIR(st.st_mode):
+                dirs.append(name)
+            else:
+                files.append(name)
+        return files,dirs
+    
+    def _loadPackage(self, suite, package):
+        def _packageRecurse(packageDir):
+            files,dirs = self._listdir(packageDir)
+            testModuleNames = fnmatch.filter(files, self.moduleGlob)
+            modules = []
+            for name in testModuleNames:
+                modname = os.path.splitext(os.path.basename(name))[0]
+                fullModName = package.__name__+'.'+modname
+                try:
+                    modules.append(reflect.namedModule(fullModName))
+                except:
+                    # Importing a module can raise any kind of error. Get them all.
+                    self.addImportError(fullModName, failure.Failure())
+                    continue
+            for module in dsu(modules, self.sorter):
+                suite.addTest(self.loadModule(module))
+            for name in dirs:
+                if isPackageDirectory(opj(packageDir, name)):
+                    modname = os.path.splitext(os.path.basename(name))[0]
+                    fullModName = package.__name__+'.'+name
+                    try:
+                        subpackage = reflect.namedModule(fullModName)
+                    except:
+                        # Importing a module can raise any kind of error. Get them all.
+                        self.addImportError(fullModName, failure.Failure())
+                        continue
+                    else:
+                        self._loadPackage(suite, subpackage)
+        # END _packageRecurse
+        for packageDir in package.__path__:
+            _packageRecurse(packageDir)
     def loadPackageRecursive(self, package):
-        packageDir = os.path.dirname(package.__file__)
         suite = self.suiteFactory()
-        os.path.walk(packageDir, self._packageRecurse, suite)
+        self._loadPackage(suite, package)
         return suite
 
     def loadDoctests(self, module):
