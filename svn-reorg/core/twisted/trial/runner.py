@@ -423,7 +423,8 @@ class TestLoader(object):
             for module in dsu(modules, self.sorter):
                 suite.addTest(self.loadModule(module))
             for name in dirs:
-                if isPackageDirectory(opj(packageDir, name)):
+                if (name not in getattr(package, 'no_tests_in_packages', ()) and
+                    isPackageDirectory(opj(packageDir, name))):
                     modname = os.path.splitext(os.path.basename(name))[0]
                     fullModName = package.__name__+'.'+name
                     try:
