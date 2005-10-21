@@ -13,7 +13,7 @@ if __name__ == '__main__':
         scripts=dist.getScripts("mail"),
         # metadata
         name="Twisted Mail",
-        version="SVN-Trunk",
+        version="0.2.0",
         description="A Twisted Mail library, server and client.",
         author="Twisted Matrix Laboratories",
         author_email="twisted-python@twistedmatrix.com",
