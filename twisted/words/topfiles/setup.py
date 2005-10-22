@@ -31,7 +31,7 @@ if __name__ == '__main__':
         scripts=dist.getScripts("words"),
         # metadata
         name="Twisted Words",
-        version="SVN-Trunk",
+        version="0.3.0",
         description="Twisted Words contains Instant Messaging implementations.",
         author="Twisted Matrix Laboratories",
         author_email="twisted-python@twistedmatrix.com",
