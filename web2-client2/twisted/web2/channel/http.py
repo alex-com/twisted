@@ -56,8 +56,6 @@ class HTTPParser(object):
     partialHeader = ''
     connHeaders = None
     finishedReading = False
-    persistent = True
-    
 
     channel = None
 
@@ -74,7 +72,8 @@ class HTTPParser(object):
 
     # Needs functions to exist on .channel
     #  channel.maxHeaderLength
-    #  channel.requestReadFinished(self, self.persistent)
+    #  channel.requestReadFinished(self)
+    #  channel.setReadPersistent(self, persistent)
     # (from LineReceiver):
     #  channel.setRawMode()
     #  channel.setLineMode(extraneous)
@@ -83,10 +82,9 @@ class HTTPParser(object):
     #  channel.stopProducing()
     
     
-    def __init__(self, channel, persistent=True):
+    def __init__(self, channel):
         self.inHeaders = http_headers.Headers()
         self.channel = channel
-        self.persistent = persistent
         
     def lineReceived(self, line):
         if self.chunkedIn:
@@ -197,7 +195,7 @@ class HTTPParser(object):
         
     def allContentReceived(self):
         self.finishedReading = True
-        self.channel.requestReadFinished(self, self.persistent)
+        self.channel.requestReadFinished(self)
         self.handleContentComplete()
         
         
@@ -245,14 +243,14 @@ class HTTPParser(object):
 
     def setConnectionParams(self, connHeaders):
         # Figure out persistent connection stuff
-        if not self.persistent:
+        if not self.channel.readPersistent:
             pass
         elif self.version >= (1,1):
-            self.persistent = not 'close' in connHeaders.getHeader('connection', ())
+            self.channel.setReadPersistent(not 'close' in connHeaders.getHeader('connection', ()))
         elif 'keep-alive' in connHeaders.getHeader('connection', ()):
-            self.persistent = PERSIST_NO_PIPELINE
+            self.channel.setReadPersistent(PERSIST_NO_PIPELINE)
         else:
-            self.persistent = False
+            self.channel.setReadPersistent(False)
 
 
         # Okay, now implement section 4.4 Message Length to determine
@@ -297,8 +295,8 @@ class HTTPParser(object):
         # If we're erroring out while still reading the request
         if not self.finishedReading:
             self.finishedReading = True
-            self.persistent = False
-            self.channel.requestReadFinished(self, self.persistent)
+            self.channel.setReadPersistent(False)
+            self.channel.requestReadFinished(self)
         
     # producer interface
     def pauseProducing(self):
@@ -325,8 +323,8 @@ class HTTPChannelRequest(HTTPParser):
     
     out_version = "HTTP/1.1"
     
-    def __init__(self, channel, queued=0, persistent=True):
-        HTTPParser.__init__(self, channel, persistent)
+    def __init__(self, channel, queued=0):
+        HTTPParser.__init__(self, channel)
         self.queued=queued
 
         # Buffer writes to a string until we're first in line
@@ -425,9 +423,9 @@ class HTTPChannelRequest(HTTPParser):
                     self.chunkedOut = True
                 else:
                     # Cannot use persistent connections if we can't do chunking
-                    self.persistent = False
+                    self.channel.dropQueuedRequests()
             
-            if not self.persistent:
+            if self.channel.isLastRequest(self):
                 l.append("%s: %s\r\n" % ('Connection', 'close'))
             elif self.version < (1,1):
                 l.append("%s: %s\r\n" % ('Connection', 'Keep-Alive'))
@@ -510,7 +508,7 @@ class HTTPChannelRequest(HTTPParser):
         if self.producer:
             log.err(RuntimeError("Producer was not unregistered for %s" % self))
             self.unregisterProducer()
-        self.channel.requestWriteFinished(self, self.persistent)
+        self.channel.requestWriteFinished(self)
         del self.transport
         
     # methods for channel - end users should not use these
@@ -611,7 +609,7 @@ class HTTPChannel(basic.LineReceiver, policies.TimeoutMixin, object):
     
     
     _first_line = 2
-    persistent = True
+    readPersistent = True
     
     _readLost = False
     _writeLost = False
@@ -622,7 +620,8 @@ class HTTPChannel(basic.LineReceiver, policies.TimeoutMixin, object):
     def __init__(self):
         # the request queue
         self.requests = []
-
+        self.readPersistent = self.allowPersistentConnections
+        
     def connectionMade(self):
         self.setTimeout(self.inputTimeOut)
         self.factory.outstandingRequests+=1
@@ -632,7 +631,7 @@ class HTTPChannel(basic.LineReceiver, policies.TimeoutMixin, object):
             self.setTimeout(self.inputTimeOut)
             # if this connection is not persistent, drop any data which
             # the client (illegally) sent after the last request.
-            if not self.persistent:
+            if not self.readPersistent:
                 self.dataReceived = self.lineReceived = lambda *args: None
                 return
 
@@ -644,8 +643,7 @@ class HTTPChannel(basic.LineReceiver, policies.TimeoutMixin, object):
             
             self._first_line = 0
             try:
-                self.chanRequest = self.chanRequestFactory(self, len(self.requests),
-                                                           self.allowPersistentConnections)
+                self.chanRequest = self.chanRequestFactory(self, len(self.requests))
                 self.requests.append(self.chanRequest)
                 self.chanRequest.gotInitialLine(line)
             except AbortedException:
@@ -660,8 +658,7 @@ class HTTPChannel(basic.LineReceiver, policies.TimeoutMixin, object):
         if self._first_line:
             # Fabricate a request object to respond to the line length violation.
             self.chanRequest = self.chanRequestFactory(self, 
-                                                       len(self.requests),
-                                                       self.allowPersistentConnections)
+                                                       len(self.requests))
             self.requests.append(self.chanRequest)
             self.chanRequest.gotInitialLine("GET fake HTTP/1.0")
         try:
@@ -676,9 +673,8 @@ class HTTPChannel(basic.LineReceiver, policies.TimeoutMixin, object):
         except AbortedException:
             pass
 
-    def requestReadFinished(self, request, persist):
-        self.persistent = persist
-        if(self.persistent == PERSIST_NO_PIPELINE or
+    def requestReadFinished(self, request):
+        if(self.readPersistent == PERSIST_NO_PIPELINE or
            len(self.requests) >= self.maxPipeline):
             self.pauseProducing()
         
@@ -703,7 +699,7 @@ class HTTPChannel(basic.LineReceiver, policies.TimeoutMixin, object):
             
             # resume reading if allowed to
             if(not self._readLost and
-               self.persistent != PERSIST_NO_PIPELINE and
+               self.readPersistent != PERSIST_NO_PIPELINE and
                len(self.requests) < self.maxPipeline):
                 self.resumeProducing()
         elif self._readLost:
@@ -714,7 +710,22 @@ class HTTPChannel(basic.LineReceiver, policies.TimeoutMixin, object):
             self.setTimeout(self.betweenRequestsTimeOut)
             self.resumeProducing()
 
-    def requestWriteFinished(self, request, persistent):
+    def setReadPersistent(self, persistent):
+        self.readPersistent = persistent
+
+    def dropQueuedRequests(self):
+        """Called when a response is written that forces a connection close."""
+        self.readPersistent = False
+        # Tell all requests but first to abort.
+        for request in self.requests[1:]:
+            request.connectionLost(None)
+        del self.requests[1:]
+    
+    def isLastRequest(self, request):
+        # Is this channel handling the last possible request
+        return not self.readPersistent and self.requests[-1] == request
+    
+    def requestWriteFinished(self, request):
         """Called by first request in queue when it is done."""
         if request != self.requests[0]: raise TypeError
 
@@ -722,7 +733,7 @@ class HTTPChannel(basic.LineReceiver, policies.TimeoutMixin, object):
         # don't want queue len to be 0 yet.
         self.requests[0] = None
         
-        if persistent:
+        if self.readPersistent or len(self.requests) > 1:
             # Do this in the next reactor loop so as to
             # not cause huge call stacks with fast
             # incoming requests.

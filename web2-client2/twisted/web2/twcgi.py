@@ -105,6 +105,26 @@ def createCGIEnvironment(ctx, request=None):
             print k, "is not string:",v
     return env
 
+def runCGI(request, filename, filterscript=None):
+    # Make sure that we don't have an unknown content-length
+    if request.stream.length is None:
+        return http.Response(responsecode.LENGTH_REQUIRED)
+    env = createCGIEnvironment(ctx=None, request=request)
+    env['SCRIPT_FILENAME'] = filename
+    if '=' in request.querystring:
+        qargs = []
+    else:
+        qargs = [urllib.unquote(x) for x in request.querystring.split('+')]
+    
+    if filterscript is None:
+        filterscript = filename
+        qargs = [filename] + qargs
+    else:
+        qargs = [filterscript, filename] + qargs
+    d = defer.Deferred()
+    proc = CGIProcessProtocol(request, d)
+    reactor.spawnProcess(proc, filterscript, qargs, env, os.path.dirname(filename))
+    return d
 
 class CGIScript(resource.LeafResource):
     """I represent a CGI script.
@@ -126,26 +146,11 @@ class CGIScript(resource.LeafResource):
         process.
         """
         request = iweb.IRequest(ctx)
-        # Make sure that we don't have an unknown content-length
-        if request.stream.length is None:
-            return http.Response(responsecode.LENGTH_REQUIRED)
-        env = createCGIEnvironment(ctx, request=request)
-        env['SCRIPT_FILENAME'] = self.filename
-        if '=' in request.querystring:
-            qargs = []
-        else:
-            qargs = [urllib.unquote(x) for x in request.querystring.split('+')]
-
-        return self.runProcess(env, request, qargs)
+        return runCGI(request, self.filename)
 
     def http_POST(self, ctx):
         return self.render(ctx)
 
-    def runProcess(self, env, request, qargs=[]):
-        d = defer.Deferred()
-        p = CGIProcessProtocol(request, d)
-        reactor.spawnProcess(p, self.filename, [self.filename]+qargs, env, os.path.dirname(self.filename))
-        return d
 
 
 class FilteredScript(CGIScript):
@@ -166,17 +171,15 @@ class FilteredScript(CGIScript):
             self.filters = filters
         CGIScript.__init__(self, filename)
         
-    def runProcess(self, env, request, qargs=[]):
-        d = defer.Deferred()
-        proc = CGIProcessProtocol(request, d)
+
+    def render(self, ctx):
+        request = iweb.IRequest(ctx)
         for filterscript in self.filters:
             if os.path.exists(filterscript):
-                reactor.spawnProcess(proc, filterscript, [filterscript, self.filename]+qargs, env, os.path.dirname(self.filename))
-                break
-        else:
-            log.err(self.__class__.__name__ + ' could not find any of: ' + ', '.join(self.filters))
-            return http.Response(responsecode.INTERNAL_SERVER_ERROR)
-        return d
+                return runCGI(request, self.filename, filterscript)
+            else:
+                log.err(self.__class__.__name__ + ' could not find any of: ' + ', '.join(self.filters))
+                return http.Response(responsecode.INTERNAL_SERVER_ERROR)
 
 
 class PHP3Script(FilteredScript):

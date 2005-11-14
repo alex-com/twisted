@@ -3,6 +3,11 @@ from twisted.protocols import basic, policies
 from twisted.web2 import stream as stream_mod, http, http_headers, responsecode
 from twisted.web2.channel import http as httpchan
 
+#from twisted.python.util import tracer
+
+class ProtocolError(Exception):
+    pass
+
 class ClientRequest(object):
     def __init__(self, method, uri, headers, stream):
         self.method = method
@@ -23,8 +28,8 @@ class HTTPClientChannelRequest(httpchan.HTTPParser):
     chunkedOut = False
     finished = False
     
-    def __init__(self, channel, request, persistent=True):
-        httpchan.HTTPParser.__init__(self, channel, persistent)
+    def __init__(self, channel, request):
+        httpchan.HTTPParser.__init__(self, channel)
         self.request = request
         self.transport = self.channel.transport
         self.responseDefer = defer.Deferred()
@@ -52,7 +57,7 @@ class HTTPClientChannelRequest(httpchan.HTTPParser):
                 l.append("%s: %s\r\n" % ('Transfer-Encoding', 'chunked'))
                 self.chunkedOut = True
 
-        if not self.persistent:
+        if self.channel.isLastRequest(self):
             l.append("%s: %s\r\n" % ('Connection', 'close'))
         else:
             l.append("%s: %s\r\n" % ('Connection', 'Keep-Alive'))
@@ -94,9 +99,8 @@ class HTTPClientChannelRequest(httpchan.HTTPParser):
         self.responseDefer.errback(err)
 
     def _abortWithError(self, errcode, text):
-        import sys, pdb
-        print >> sys.stderr, "ERROR:", errcode, text
-        pdb.set_trace()
+        self.abortParse()
+        self.responseDefer.errback(ProtocolError(text))
         
     def gotInitialLine(self, initialLine):
         parts = initialLine.split(' ', 2)
@@ -138,120 +142,140 @@ class HTTPClientChannelRequest(httpchan.HTTPParser):
     def handleContentComplete(self):
         self.stream.finish()
 
+class EmptyHTTPClientManager(object):
+    def clientBusy(self, proto):
+        pass
+    
+    def clientIdle(self, proto):
+        pass
+
+    def clientPipelining(self, proto):
+        pass
+    
+    def clientGone(self, proto):
+        pass
+    
+
 class HTTPClientProtocol(basic.LineReceiver, policies.TimeoutMixin, object):
+    """A HTTP 1.1 Client with request pipelining support."""
+    
     chanRequest = None
     maxHeaderLength = 10240
-    first = 1
-    
-    def __init__(self):
-        pass
+    firstLine = 1
+    readPersistent = True
+    # Timeout between lines or bytes while reading a request
+    inputTimeOut = 60 * 4
+
+    def __init__(self, manager=None):
+        self.chanRequests = []
+        if manager is None:
+            manager = EmptyHTTPClientManager()
+        self.manager = manager
 
     def lineReceived(self, line):
-        if self.first:
-            self.first = 0
-            self.chanRequest.gotInitialLine(line)
+        self.setTimeout(self.inputTimeOut)
+        if not self.chanRequests:
+            print "Extra line!"
+            # server sending random unrequested data.
+            self.transport.loseConnection()
+            return
+        
+        if self.firstLine:
+            self.firstLine = 0
+            self.chanRequests[0].gotInitialLine(line)
         else:
-            self.chanRequest.lineReceived(line)
+            self.chanRequests[0].lineReceived(line)
 
     def rawDataReceived(self, data):
-        self.chanRequest.rawDataReceived(data)
+        self.setTimeout(self.inputTimeOut)
+        if not self.chanRequests:
+            print "Extra raw data!"
+            # server sending random unrequested data.
+            self.transport.loseConnection()
+            return
+        
+        self.chanRequests[0].rawDataReceived(data)
         
     def submitRequest(self, request):
-        assert self.chanRequest is None
-        d = defer.Deferred()
-        chanRequest = HTTPClientChannelRequest(self, request, False)
-        self.chanRequest = chanRequest
-        chanRequest.submit()
+        self.manager.clientBusy(self)
+        
+        chanRequest = HTTPClientChannelRequest(self, request)
+        self.chanRequests.append(chanRequest)
+        print "submitRequest:", self.chanRequests
+        if len(self.chanRequests) == 1 or self.chanRequests[-2].finished:
+            print "submit!", request
+            self.setTimeout(self.inputTimeOut)
+            chanRequest.submit()
+        
         return chanRequest.responseDefer
 
-    def requestReadFinished(self, request, persistent):
-        pass
-
     def requestWriteFinished(self, request):
-        pass
+        reqind = self.chanRequests.index(request)
+        # If we're the last request to be written, tell the manager
+        if reqind == len(self.chanRequests) - 1:
+            if self.readPersistent:
+                self.manager.clientPipelining(self)
+        else:
+            self.chanRequests[reqind+1].submit()
+            
+
+    def requestReadFinished(self, request):
+        assert self.chanRequests[0] is request
+
+        del self.chanRequests[0]
+        self.firstLine = True
+        
+        if not self.chanRequests:
+            if self.readPersistent:
+                self.setTimeout(None)
+                self.manager.clientIdle(self)
+            else:
+                print "No more requests, closing"
+                self.transport.loseConnection()
+
+    def setReadPersistent(self, persist):
+        self.readPersistent = persist
+        if not persist:
+            # Tell all requests but first to abort.
+            for request in self.chanRequests[1:]:
+                request.connectionLost(None)
+            del self.chanRequests[1:]
+    
+    def isLastRequest(self, request):
+        # Is this channel handling the last possible request
+        return not self.readPersistent and self.chanRequests[-1] == request
 
     def connectionLost(self, reason):
-        pass
-    
-    
-# class HTTPClientProtocol(basic.LineReceiver, policies.TimeoutMixin, object):
-#     maxHeaderLength = 10240 
-    
-#     def __init__(self):
-#         self.chanRequests = []
-        
-#     def submitRequest(self, request):
-#         assert not self.chanRequests or self.chanRequests[-1].finished
-        
-#         self.manager.clientBusy(self)
-        
-#         d = defer.Deferred()
-#         chanRequest = HTTPClientChannelRequest(self, request, self.persistent)
-#         self.chanRequests.append(chanRequest)
-#         chanRequest.submit()
-#         return chanRequest.responseDefer
-    
-#     def requestReadFinished(self, request, persistent):
-#         assert self.chanRequests[0] is request
-        
-#         self.persistent = persistent
-#         del self.chanRequests[0]
-#         if persistent and not self.chanRequests:
-#             self.manager.clientIdle(self)
-        
-#     def requestWriteFinished(self, request):
-#         if len(self.chanRequests) == 1:
-#             self.manager.clientPipelining(self)
+        self.setTimeout(None)
+        self.manager.clientGone(self)
+        # Tell all requests to abort.
+#        for request in self.chanRequests:
+#            if request is not None:
+#                request.connectionLost(reason)
 
-#     def connectionLost(self, reason):
-#         pass
-
-
-# class HTTPClientManager(object):
-#     def clientBusy(self, proto):
-#         pass
+    #isLastRequest = tracer(isLastRequest)
+    #lineReceived = tracer(lineReceived)
+    #rawDataReceived = tracer(rawDataReceived)
+    #connectionLost = tracer(connectionLost)
+    #requestReadFinished = tracer(requestReadFinished)
+    #requestWriteFinished = tracer(requestWriteFinished)
+    #submitRequest = tracer(submitRequest)
     
-#     def clientIdle(self, proto):
-#         pass
-
-#     def clientPipelining(self, proto):
-#         pass
-    
-#     def clientGone(self, proto):
-#         pass
-    
-# class HTTPClientProtocolFactory(protocol.ClientFactory, HTTPClientManager):
-#     protocol = HTTPClientProtocol
-    
-#     def __init__(self, request):
-#         self.request = request
-#         self.deferred = defer.Deferred()
-        
-#     def buildProtocol(self, addr):
-#         return self.protocol(self)
-        
-#     def clientConnectionFailed(self, connector, reason):
-#         self.sendFailureResponse(reason)
-
-#     def sendFailureResponse(self, reason):
-#         response = http.Response(code=responsecode.BAD_GATEWAY, stream=str(reason.value))
-#         self.deferred.callback(response)
-
 
 def testConn(host):
     from twisted.internet import reactor
     d = protocol.ClientCreator(reactor, HTTPClientProtocol).connectTCP(host, 80)
-    def sendReq(proto):
-        return proto.submitRequest(ClientRequest("GET", "/", {'Host':host}, None))
-    d.addCallback(sendReq)
-    def gotResp(resp):
+    def gotResp(resp, num):
         def print_(n):
-            print "DATA:", `n`
+            print "DATA %s: %r" % (num, n)
         def printdone(n):
-            print "DONE"
-        print "GOT RESPONSE: ", resp
+            print "DONE %s" % num
+        print "GOT RESPONSE %s: %s" % (num, resp)
         stream_mod.readStream(resp.stream, print_).addCallback(printdone)
-    d.addCallback(gotResp)
+    def sendReqs(proto):
+        proto.submitRequest(ClientRequest("GET", "/", {'Host':host}, None)).addCallback(gotResp, 1)
+        proto.submitRequest(ClientRequest("GET", "/foo", {'Host':host}, None)).addCallback(gotResp, 2)
+    d.addCallback(sendReqs)
     del d
     reactor.run()
 

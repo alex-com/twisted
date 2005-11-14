@@ -381,6 +381,50 @@ def spewer(frame, s, ignored):
             frame.f_code.co_filename,
             frame.f_lineno)
 
+def tracer(f):
+    def g(*args, **kwargs):
+        s=[]
+        try:
+            fname = str(f.__name__)
+        except:
+            fname = "<Unknown>"
+        for arg in args:
+            try:
+                s.append(repr(arg))
+            except:
+                s.append("<Unprintable>")
+        
+        for k, v in kwargs.iteritems():
+            try:
+                ks = repr(k)
+            except:
+                ks = "<Unprintable>"
+            try:
+                vs = repr(v)
+            except:
+                vs = "<Unprintable>"
+            s.append('%s=%s' % (ks, vs))
+            
+        print "=> %s(%s)" % (fname, ', '.join(s))
+        try:
+            result = f(*args, **kwargs)
+        except:
+            try:
+                rs = str(sys.exc_info()[1])
+            except:
+                rs = "<Unprintable exception>"
+            print "<= EXC %s:%s" % (fname, rs)
+            raise
+        else:
+            try:
+                rs = repr(result)
+            except:
+                rs = "<Unprintable>"
+            print "<= %s:%s" % (fname, rs)
+            return result
+    mergeFunctionMetadata(f, g)
+    return g
+    
 def searchupwards(start, files=[], dirs=[]):
     """Walk upwards from start, looking for a directory containing
     all files and directories given as arguments::

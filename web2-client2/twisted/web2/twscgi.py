@@ -31,11 +31,13 @@ class SCGIClientResource(resource.LeafResource):
     
     def renderHTTP(self, ctx):
         request = iweb.IRequest(ctx)
-        factory = SCGIClientProtocolFactory(request)
-        reactor.connectTCP(self.host, self.port, factory)
-        return factory.deferred
-        
-        
+        return doSCGI(request, self.host, self.port)
+
+def doSCGI(request, host, port):
+    factory = SCGIClientProtocolFactory(request)
+    reactor.connectTCP(self.host, self.port, factory)
+    return factory.deferred
+    
 class SCGIClientProtocol(basic.LineReceiver):
     """Protocol for talking to a SCGI server.
     """
