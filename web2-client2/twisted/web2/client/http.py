@@ -201,9 +201,7 @@ class HTTPClientProtocol(basic.LineReceiver, policies.TimeoutMixin, object):
         
         chanRequest = HTTPClientChannelRequest(self, request)
         self.chanRequests.append(chanRequest)
-        print "submitRequest:", self.chanRequests
         if len(self.chanRequests) == 1 or self.chanRequests[-2].finished:
-            print "submit!", request
             self.setTimeout(self.inputTimeOut)
             chanRequest.submit()
         
