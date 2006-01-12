@@ -10,7 +10,7 @@ from twisted.web2 import responsecode
 from twisted.web2 import http_headers
 from twisted.web2 import http
 
-PERSIST_NO_PIPELINE = 2
+PERSIST_NO_PIPELINE, PERSIST_PIPELINE = (1,2)
 
 _cachedHostNames = {}
 def _cachedGetHostByAddr(hostaddr):
@@ -243,14 +243,15 @@ class HTTPParser(object):
 
     def setConnectionParams(self, connHeaders):
         # Figure out persistent connection stuff
-        if not self.channel.readPersistent:
-            pass
-        elif self.version >= (1,1):
-            self.channel.setReadPersistent(not 'close' in connHeaders.getHeader('connection', ()))
+        if self.version >= (1,1):
+            if 'close' in connHeaders.getHeader('connection', ()):
+                readPersistent = False
+            else:
+                readPersistent = PERSIST_PIPELINE
         elif 'keep-alive' in connHeaders.getHeader('connection', ()):
-            self.channel.setReadPersistent(PERSIST_NO_PIPELINE)
+            readPersistent = PERSIST_NO_PIPELINE
         else:
-            self.channel.setReadPersistent(False)
+            readPersistent = False
 
 
         # Okay, now implement section 4.4 Message Length to determine
@@ -287,10 +288,17 @@ class HTTPParser(object):
                     self.length = 0
                 else:
                     self.length = connHeaders.getHeader('content-length', self.length)
+                    
+                # If it's an indeterminate stream without transfer encoding, it must be
+                # the last request.
+                if self.length is None:
+                    readPersistent = False
             else:
                 # If no Content-Length either, assume no content.
                 self.length = connHeaders.getHeader('content-length', 0)
 
+        # Set the calculated persistence
+        self.channel.setReadPersistent(readPersistent)
     def abortParse(self):
         # If we're erroring out while still reading the request
         if not self.finishedReading:
@@ -609,7 +617,7 @@ class HTTPChannel(basic.LineReceiver, policies.TimeoutMixin, object):
     
     
     _first_line = 2
-    readPersistent = True
+    readPersistent = PERSIST_PIPELINE
     
     _readLost = False
     _writeLost = False
@@ -620,7 +628,6 @@ class HTTPChannel(basic.LineReceiver, policies.TimeoutMixin, object):
     def __init__(self):
         # the request queue
         self.requests = []
-        self.readPersistent = self.allowPersistentConnections
         
     def connectionMade(self):
         self.setTimeout(self.inputTimeOut)
@@ -642,6 +649,11 @@ class HTTPChannel(basic.LineReceiver, policies.TimeoutMixin, object):
                 return
             
             self._first_line = 0
+            
+            if not self.allowPersistentConnections:
+                # Don't allow a second request
+                self.readPersistent = False
+                
             try:
                 self.chanRequest = self.chanRequestFactory(self, len(self.requests))
                 self.requests.append(self.chanRequest)
@@ -674,7 +686,7 @@ class HTTPChannel(basic.LineReceiver, policies.TimeoutMixin, object):
             pass
 
     def requestReadFinished(self, request):
-        if(self.readPersistent == PERSIST_NO_PIPELINE or
+        if(self.readPersistent is PERSIST_NO_PIPELINE or
            len(self.requests) >= self.maxPipeline):
             self.pauseProducing()
         
@@ -699,7 +711,7 @@ class HTTPChannel(basic.LineReceiver, policies.TimeoutMixin, object):
             
             # resume reading if allowed to
             if(not self._readLost and
-               self.readPersistent != PERSIST_NO_PIPELINE and
+               self.readPersistent is not PERSIST_NO_PIPELINE and
                len(self.requests) < self.maxPipeline):
                 self.resumeProducing()
         elif self._readLost:
@@ -711,7 +723,9 @@ class HTTPChannel(basic.LineReceiver, policies.TimeoutMixin, object):
             self.resumeProducing()
 
     def setReadPersistent(self, persistent):
-        self.readPersistent = persistent
+        if self.readPersistent:
+            # only allow it to be set if it's not currently False
+            self.readPersistent = persistent
 
     def dropQueuedRequests(self):
         """Called when a response is written that forces a connection close."""

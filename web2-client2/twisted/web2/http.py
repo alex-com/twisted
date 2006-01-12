@@ -337,7 +337,7 @@ class Request(object):
             # and decide to do so anyways at the same time we're sending back 
             # this response. Thus, the read state is unknown after this.
             # We must close the connection.
-            self.chanRequest.persistent = False
+            self.chanRequest.channel.setReadPersistent(False)
             # Nothing more will be read
             self.chanRequest.allContentReceived()
 

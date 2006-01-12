@@ -355,17 +355,14 @@ class TestConnection:
         self.client = None
 
 class HTTPTests(unittest.TestCase):
-    def connect(self, logFile=None, maxPipeline=4,
-                inputTimeOut=60000, betweenRequestsTimeOut=600000):
+    def connect(self, logFile=None, **protocol_kwargs):
         cxn = TestConnection()
 
         def makeTestRequest(*args):
             cxn.requests.append(TestRequest(*args))
             return cxn.requests[-1]
         
-        factory = channel.HTTPFactory(requestFactory=makeTestRequest, maxPipeline=maxPipeline,
-                                   inputTimeOut=inputTimeOut,
-                                   betweenRequestsTimeOut=betweenRequestsTimeOut)
+        factory = channel.HTTPFactory(requestFactory=makeTestRequest, **protocol_kwargs)
         
         cxn.client = TestClient()
         cxn.server = factory.buildProtocol(address.IPv4Address('TCP', '127.0.0.1', 2345))
@@ -669,7 +666,29 @@ class CoreHTTPTestCase(HTTPTests):
         
         cxn.client.loseConnection()
         self.assertDone(cxn)
+
+    def testHTTP1_1_expect_continue_early_reply(self):
+        cxn = self.connect()
+        cmds = [[]]
+        data = ""
+        cxn.client.write("GET / HTTP/1.1\r\nContent-Length: 5\r\nHost: localhost\r\nExpect: 100-continue\r\n\r\n")
+        cmds[0] += [('init', 'GET', '/', (1,1),
+                     (('Content-Length', ['5']), ('Host', ['localhost']), ('Expect', ['100-continue'])))]
+        self.compareResult(cxn, cmds, data)
+
+        response = TestResponse()
+        response.headers.setRawHeaders("Content-Length", ("6",))
+        cxn.requests[0].writeResponse(response)
+        response.write("Output")
+        response.finish()
+
+        cmds[0] += [('contentComplete',)]
+        data += "HTTP/1.1 200 OK\r\nContent-Length: 6\r\nConnection: close\r\n\r\nOutput"
+        self.compareResult(cxn, cmds, data)
         
+        cxn.client.loseConnection()
+        self.assertDone(cxn)
+
     def testHeaderContinuation(self):
         cxn = self.connect()
         cmds = [[]]
@@ -741,7 +760,25 @@ class CoreHTTPTestCase(HTTPTests):
 
         cxn.client.loseConnection()
         self.assertDone(cxn)
-
+        
+    def testDisallowPersistentConnections(self):
+        cxn = self.connect(allowPersistentConnections=False)
+        cmds = [[]]
+        data = ""
+        
+        cxn.client.write("GET / HTTP/1.1\r\nHost: localhost\r\n\r\nGET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
+        cmds[0] += [('init', 'GET', '/', (1,1),
+                     (('Host', ['localhost']),)),
+                    ('contentComplete',)]
+        self.compareResult(cxn, cmds, data)
+        
+        response = TestResponse()
+        response.finish()
+        cxn.requests[0].writeResponse(response)
+        data += 'HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n'
+        self.compareResult(cxn, cmds, data)
+        self.assertDone(cxn)
+    
 class ErrorTestCase(HTTPTests):
     def assertStartsWith(self, first, second, msg=None):
         self.assert_(first.startswith(second), '%r.startswith(%r)' % (first, second))

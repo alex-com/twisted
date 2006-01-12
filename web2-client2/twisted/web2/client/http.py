@@ -2,6 +2,7 @@ from twisted.internet import defer, protocol
 from twisted.protocols import basic, policies
 from twisted.web2 import stream as stream_mod, http, http_headers, responsecode
 from twisted.web2.channel import http as httpchan
+from twisted.web2.channel.http import PERSIST_NO_PIPELINE, PERSIST_PIPELINE
 
 #from twisted.python.util import tracer
 
@@ -28,9 +29,12 @@ class HTTPClientChannelRequest(httpchan.HTTPParser):
     chunkedOut = False
     finished = False
     
-    def __init__(self, channel, request):
+    closeAfter = False
+    
+    def __init__(self, channel, request, closeAfter):
         httpchan.HTTPParser.__init__(self, channel)
         self.request = request
+        self.closeAfter = closeAfter
         self.transport = self.channel.transport
         self.responseDefer = defer.Deferred()
         
@@ -57,7 +61,7 @@ class HTTPClientChannelRequest(httpchan.HTTPParser):
                 l.append("%s: %s\r\n" % ('Transfer-Encoding', 'chunked'))
                 self.chunkedOut = True
 
-        if self.channel.isLastRequest(self):
+        if self.closeAfter:
             l.append("%s: %s\r\n" % ('Connection', 'close'))
         else:
             l.append("%s: %s\r\n" % ('Connection', 'Keep-Alive'))
@@ -101,7 +105,11 @@ class HTTPClientChannelRequest(httpchan.HTTPParser):
     def _abortWithError(self, errcode, text):
         self.abortParse()
         self.responseDefer.errback(ProtocolError(text))
-        
+
+    def connectionLost(self, reason):
+        ### FIXME!
+        pass
+    
     def gotInitialLine(self, initialLine):
         parts = initialLine.split(' ', 2)
         
@@ -162,68 +170,82 @@ class HTTPClientProtocol(basic.LineReceiver, policies.TimeoutMixin, object):
     chanRequest = None
     maxHeaderLength = 10240
     firstLine = 1
-    readPersistent = True
-    # Timeout between lines or bytes while reading a request
+    readPersistent = PERSIST_NO_PIPELINE
+    
+    # inputTimeOut should be pending whenever a complete request has
+    # been written but the complete response has not yet been
+    # received, and be reset every time data is received.
     inputTimeOut = 60 * 4
 
     def __init__(self, manager=None):
-        self.chanRequests = []
+        self.outRequest = None
+        self.inRequests = []
         if manager is None:
             manager = EmptyHTTPClientManager()
         self.manager = manager
 
     def lineReceived(self, line):
-        self.setTimeout(self.inputTimeOut)
-        if not self.chanRequests:
+        if not self.inRequests:
             print "Extra line!"
             # server sending random unrequested data.
             self.transport.loseConnection()
             return
-        
+
+        # If not currently writing this request, set timeout
+        if self.inRequests[0] is not self.outRequest:
+            self.setTimeout(self.inputTimeOut)
+            
         if self.firstLine:
             self.firstLine = 0
-            self.chanRequests[0].gotInitialLine(line)
+            self.inRequests[0].gotInitialLine(line)
         else:
-            self.chanRequests[0].lineReceived(line)
+            self.inRequests[0].lineReceived(line)
 
     def rawDataReceived(self, data):
-        self.setTimeout(self.inputTimeOut)
-        if not self.chanRequests:
+        if not self.inRequests:
             print "Extra raw data!"
             # server sending random unrequested data.
             self.transport.loseConnection()
             return
         
-        self.chanRequests[0].rawDataReceived(data)
-        
-    def submitRequest(self, request):
-        self.manager.clientBusy(self)
-        
-        chanRequest = HTTPClientChannelRequest(self, request)
-        self.chanRequests.append(chanRequest)
-        if len(self.chanRequests) == 1 or self.chanRequests[-2].finished:
+        # If not currently writing this request, set timeout
+        if self.inRequests[0] is not self.outRequest:
             self.setTimeout(self.inputTimeOut)
-            chanRequest.submit()
+            
+        self.inRequests[0].rawDataReceived(data)
         
+    def submitRequest(self, request, closeAfter=True):
+        # Assert we're in a valid state to submit more
+        assert self.outRequest is None
+        assert ((self.readPersistent is PERSIST_NO_PIPELINE and not self.inRequests)
+                or self.readPersistent is PERSIST_PIPELINE)
+        
+        self.manager.clientBusy(self)
+        if closeAfter:
+            self.readPersistent = False
+        
+        self.outRequest = chanRequest = HTTPClientChannelRequest(self, request, closeAfter)
+        self.inRequests.append(chanRequest)
+        
+        chanRequest.submit()
         return chanRequest.responseDefer
 
     def requestWriteFinished(self, request):
-        reqind = self.chanRequests.index(request)
-        # If we're the last request to be written, tell the manager
-        if reqind == len(self.chanRequests) - 1:
-            if self.readPersistent:
-                self.manager.clientPipelining(self)
-        else:
-            self.chanRequests[reqind+1].submit()
-            
+        assert request is self.outRequest
+        
+        self.outRequest = None
+        # Tell the manager if more requests can be submitted.
+        self.setTimeout(self.inputTimeOut)
+        if self.readPersistent is PERSIST_PIPELINE:
+            self.manager.clientPipelining(self)
 
     def requestReadFinished(self, request):
-        assert self.chanRequests[0] is request
-
-        del self.chanRequests[0]
+        assert self.inRequests[0] is request
+        
+        del self.inRequests[0]
         self.firstLine = True
         
-        if not self.chanRequests:
+        if not self.inRequests:
             if self.readPersistent:
                 self.setTimeout(None)
                 self.manager.clientIdle(self)
@@ -235,22 +257,19 @@ class HTTPClientProtocol(basic.LineReceiver, policies.TimeoutMixin, object):
         self.readPersistent = persist
         if not persist:
             # Tell all requests but first to abort.
-            for request in self.chanRequests[1:]:
+            for request in self.inRequests[1:]:
                 request.connectionLost(None)
-            del self.chanRequests[1:]
+            del self.inRequests[1:]
     
-    def isLastRequest(self, request):
-        # Is this channel handling the last possible request
-        return not self.readPersistent and self.chanRequests[-1] == request
-
     def connectionLost(self, reason):
+        self.readPersistent = False
         self.setTimeout(None)
         self.manager.clientGone(self)
         # Tell all requests to abort.
-#        for request in self.chanRequests:
-#            if request is not None:
-#                request.connectionLost(reason)
-
+        for request in self.inRequests:
+            if request is not None:
+                request.connectionLost(reason)
+    
     #isLastRequest = tracer(isLastRequest)
     #lineReceived = tracer(lineReceived)
     #rawDataReceived = tracer(rawDataReceived)
