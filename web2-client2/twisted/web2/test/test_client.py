@@ -28,9 +28,7 @@ class FakeTransport:
 # Halfway tests
 
 class TestSentRequests(unittest.TestCase):
-    def assertRequest(self, req, expectedLines):
-        d = self.proto.submitRequest(req)
-
+    def assertRequest(self, expectedLines):
         headers, content = self.proto.transport.buffer.split('\r\n\r\n', 1)
         status, headers = headers.split('\r\n', 1)
         headers = headers.split('\r\n')
@@ -57,33 +55,39 @@ class TestSentRequests(unittest.TestCase):
         # set up request
         req = http.ClientRequest('GET', '/', None, None)
 
-        self.assertRequest(req, ['GET / HTTP/1.1',
-                                 'Connection: Keep-Alive',
-                                 ''])
+        self.proto.submitRequest(req)
+        
+        self.assertRequest(['GET / HTTP/1.1',
+                            'Connection: close',
+                            ''])
 
     def test_addedHeaders(self):
         req = http.ClientRequest('GET', '/', {'Host': 'foo'}, None)
 
-        self.assertRequest(req, ['GET / HTTP/1.1',
-                                 'Connection: Keep-Alive',
-                                 'Host: foo',
-                                 ''])
+        self.proto.submitRequest(req)
+        
+        self.assertRequest(['GET / HTTP/1.1',
+                            'Connection: close',
+                            'Host: foo',
+                            ''])
 
     def test_streamedContent(self):
         req = http.ClientRequest('GET', '/', None, 'Hello friends')
 
-        self.assertRequest(req, ['GET / HTTP/1.1',
-                                 'Connection: Keep-Alive',
-                                 'Content-Length: 13',
-                                 '',
-                                 'Hello friends'])
+        self.proto.submitRequest(req)
+
+        self.assertRequest(['GET / HTTP/1.1',
+                            'Connection: close',
+                            'Content-Length: 13',
+                            '',
+                            'Hello friends'])
 
 
-    def test_lastRequest(self):
+    def test_persistConnection(self):
         req = http.ClientRequest('GET', '/', None, None)
 
-        self.proto.readPersistent = False
-
-        self.assertRequest(req, ['GET / HTTP/1.1',
-                                 'Connection: close',
-                                 ''])
+        self.proto.submitRequest(req, closeAfter=False)
+        
+        self.assertRequest(['GET / HTTP/1.1',
+                            'Connection: Keep-Alive',
+                            ''])
