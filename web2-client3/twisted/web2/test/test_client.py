@@ -13,10 +13,6 @@ from twisted.web2 import iweb, responsecode
 
 from twisted.web2.test.test_http import LoopbackRelay, HTTPTests, TestConnection
 
-from twisted.python.util import tracer
-
-import pdb
-
 class FakeTransport:
     buffer = ''
     disconnected = False
@@ -140,6 +136,7 @@ class ClientTests(HTTPTests):
         
         cxn.serverToClient = LoopbackRelay(cxn.client, logFile)
         cxn.clientToServer = LoopbackRelay(cxn.server, logFile)
+
         cxn.server.makeConnection(cxn.serverToClient)
         cxn.client.makeConnection(cxn.clientToServer)
 
@@ -149,13 +146,20 @@ class ClientTests(HTTPTests):
         cxn.server.write(data)
         self.iterate(cxn)
 
-    def assertRecieved(self, cxn, expected):
+    def writeLines(self, cxn, lines):
+        self.writeToClient(cxn, '\r\n'.join(lines))
+
+    def assertReceived(self, cxn, expected):
         self.iterate(cxn)
-        self.assertEquals(cxn.server.data, expected)
+        self.assertEquals(cxn.server.data, '\r\n'.join(expected))
 
     def assertDone(self, cxn):
         self.iterate(cxn)
-        self.assertEquals(cxn.server.done, True)
+        self.assertEquals(cxn.server.done, True, 'Connection not closed.')
+        
+    def assertHeaders(self, resp, expectedHeaders):
+        for header in resp.headers.getAllRawHeaders():
+            self.assertIn(header, expectedHeaders)
 
     def test_simpleRequest(self):
         cxn = self.connect(inputTimeOut=None)
@@ -167,19 +171,23 @@ class ClientTests(HTTPTests):
         def gotResp(resp):
             self.assertEquals(resp.code, 200)
 
-            self.assertEquals(tuple(
-                    resp.headers.getAllRawHeaders()),
-                              (('Content-Length', ['10']),))
+	    self.assertHeaders(resp, (('Content-Length', ['10']),))
 
             return defer.maybeDeferred(resp.stream.read).addCallback(gotData)
                 
         d = cxn.client.submitRequest(req).addCallback(gotResp)
 
-        self.assertRecieved(cxn, 'GET / HTTP/1.1\r\nConnection: close\r\n\r\n')
+        self.assertReceived(cxn, ('GET / HTTP/1.1',
+				  'Connection: close',
+				  '\r\n'))
 
-        self.writeToClient(cxn, 'HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\n1234567890')
+        self.writeLines(cxn, ('HTTP/1.1 200 OK',
+			      'Content-Length: 10',
+			      'Connection: close',
+			      '',
+			      '1234567890'))
 
-        return d
+        return d.addCallback(lambda _: self.assertDone(cxn))
 
     def test_delayedContent(self):
         cxn = self.connect(inputTimeOut=None)
@@ -190,9 +198,7 @@ class ClientTests(HTTPTests):
 
         def gotResp(resp):
             self.assertEquals(resp.code, 200)
-            self.assertEquals(tuple(
-                    resp.headers.getAllRawHeaders()),
-                              (('Content-Length', ['10']),))
+	    self.assertHeaders(resp, (('Content-Length', ['10']),))
 
             self.writeToClient(cxn, '1234567890')
 
@@ -200,8 +206,34 @@ class ClientTests(HTTPTests):
 
         d = cxn.client.submitRequest(req).addCallback(gotResp)
 
-        self.assertRecieved(cxn, 'GET / HTTP/1.1\r\nConnection: close\r\n\r\n')
+        self.assertReceived(cxn, ('GET / HTTP/1.1',
+				  'Connection: close',
+				  '\r\n'))
 
-        self.writeToClient(cxn, 'HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\n')
+        self.writeLines(cxn, ('HTTP/1.1 200 OK',
+			      'Content-Length: 10',
+			      'Connection: close',
+			      '\r\n'))
 
-        return d
+        return d.addCallback(lambda _: self.assertDone(cxn))
+
+    def test_serverDoesntSendConnectionClose(self):
+        cxn = self.connect(inputTimeOut=None)
+        req = http.ClientRequest('GET', '/', None, None)
+
+        def gotResp(resp):
+            self.assertEquals(resp.code, 200)
+	    
+	    self.failIf(('Connection', ['close']) in resp.headers.getAllRawHeaders())
+	    
+        d = cxn.client.submitRequest(req).addCallback(gotResp)
+
+        self.assertReceived(cxn, ('GET / HTTP/1.1',
+				  'Connection: close',
+				  '\r\n'))
+
+        self.writeLines(cxn, ('HTTP/1.1 200 OK',
+                              '',
+			      'Some Content'))
+
+        return d.addCallback(lambda _: self.assertDone(cxn))

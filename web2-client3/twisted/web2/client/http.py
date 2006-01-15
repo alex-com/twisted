@@ -250,7 +250,7 @@ class HTTPClientProtocol(basic.LineReceiver, policies.TimeoutMixin, object):
                 self.setTimeout(None)
                 self.manager.clientIdle(self)
             else:
-                print "No more requests, closing"
+#                 print "No more requests, closing"
                 self.transport.loseConnection()
 
     def setReadPersistent(self, persist):
