@@ -135,9 +135,9 @@ class ClientTests(HTTPTests):
             return cxn.requests[-1]
         
         cxn.client = http.HTTPClientProtocol()
-    cxn.client.inputTimeOut = inputTimeOut
+        cxn.client.inputTimeOut = inputTimeOut
         cxn.server = TestServer()
-    
+	
         cxn.serverToClient = LoopbackRelay(cxn.client, logFile)
         cxn.clientToServer = LoopbackRelay(cxn.server, logFile)
         cxn.server.makeConnection(cxn.serverToClient)
@@ -146,62 +146,62 @@ class ClientTests(HTTPTests):
         return cxn
 
     def writeToClient(self, cxn, data):
-    cxn.server.write(data)
-    self.iterate(cxn)
+	cxn.server.write(data)
+	self.iterate(cxn)
 
     def assertRecieved(self, cxn, expected):
-    self.iterate(cxn)
-    self.assertEquals(cxn.server.data, expected)
+	self.iterate(cxn)
+	self.assertEquals(cxn.server.data, expected)
 
     def assertDone(self, cxn):
-    self.iterate(cxn)
-    self.assertEquals(cxn.server.done, True)
+	self.iterate(cxn)
+	self.assertEquals(cxn.server.done, True)
 
     def test_simpleRequest(self):
-    cxn = self.connect(inputTimeOut=None)
-    req = http.ClientRequest('GET', '/', None, None)
+	cxn = self.connect(inputTimeOut=None)
+	req = http.ClientRequest('GET', '/', None, None)
 
-    def gotData(data):
-        self.assertEquals(data, '1234567890')
+	def gotData(data):
+	    self.assertEquals(data, '1234567890')
 
-    def gotResp(resp):
-        self.assertEquals(resp.code, 200)
+	def gotResp(resp):
+	    self.assertEquals(resp.code, 200)
 
-        self.assertEquals(tuple(
-            resp.headers.getAllRawHeaders()),
-                  (('Content-Length', ['10']),))
+	    self.assertEquals(tuple(
+		    resp.headers.getAllRawHeaders()),
+			      (('Content-Length', ['10']),))
 
-        return defer.maybeDeferred(resp.stream.read).addCallback(gotData)
-        
-    d = cxn.client.submitRequest(req).addCallback(gotResp)
+	    return defer.maybeDeferred(resp.stream.read).addCallback(gotData)
+		
+	d = cxn.client.submitRequest(req).addCallback(gotResp)
 
-    self.assertRecieved(cxn, 'GET / HTTP/1.1\r\nConnection: close\r\n\r\n')
+	self.assertRecieved(cxn, 'GET / HTTP/1.1\r\nConnection: close\r\n\r\n')
 
-    self.writeToClient(cxn, 'HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\n1234567890')
+	self.writeToClient(cxn, 'HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\n1234567890')
 
-    return d
+	return d
 
     def test_delayedContent(self):
-    cxn = self.connect(inputTimeOut=None)
-    req = http.ClientRequest('GET', '/', None, None)
+	cxn = self.connect(inputTimeOut=None)
+	req = http.ClientRequest('GET', '/', None, None)
 
-    def gotData(data):
-        self.assertEquals(data, '1234567890')
+	def gotData(data):
+	    self.assertEquals(data, '1234567890')
 
-    def gotResp(resp):
-        self.assertEquals(resp.code, 200)
-        self.assertEquals(tuple(
-            resp.headers.getAllRawHeaders()),
-                  (('Content-Length', ['10']),))
+	def gotResp(resp):
+	    self.assertEquals(resp.code, 200)
+	    self.assertEquals(tuple(
+		    resp.headers.getAllRawHeaders()),
+			      (('Content-Length', ['10']),))
 
-        self.writeToClient(cxn, '1234567890')
+	    self.writeToClient(cxn, '1234567890')
 
-        return defer.maybeDeferred(resp.stream.read).addCallback(gotData)
+	    return defer.maybeDeferred(resp.stream.read).addCallback(gotData)
 
-    d = cxn.client.submitRequest(req).addCallback(gotResp)
+	d = cxn.client.submitRequest(req).addCallback(gotResp)
 
-    self.assertRecieved(cxn, 'GET / HTTP/1.1\r\nConnection: close\r\n\r\n')
+	self.assertRecieved(cxn, 'GET / HTTP/1.1\r\nConnection: close\r\n\r\n')
 
-    self.writeToClient(cxn, 'HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\n')
+	self.writeToClient(cxn, 'HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\n')
 
-    return d
+	return d
