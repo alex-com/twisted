@@ -116,6 +116,7 @@ class HTTPClientChannelRequest(httpchan.HTTPParser):
         # Parse the initial request line
         if len(parts) != 3:
             self._abortWithError(responsecode.BAD_REQUEST, 'Bad response line: %s' % initialLine)
+            return
 
         strversion, self.code, message = parts
         
@@ -125,12 +126,14 @@ class HTTPClientChannelRequest(httpchan.HTTPParser):
                 raise ValueError()
         except ValueError:
             self._abortWithError(responsecode.BAD_REQUEST, "Unknown protocol: %s" % strversion)
+            return
         
         self.version = protovers[1:3]
 
         # Ensure HTTP 0 or HTTP 1.
         if self.version[0] != 1:
             self._abortWithError(responsecode.HTTP_VERSION_NOT_SUPPORTED, 'Only HTTP 1.x is supported.')
+            return
 
     ## FIXME: Actually creates Response, function is badly named!
     def createRequest(self):
@@ -186,7 +189,6 @@ class HTTPClientProtocol(basic.LineReceiver, policies.TimeoutMixin, object):
 
     def lineReceived(self, line):
         if not self.inRequests:
-            print "Extra line!"
             # server sending random unrequested data.
             self.transport.loseConnection()
             return
