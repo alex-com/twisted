@@ -1,5 +1,0 @@
-Twisted Conch SVN-Trunk
-
-Conch was recently split out of Twisted.
-
-Conch depends on Python Crypto extensions.
