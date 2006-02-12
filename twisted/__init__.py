@@ -26,4 +26,4 @@ from twisted.python import compat
 del compat
 
 # setup version
-__version__ = 'SVN-Trunk'
+__version__ = '2.2.0'
