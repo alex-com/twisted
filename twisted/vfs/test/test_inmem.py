@@ -40,6 +40,11 @@ class InMemTest(unittest.TestCase):
     def test_parent_root(self):
         return self.assertEqual(self.root.parent().path(), [])
 
+    def test_parent_exists(self):
+        d = self.root.child('adir', 'anotherFile').parent().exists()
+        d.addCallback(self.failUnless)
+        return d
+
     def test_exists_does(self):
         return self.root.child('adir').exists().addCallback(self.assert_)
 
@@ -121,7 +126,7 @@ class InMemTest(unittest.TestCase):
     def test_createFile(self):
         def _check(result):
             return self.root.child('adir').child('newfile').isfile(
-                ).addCallback(self.assert_)
+                ).addCallback(lambda r: self.assert_(r, "is not a file"))
         return self.root.child('adir').createFile('newfile'
             ).addCallback(_check)
 
