@@ -19,16 +19,20 @@ from zope.interface import implements
 __all__ = ['OSDirectory', 'OSFile', 'RunWithPrivSep', 'SetUIDProxy',
            'ForceCreateModeProxy', 'OSFS']
 
-
 class SyncOSFS(object):
+    """It is better to ask beg forgiveness than ask permission."""
+    implements(ivfs.IFileSystemNode)
+
     def __init__(self, realdir, segments=None, parent=None):
         self.base = realdir
         self.segments = segments or []
-        self.parent = parent
+        self._parent = parent
 
-    def _getCur(self):
+    def _getCur(self, segments=None):
+        if not segments:
+            segments = self.segments
         file = self.base
-        for seg in self.segments:
+        for seg in segments:
             file = file.child(seg)
         return file
 
@@ -46,7 +50,11 @@ class SyncOSFS(object):
                 raise ivfs.NotAContainerError()
             if e.errno == errno.ENOENT:
                 raise ivfs.NotFoundError()
+            raise
         return childs
+
+    def parent(self):
+        return SyncOSFS(self.base, self.segments[:-1])
 
     def path(self):
         return self.segments
@@ -56,23 +64,90 @@ class SyncOSFS(object):
             return self._getCur().child(name).createDirectory()
         except OSError, e:
             if e.errno == errno.EEXIST:
-                raise ivfs.AlreadyExistsError("Already Exists")
+                raise ivfs.AlreadyExistsError()
+            if e.errno == errno.ENOTDIR:
+                raise ivfs.NotAContainerError()
+            if e.errno == errno.ENOENT:
+                raise ivfs.NotFoundError()
+            raise
+
+    def createFile(self, name, exclusive=True):
+        flags = os.O_WRONLY | os.O_CREAT
+        if exclusive:
+            flags |= os.O_EXCL
+        try:
+            fd = os.open(self._getCur().child(name).path, flags)
+        except OSError, e:
+            if e.errno == errno.EEXIST:
+                raise ivfs.AlreadyExistsError("File %r already exists." 
+                                              % name)
+            if e.errno == errno.ENOTDIR:
+                raise ivfs.NotAContainerError()
+            if e.errno == errno.ENOENT:
+                raise ivfs.NotFoundError()
+            # Something unexpected happened.  Let it propagate.
+            raise
+        f = os.fdopen(fd, "w")
+        f.close()
 
     def isdir(self):
         if not self.exists():
             raise ivfs.NotFoundError()
         return self._getCur().isdir()
 
+    def isfile(self):
+        try:
+            f = self._getCur().isfile()
+            if not f and not self.exists(): #:(
+                raise ivfs.NotFoundError()
+            return f
+        except OSError, e:
+            if e.errno == errno.ENOENT:
+                raise ivfs.NotFoundError()
+            raise
+
     def exists(self):
         return self._getCur().exists()
+
+    def remove(self):
+        if not self._parent: # I am the root node
+            raise ivfs.PermissionError()
+        path = self._getCur().path
+        if self.isdir():
+            try:
+                os.rmdir(path)
+            except OSError, e:
+                if e.errno == errno.ENOTEMPTY:
+                    raise ivfs.VFSError("NOT EMPTY")
+        else:
+            os.remove(path)
+
+    def rename(self, segments):
+        target = self._getCur(segments) # I think this is secure
+        try:
+            self._getCur().moveTo(target)
+        except OSError, e:
+            if e.errno == errno.ENOENT:
+                # :(
+                if not self.exists():
+                    raise ivfs.NotFoundError()
+                raise ivfs.VFSError()
+            if e.errno == errno.ENOTDIR:
+                raise ivfs.VFSError()
+            if e.errno == errno.EISDIR:
+                raise ivfs.VFSError()
+            raise
+                
 
 def OSFS(*args, **kwargs):
     """FUCKTORY
     """
     return decorator.CommonWrapperDecorator(
         SyncOSFS(*args, **kwargs),
-        factoryMethods = ['child'],
+        factoryMethods = ['child', 'parent'],
         wrapper = defer.execute,
+        specialFactories = {
+            'children': lambda l, s: [s._decorate(i) for i in l]},
         wrappedMethods = decorator.introspectMethods(
             SyncOSFS,
             exceptMethods = ['child', 'parent', 'path', 'name']),
