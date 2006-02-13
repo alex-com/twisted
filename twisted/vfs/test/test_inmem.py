@@ -59,6 +59,11 @@ class InMemTest(unittest.TestCase):
             self.assertEqual(names, ['adir', 'afile'])
         return self.root.children().addCallback(_check)
 
+    def test_children_child(self):
+        def _check(children):
+            return children[0].exists().addCallback(self.assert_)
+        return self.root.children().addCallback(_check)
+
     def test_children_notContainer(self):        
         d = self.root.child('afile').children()
         self.assertFailure(d, ivfs.NotAContainerError)

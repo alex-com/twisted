@@ -14,10 +14,14 @@ class A(object):
         return self.num
     def getNum3(self):
         return self.num
+    def doublenew(self,num):
+        return [A(num), A(num)]
 
 class ADecorator(Decorator):
-    def __init__(self, target, factoryMethods=['new']):
-        Decorator.__init__(self, target, factoryMethods)
+    def __init__(self, target, factoryMethods=['new'],
+            specialFactories={'doublenew': lambda l, s: [
+                s._decorate(i) for i in l]}):
+        Decorator.__init__(self, target, factoryMethods, specialFactories)
     
 class AddOne(ADecorator):
     def getNum(self):
@@ -68,6 +72,10 @@ class DecoratorTest(unittest.TestCase):
         a = AddOne(TimesTwo(A(3)))
         self.assertEquals(a.new(5).getNum(), 11)
 
+    def test_stack_redecorate_special(self):
+        a = TimesTwo(AddOne(A(3)))
+        self.assertEquals(a.doublenew(5)[1].getNum(), 12)
+
     def test_commonwrap_direct(self):
         a = CommonWrapperDecorator(A(3), factoryMethods=['new'],
             wrapper=addOneDirect, wrappedMethods=['getNum', 'getNum3'])
@@ -112,20 +120,31 @@ class DecoratorTest(unittest.TestCase):
         self.assertEquals(a.new(15).new(7).getNum2(), 7)
         self.assertEquals(a.new(15).new(7).getNum3(), 8)
 
+    def test_commonwrap_stack_special(self):
+        a = TimesTwo(CommonWrapperDecorator(A(3), factoryMethods=['new'],
+            specialFactories={'doublenew': lambda l, s: [
+                s._decorate(i) for i in l]}, 
+            wrapper=addOneDirect, wrappedMethods=['getNum', 'getNum3']))
+        self.assertEquals(a.doublenew(15)[1].getNum(), 32)
+        self.assertEquals(a.doublenew(15)[1].getNum2(), 15)
+        self.assertEquals(a.doublenew(15)[1].getNum3(), 16)
+
     def test_introspectMethods(self):
         methods = introspectMethods(A)
         methods.sort()
         self.assertEquals(methods, [
+            'doublenew',
             'getNum',
             'getNum2',
             'getNum3',
             'new',
         ])
 
-    def test_introspectMethods(self):
+    def test_introspectMethods_except(self):
         methods = introspectMethods(A, exceptMethods=['new', 'getNum2'])
         methods.sort()
         self.assertEquals(methods, [
+            'doublenew',
             'getNum',
             'getNum3',
         ])

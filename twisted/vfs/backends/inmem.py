@@ -110,6 +110,8 @@ def InMemNode(*args, **kwargs):
     return decorator.CommonWrapperDecorator(
         InMemNodeSync(*args, **kwargs),
         factoryMethods = ['child'],
+        specialFactories = {
+            'children': lambda l, s: [s._decorate(i) for i in l]},
         wrapper = defer.execute,
         wrappedMethods = decorator.introspectMethods(
             InMemNodeSync,
