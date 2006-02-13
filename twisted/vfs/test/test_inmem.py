@@ -171,7 +171,7 @@ class InMemTest(unittest.TestCase):
         return self.root.child('adir', 'anotherdir').remove().addCallback(_check)
 
     def test_remove_root(self):
-        d = inmem.InMemNode().remove()
+        d = self.root.remove()
         self.assertFailure(d, ivfs.PermissionError)
         return d
 
