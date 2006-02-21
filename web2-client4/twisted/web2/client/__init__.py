@@ -1,1 +1,3 @@
-# Init file
+"""
+Twisted.web2.client: Client Implementation
+"""
