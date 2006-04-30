@@ -2,6 +2,9 @@
 
 	* topfiles/README, topfiles/NEWS: Release pb2-0.0.1
 	* setup.py: fix up description, project name
+	* test_ZZresolve.py: add some instrumentation to try and debug the
+	occasional all-connection-related-tests-fail problem, which I
+	suspect involves the threadpool being broken.
 
 2006-02-28  Brian Warner  <warner@lothar.com>
 
