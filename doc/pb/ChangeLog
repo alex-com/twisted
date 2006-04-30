@@ -1,3 +1,8 @@
+2006-04-29  Brian Warner  <warner@lothar.com>
+
+	* topfiles/README, topfiles/NEWS: Release pb2-0.0.1
+	* setup.py: fix up description, project name
+
 2006-02-28  Brian Warner  <warner@lothar.com>
 
 	* sslverify.py: update to latest version (r5075) from Vertex SVN,
