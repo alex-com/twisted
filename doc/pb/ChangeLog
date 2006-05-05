@@ -2,6 +2,7 @@
 
 	* release-twisted: add 'pb' subproject
 	* twisted/python/dist.py: same
+	* twisted/pb/__init__.py: set version to 0.0.1
 	* twisted/pb/topfiles/setup.py: fix subproject name, set version 0.0.1
 
 2006-04-29  Brian Warner  <warner@lothar.com>

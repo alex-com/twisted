@@ -2,7 +2,7 @@
 
 from twisted.python import versions
 
-version = versions.Version(__name__, 0, 0, 0)
+version = versions.Version(__name__, 0, 0, 1)
 __version__ = version.short()
 
 del versions
