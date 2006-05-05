@@ -10,7 +10,7 @@ from distutils import core
 
 twisted_subprojects = ["conch", "flow", "lore", "mail", "names",
                        "news", "pair", "runner", "web", "web2",
-                       "words"]
+                       "words", "pb"]
 
 
 def setup(**kw):

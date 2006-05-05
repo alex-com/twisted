@@ -4,10 +4,10 @@ from twisted.python import dist
 
 if __name__ == '__main__':
     dist.setup(
-        twisted_subproject="pb2",
+        twisted_subproject="pb",
         # metadata
         name="Twisted Perspective Broker, version 2",
-        version="SVN-Trunk",
+        version="0.0.1",
         description="Twisted Perspective Broker contains the native RPC protocol.",
         author="Twisted Matrix Laboratories",
         author_email="twisted-python@twistedmatrix.com",

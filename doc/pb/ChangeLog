@@ -1,6 +1,12 @@
+2006-05-05  Brian Warner  <warner@lothar.com>
+
+	* release-twisted: add 'pb' subproject
+	* twisted/python/dist.py: same
+	* twisted/pb/topfiles/setup.py: fix subproject name, set version 0.0.1
+
 2006-04-29  Brian Warner  <warner@lothar.com>
 
-	* topfiles/README, topfiles/NEWS: Release pb2-0.0.1
+	* topfiles/README, topfiles/NEWS: prepare for 0.0.1 release
 	* setup.py: fix up description, project name
 	* test_ZZresolve.py: add some instrumentation to try and debug the
 	occasional all-connection-related-tests-fail problem, which I
