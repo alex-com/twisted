@@ -25,6 +25,9 @@
    where minors are only bugfixes, majors are functionality
    increases, and releases are major milestones.
 
+* Add a Quote of the Release to twisted/topfiles/README if you are
+  releasing Twisted Core.
+
 * Run the release script: 
    ./admin/release-twisted --commands=exportTemp,makeDocProj,makeBallProj
 
