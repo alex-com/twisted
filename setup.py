@@ -90,9 +90,8 @@ def main(args):
         sys.stdout.write(
 """Twisted: The Framework Of Your Internet.
 Usage: setup.py <distutils args..>
-
-E.g. setup.py install
 """)
+        runSetup('core', ['-h'])
         sys.exit(0)
 
     for project in sumoSubprojects:
