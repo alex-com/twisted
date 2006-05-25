@@ -29,8 +29,7 @@ def runInDir(dir, f, *args, **kw):
 
 
 def getSumoProjDir(proj):
-    globst = 'Twisted%s-*' % (proj != 'core'
-                              and proj.capitalize() or '')
+    globst = 'Twisted%s-*' % proj.capitalize()
     gl = glob.glob(globst)
     assert len(gl) == 1, 'Wrong number of %s found!?' % proj
     dir = gl[0]
@@ -70,9 +69,9 @@ def runSetup(project, args):
     # their source, whereas out of SVN they should be run from the
     # root directory of the entire tree.
     if sumoMode:
-        result = runInDir(dir, os.spawnv,
-                              os.P_WAIT, sys.executable,
-                              [sys.executable, 'setup.py'] + args)
+        result = runInDir(os.path.dirname(setupPy), os.spawnv,
+                          os.P_WAIT, sys.executable,
+                          [sys.executable, 'setup.py'] + args)
     else:
         result = os.spawnv(os.P_WAIT, sys.executable,
                            [sys.executable, setupPy] + args)
