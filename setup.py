@@ -9,7 +9,6 @@ Distutils-launcher for Twisted projects.
 
 import sys, os, glob
 
-# Projects to which `all' refers.
 sumoSubprojects = ['core', 'conch', 'lore', 'mail', 'names',
                    'runner', 'web', 'words', 'news']
 
@@ -90,12 +89,9 @@ def main(args):
     if len(args) == 0 or args[0] in ('-h', '--help'):
         sys.stdout.write(
 """Twisted: The Framework Of Your Internet.
-Usage: setup.py <project> <distutils args...>
-       setup.py all <distutils args..>
+Usage: setup.py <distutils args..>
 
-E.g. setup.py all install
-or   setup.py core --help
-
+E.g. setup.py install
 """)
         sys.exit(0)
 
