@@ -554,10 +554,19 @@ class FancyEqMixin:
     def __ne__(self, other):
         return not self.__eq__(other)
 
-def dsu(list, key):
-    L2 = [(key(e), i, e) for (i, e) in zip(range(len(list)), list)]
-    L2.sort()
-    return [e[2] for e in L2]
+# plagues upon exarkun for the name of this function
+if sys.version_info >= (2, 4):
+    def dsu(l, key):
+        """Stable sort 'l', with key 'key', returning a new list.
+        The same as sorted(l, key=key) in python2.4."""
+        return sorted(l, key=key)
+else:
+    def dsu(list, key):
+        """Stable sort 'l', with key 'key', returning new list.
+        The same as sorted(l, key=key) in python2.4."""
+        L2 = [(key(e), i, e) for (i, e) in zip(range(len(list)), list)]
+        L2.sort()
+        return [e[2] for e in L2]
 
 try:
     import pwd, grp

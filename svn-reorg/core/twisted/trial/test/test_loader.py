@@ -273,6 +273,10 @@ class LoaderTest(unittest.TestCase):
         
     def test_loadAnythingOnPackageRecursive(self):
         import goodpackage
+        print "goodpackage:", goodpackage.__file__, goodpackage.__path__
+        print dir(goodpackage)
+        import goodpackage.test_sample
+        print dir(goodpackage.test_sample)
         suite = self.loader.loadAnything(goodpackage, recurse=True)
         self.failUnless(isinstance(suite, self.loader.suiteFactory))
         self.failUnlessEqual(14, suite.countTestCases())

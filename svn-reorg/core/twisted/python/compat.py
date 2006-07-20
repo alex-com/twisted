@@ -24,6 +24,10 @@ import os, sys, string, types, socket, struct, __builtin__, exceptions, UserDict
 #    dict.__doc__ = _dict_doc
 #    __builtin__.dict = dict
 
+if sys.version_info[:2] < (2,5):
+    from twisted.python.pymodules import pkgutil as pkgutil_new
+    import pkgutil
+    pkgutil.__dict__.update(pkgutil_new.__dict__)
 
 if not hasattr(UserDict, 'DictMixin'):
     from twisted.python.pymodules import UserDictExtras
