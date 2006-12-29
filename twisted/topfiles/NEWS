@@ -1,3 +1,86 @@
+2.5.0 (2006-12-29)
+==================
+
+Features
+--------
+ - log.err can now take a second argument for specifying information
+   about an error (#1399)
+ - A time-simulating test helper class, twisted.internet.task.Clock (#1757)
+ - Trial docstring improvements (#1604, #2133)
+ - Richer access to the features of SSL in twisted.internet.ssl,
+   notably client verification (#302)
+ - Support Python 2.5 (#1867)
+ - Trial's assertFailure now provides more information on
+   failure (#1869)
+ - Trial can now be run on tests within a zipfile (#1940)
+ - Added AMP, a new simple protocol for asynchronous messaging (#1715)
+ - Trial's colorful reporter now works on win32 (#1646)
+ - Trial test modules can now dynamically construct TestSuites (#1638, #2165)
+ - twistd can now make use of plugins to allow such commands as
+   "twistd web --path /var/www" (#1922, #2013)
+ - Twisted can now work with the latest (unreleased) zope.interface
+   code (#2160)
+ - An epoll-based reactor, epollreactor, was added. It is selectable
+   with the -r options to twistd and trial (#1953)
+ - twistd and trial now use the plugin system to find reactors which
+   can be selected (#719)
+ - Add new function twisted.internet.defer.defgen, which takes
+   advantage of Python 2.5's generators to offer a convenient
+   mechanism for dealing with Deferreds (#2100)
+
+Fixes
+-----
+ - Improved traceback formatting in Trial (#1454, #1610)
+ - twisted.python.filepath.FilePath.islink now actually returns True when
+   appropriate (#1773)
+ - twisted.plugin robustness improvements related to removing plugins (#926)
+ - twisted.pb Cacheables can now be new-style classes (#1324)
+ - FileDescriptor now deals with producers in a more
+   interface-compliant and robust manner (#2286, #811)
+ - "setup.py build" and other setup.py commands which don't actually
+   install the software now work (#1835)
+ - wxreactor has had various fixes (#1235, #1574, #1688)
+
+Deprecations and Removals
+-------------------------
+ - The old twisted.cred API (Perspectives, Identities and such) is now
+   gone (#1440)
+ - twisted.spread.newjelly doesn't exist any more (#1831)
+ - Various deprecated things in twisted.python.components were
+   removed: Interface, MetaInterface, getAdapterClass, and
+   getAdapterClassWithInheritance (#1636)
+ - twisted.enterprise.xmlreflector was removed (#661)
+ - mktap is on its slow way out, now that twistd supports plugins. It
+   not yet officially deprecated, however. (#2013)
+ - tkmktap was deleted, because it wasn't working anyway (#2020)
+ - reactor.iterate calls made inside of a Trial test case are
+   deprecated (#2090)
+ - twisted.internet.qtreactor is no more: It has been moved to a
+   separate project. See http://twistedmatrix.com/trac/wiki/QTReactor
+   (#2130, #2137)
+ - threadedselectreactor is now not a directly-usable reactor; it is
+   only meant for building other reactors with (#2126)
+ - twisted.python.reflect.funcinfo is deprecated (#2079)
+ - twisted.spread.sturdy, which was already completely broken, was
+   removed (#2299)
+
+
+Other
+-----
+The following changes are minor or closely related to other changes.
+
+ - #1783, #1786, #1788, #1648, #1734, #1609, #1800, #1818,
+   #1629, #1829, #491, #1816, #1824, #1855, #1797, #1637, #1371,
+   #1892, #1887, #1897, #1563, #1741, #1943, #1952, #1276, 
+   #1837, #1726, #1963, #1965, #1973, #1976, #1991, #1936, #1113,
+   #630, #2002, #2040, #2044, #1617, #2045, #2055, #2056, #2022,
+   #2052, #1552, #1999, #1507, #2054, #1970, #1968, #662, #1910,
+   #1694, #1999, #1409, #2150, #2127, #2155, #1983, #2014, #2222,
+   #1067, #2136, #2065, #1430, #2173, #2212, #1871, #2147, #1199,
+   #2273, #428, #992, #815, #2024, #2292, #2125, #2139, #2291, #2174,
+   #2306, #2228, #2309, #2319, #2317, #2313, #2154, #1985, #1201
+
+
 2.4.0 (2006-05-21)
 ==================
 
