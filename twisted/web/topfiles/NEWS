@@ -9,15 +9,14 @@ Features
 
 Fixes
 -----
- - Microdom and SUX are managing certain malformed XML more
-   resiliently (#1984, #2225, #2298)
+ - Microdom and SUX now manages certain malformed XML more resiliently
+   (#1984, #2225, #2298)
  - twisted.web.client.getPage can now deal with an URL of the form
    "http://example.com" (no trailing slash) (#1080)
  - The HTTP server now allows (invalid) URLs with multiple question
    marks (#1550)
  - '=' can now be in the value of a cookie (#1051)
  - Microdom now correctly handles xmlns="" (#2184)
-
 
 Deprecations and Removals
 -------------------------
