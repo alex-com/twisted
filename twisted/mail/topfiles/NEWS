@@ -3,13 +3,13 @@
 
 Features
 --------
- - Plaintext logins are now possible over SSL or TLS (#1809)
+ - Plaintext POP3 logins are now possible over SSL or TLS (#1809)
 
 Fixes
 -----
  - ESMTP servers now greet with an "ESMTP" string (#1891)
  - The POP3 client can now correctly deal with concurrent POP3
-   retrievals (#1988, 1691)
+   retrievals (#1988, #1691)
  - In the IMAP4 server, a bug involving retrieving the first part
    of a single-part message was fixed. This improves compatibility
    with Pine (#1978)
