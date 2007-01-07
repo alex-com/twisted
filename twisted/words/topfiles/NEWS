@@ -3,11 +3,12 @@
 
 Features
 --------
- - Jabber:
-   - IQ.send now optionally has a 'timeout' parameter which specifies
-     a time at which to errback the Deferred with a TimeoutError (#2218)
-   - SASL authentication, resource binding and session establishment
-     were added (#1046)
+ - (Jabber) IQ.send now optionally has a 'timeout' parameter which
+   specifies a time at which to errback the Deferred with a
+   TimeoutError (#2218)
+ - (Jabber) SASL authentication, resource binding and session
+   establishment were added. (#1046) The following were done in
+   support of this change:
    - Rework ConnectAuthenticator to work with initializer objects that
      provide a stream initialization step.
    - Reimplement iq:auth as an initializer.
@@ -16,21 +17,21 @@ Features
      with XMPPClientFactory.
    - Add support for working with pre-XMPP-1.0 error stanzas.
    - Remove hasFeature() from XmlStream as you can test (uri, name) in
-	 xs.features.
+     xs.features.
    - Add sendFooter() and sendStreamError() to XmlStream
 
 Fixes
 -----
- - In Jabber, Deferreds from queries which were never resolved before
+ - (Jabber) Deferreds from queries which were never resolved before
    a lost connection are now errbacked (#2006)
- - Jabber servers which didn't send a 'realm' directive in
+ - (Jabber) servers which didn't send a 'realm' directive in
    authentication challenges no longer cause the Jabber client to
    choke (#2098)
- - MSN error responses are now properly turned into errbacks (#2019)
- - A trivial bug in the IRC client which would cause whois(oper=True)
+ - (MSN) error responses are now properly turned into errbacks (#2019)
+ - (IRC) A trivial bug in IRCClient which would cause whois(oper=True)
    to always raise an exception was fixed (#2089)
- - Bugs in the error handling and already-connecting cases of
-   AbstractAccount.logOn were fixed (#2086)
+ - (Words service) Bugs in the error handling and already-connecting
+   cases of AbstractAccount.logOn were fixed (#2086)
 
 Misc
 ----
