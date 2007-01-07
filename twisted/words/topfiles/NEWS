@@ -30,8 +30,8 @@ Fixes
  - (MSN) error responses are now properly turned into errbacks (#2019)
  - (IRC) A trivial bug in IRCClient which would cause whois(oper=True)
    to always raise an exception was fixed (#2089)
- - (Words service) Bugs in the error handling and already-connecting
-   cases of AbstractAccount.logOn were fixed (#2086)
+ - (IM) Bugs in the error handling and already-connecting cases of
+   AbstractAccount.logOn were fixed (#2086)
 
 Misc
 ----
