@@ -62,7 +62,10 @@ class ContactsList:
 
 
 class Conversation:
-    """A GUI window of a conversation with a specific person"""
+    """
+    A GUI window of a conversation with a specific person.
+    """
+
     def __init__(self, person, chatui):
         """
         @type person: L{Person<interfaces.IPerson>}
@@ -71,36 +74,58 @@ class Conversation:
         self.chatui = chatui
         self.person = person
 
+
     def show(self):
-        """Displays the ConversationWindow"""
+        """
+        Callback invoked when it may be appropriate for this conversation to be
+        visible.
+        """
         raise NotImplementedError("Subclasses must implement this method")
+
 
     def hide(self):
-        """Hides the ConversationWindow"""
+        """
+        Callback invoked when it may be appropriate for this conversation to be
+        invisible.
+        """
         raise NotImplementedError("Subclasses must implement this method")
 
-    def sendText(self, text):
-        """Sends text to the person with whom the user is conversing.
 
-        @returntype: L{Deferred<twisted.internet.defer.Deferred>}
+    def sendText(self, text):
+        """
+        Sends text to the person with whom the user is conversing.
+
+        @rtype: L{Deferred<twisted.internet.defer.Deferred>}
+
+        @return: A Deferred which will be called back when the message has been
+        sent.  If there is no reliable way to determine when the message has
+        been sent for a particular person type, a best effort will be made
+        instead.
         """
         self.person.sendMessage(text, None)
 
+
     def showMessage(self, text, metadata=None):
-        """Display a message sent from the person with whom she is conversing
+        """
+        Display a message sent from the person with whom the user is
+        conversing.
 
         @type text: string
         @type metadata: dict
         """
         raise NotImplementedError("Subclasses must implement this method")
 
+
     def contactChangedNick(self, person, newnick):
-        """Change a person's name.
+        """
+        Callback invoked when the person with whom the user is conversing
+        changes his or her nickname.
 
         @type person: L{Person<interfaces.IPerson>}
-        @type newnick: string
+        @type newnick: C{str}
         """
         self.person.name = newnick
+
 
 
 class GroupConversation:
