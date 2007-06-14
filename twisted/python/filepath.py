@@ -18,12 +18,14 @@ from os.path import join as joinpath
 from os import sep as slash
 from os import listdir, utime, stat
 
+from stat import ST_MODE, ST_MTIME, ST_ATIME, ST_CTIME, ST_SIZE
 from stat import S_ISREG, S_ISDIR
 
 # Please keep this as light as possible on other Twisted imports; many, many
 # things import this module, and it would be good if it could easily be
 # modified for inclusion in the standard library.  --glyph
 
+from zope.interface import Interface, Attribute, implements
 from twisted.python.runtime import platform
 
 from twisted.python.win32 import ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND
@@ -67,9 +69,161 @@ islink = getattr(os.path, 'islink', _stub_islink)
 randomBytes = getattr(os, 'urandom', _stub_urandom)
 armor = getattr(base64, 'urlsafe_b64encode', _stub_armor)
 
+class IFilePath(Interface):
+    """
+    File path object.
+
+    A file path represents a location for a file-like-object and can be
+    organized into a hierarchy; a file path can can children which are
+    themselves file paths.
+
+    A file path has a name which unique identifies it in the context of its
+    parent (if it has one); a file path can not have two children with the same
+    name.  This name is referred to as the file path's "base name".
+
+    A series of such names can be used to locate nested children of a file path;
+    such a series is referred to as the child's "path", relative to the parent.
+    In this case, each name in the path is referred to as a "path segment"; the
+    child's base name is the segment in the path.
+
+    When representing a file path as a string, a "path separator" is used to
+    delimit the path segments within the string.  For a file system path, that
+    would be C{os.sep}.
+
+    Note that the values of child names may be restricted.  For example, a file
+    system path will not allow the use of the path separator in a name, and
+    certain names (eg. C{"."} and C{".."}) may be reserved or have special
+    meanings.
+    """
+    sep = Attribute("The path separator to use in string representations")
+
+    def child(name):
+        """
+        Obtain a direct child of this file path.  The child may or may not
+        exist.
+
+        @param name: the name of a child of this path. C{name} must be a direct
+            child of this path and may not contain a path separator.
+        @return: the child of this path with the given C{name}.
+        @raise InsecurePath: if C{name} describes a file path that is not a
+            direct child of this file path.
+        """
+
+    # FIXME: Implementation-specific exceptions are a drag.  Unfortunately,
+    # FilePath already raises various OS-specific exceptions.
+
+    def open(mode="r"):
+        """
+        Opens this file path with the given mode.
+        @return: a file-like-object.
+        @raise Exception: if this file path cannot be opened.
+        """
+
+    def restat(reraise=True):
+        """
+        Reloads cached metadata for the file at this file path.
+        @param reraise: specifies whether exceptions should be propagated to the
+            caller.
+        @raise Exception: is C{reraise} is C{True} and an exception occurs while
+            reloading metadata.
+        """
+
+    def getsize():
+        """
+        @return: the size of the file at this file path in bytes.
+        @raise Exception: if the size cannot be obtained.
+        """
+
+    def getmtime():
+        """
+        @return: the last modification time of the file at this file path in
+            bytes.
+        @raise Exception: if the last modification time cannot be obtained.
+        """
+
+    def getctime():
+        """
+        @return: the creation time of the file at this file path in bytes.
+        @raise Exception: if the creation time cannot be obtained.
+        """
+
+    def getatime():
+        """
+        @return: the last access time of the file at this file path in bytes.
+        @raise Exception: if the last access time cannot be obtained.
+        """
+
+    def exists():
+        """
+        @return: C{True} if the file at this file path exists, C{False}
+            otherwise.
+        """
+
+    def isdir():
+        """
+        @return: C{True} if the file at this file path is a directory, C{False}
+            otherwise.
+        """
+
+    def isfile():
+        """
+        @return: C{True} if the file at this file path is a regular file,
+            C{False} otherwise.
+        """
+
+    def listdir():
+        """
+        @return: a sequence of the names of the children of the directory at this
+			file path.
+        @raise Exception: if the file at this file path is not a directory.
+        """
+
+    def children():
+        """
+        @return: a sequence of the children of the directory at this file path.
+        @raise Exception: if the file at this file path is not a directory.
+        """
+
+    def touch():
+        """
+        Updates the last modification time of the file at this file path to the
+        current time, creating a regular file, if not file exists, at this file
+        path.
+        @raise Exception: if unable to create or modify the last modification
+            time of the file.
+        """
+
+    def remove():
+        """
+        Removes the file at this file path.
+        @raise Exception: if unable to remove the file.
+        """
+
+    def makedirs():
+        """
+        Creates a directory, if none exists, at this file path, creating any
+        non-existing intermediate directories as necessary.
+        @raise Exception: if unable to create the directory.
+        """
+
+    def globChildren(pattern):
+        """
+        @return: a list of the children of the directory at this file path.
+        @raise Exception: if the file at this file path is not a directory.
+        """
+
+    def basename(self):
+        """
+        @return: the base name of this file path.
+        """
+
+    def parent(self):
+        """
+        A file path for the directory containing the file at this file path.
+        """
+
 class InsecurePath(Exception):
     pass
-
 
 class UnlistableError(OSError):
     """
@@ -103,19 +257,10 @@ class _WindowsUnlistableError(UnlistableError, WindowsError):
     L{UnlistableError} instead.
     """
 
-
-
-def _secureEnoughString():
+class AbstractFilePath(object):
     """
-    Create a pseudorandom, 16-character string for use in secure filenames.
+    Abstract implementation of an IFilePath; must be completed by a subclass.
     """
-    return armor(sha.new(randomBytes(64)).digest())[:16]
-
-class _PathHelper:
-    """
-    Abstract helper class also used by ZipPath; implements certain utility methods.
-    """
-
     def getContent(self):
         return self.open().read()
 
@@ -222,7 +367,6 @@ class _PathHelper:
             return segments
         raise ValueError("%r not parent of %r" % (ancestor, self))
 
-
     # new in 2.6.0
     def __hash__(self):
         """
@@ -253,8 +397,7 @@ class _PathHelper:
         return int(self.getStatusChangeTime())
 
 
-
-class FilePath(_PathHelper):
+class FilePath(AbstractFilePath):
     """
     I am a path on the filesystem that only permits 'downwards' access.
 
@@ -282,9 +425,12 @@ class FilePath(_PathHelper):
     @ivar alwaysCreate: When opening this file, only succeed if the file does not
     already exist.
     """
+    implements(IFilePath)
 
     statinfo = None
     path = None
+
+    sep = slash
 
     def __init__(self, path, alwaysCreate=False):
         self.path = abspath(path)
@@ -301,8 +447,8 @@ class FilePath(_PathHelper):
             # Catch paths like C:blah that don't have a slash
             raise InsecurePath("%r contains a colon." % (path,))
         norm = normpath(path)
-        if slash in norm:
-            raise InsecurePath("%r contains one or more directory separators" % (path,))
+        if self.sep in norm:
+            raise InsecurePath("%r contains one or more path separators" % (path,))
         newpath = abspath(joinpath(self.path, norm))
         if not newpath.startswith(self.path):
             raise InsecurePath("%r is not a child of %s" % (newpath, self.path))
@@ -464,6 +610,10 @@ class FilePath(_PathHelper):
         return S_ISREG(st.st_mode)
 
     def islink(self):
+        """
+        @return: C{True} if the file at this file path is a symbolic link,
+            C{False} otherwise.
+        """
         # We can't use cached stat results here, because that is the stat of
         # the destination - (see #1773) which in *every case* but this one is
         # the right thing to use.  We could call lstat here and use that, but
@@ -471,12 +621,20 @@ class FilePath(_PathHelper):
         return islink(self.path)
 
     def isabs(self):
+        """
+        @return: C{True} if this file path is absolute, C{False} otherwise.
+        """
         return isabs(self.path)
 
     def listdir(self):
         return listdir(self.path)
 
     def splitext(self):
+        """
+        @return: a tuple C{(root, ext)} where C{root + ext} is the base name of
+            this file path and C{ext} is empty or begins with a period and
+            contains at most one period.
+        """
         return splitext(self.path)
 
     def __repr__(self):
@@ -508,13 +666,19 @@ class FilePath(_PathHelper):
         pattern.
         """
         import glob
-        path = self.path[-1] == '/' and self.path + pattern or slash.join([self.path, pattern])
+        path = self.path[-1] == '/' and self.path + pattern or self.sep.join([self.path, pattern])
         return map(self.clonePath, glob.glob(path))
 
     def basename(self):
         return basename(self.path)
 
     def dirname(self):
+        """
+        @return: if the file at this file path is a directory, the string
+            representation of this file path; otherwise, the the string
+            representation of the path to the directory containing the file at
+            this file path.
+        """
         return dirname(self.path)
 
     def parent(self):
@@ -622,5 +786,12 @@ class FilePath(_PathHelper):
             else:
                 raise
 
-
 FilePath.clonePath = FilePath
+
+def _secureEnoughString():
+    """
+    Create a pseudorandom, 16-character string for use in secure filenames.
+    """
+    return armor(sha.new(randomBytes(64)).digest())[:16]
+
+__all__ = ["IFilePath", "AbstractFilePath", "FilePath", "InsecurePath"]

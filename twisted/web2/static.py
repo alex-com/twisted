@@ -16,7 +16,7 @@ from twisted.web2 import http_headers, resource
 from twisted.web2 import http, iweb, stream, responsecode, server, dirlist
 
 # Twisted Imports
-from twisted.python import filepath
+from twisted.python.filepath import IFilePath, FilePath
 from twisted.internet.defer import maybeDeferred
 from zope.interface import implements
 
@@ -198,7 +198,10 @@ class File(StaticRenderMixin):
         super(File, self).__init__()
 
         self.putChildren = {}
-        self.fp = filepath.FilePath(path)
+        if type(path) is str:
+            self.fp = FilePath(path)
+        else:
+            self.fp = IFilePath(path)
         # Remove the dots from the path to split
         self.defaultType = defaultType
         self.ignoredExts = list(ignoredExts)
@@ -215,20 +218,31 @@ class File(StaticRenderMixin):
         return self.fp.exists()
 
     def etag(self):
-        if not self.fp.exists(): return None
+        if not self.fp.exists():
+            return None
 
-        st = self.fp.statinfo
+        mtime = self.fp.getmtime()
 
         #
-        # Mark ETag as weak if it was modified more recently than we can
-        # measure and report, as it could be modified again in that span
-        # and we then wouldn't know to provide a new ETag.
+        # NOTE: Apache marks an ETag as weak if the resource was modified more
+        # recently than we can measure and report, as it could be modified again
+        # in that span and we then wouldn't know to provide a new ETag.
         #
-        weak = (time.time() - st.st_mtime <= 1)
+        # This strategy is problematic, because, while it may produce correct
+        # caching behavior for some clients, it lies about what's actually going
+        # on.  Instead, let's not return an ETag that we can't realiably compute.
+        #
+        if (time.time() - mtime) <= 0.1:
+            #print "TEMPO SBAGLIATOOO"
+            return None
 
+        #
+        # Apache's generated ETag includes the inode number.  IFilePath doesn't
+        # give us access to inode numbers, but we don't really need them here.
+        #
         return http_headers.ETag(
-            "%X-%X-%X" % (st.st_ino, st.st_size, st.st_mtime),
-            weak=weak
+            "%X-%X" % (self.fp.getsize(), mtime),
+            weak=False
         )
 
     def lastModified(self):
@@ -316,7 +330,7 @@ class File(StaticRenderMixin):
 
         child_fp = self.fp.child(name)
         if child_fp.exists():
-            return self.createSimilarFile(child_fp.path)
+            return self.createSimilarFile(child_fp)
         else:
             return None
 
@@ -366,7 +380,7 @@ class File(StaticRenderMixin):
             if sibling_fpath is not None:
                 fpath = sibling_fpath
 
-        return self.createSimilarFile(fpath.path), segments[1:]
+        return self.createSimilarFile(fpath), segments[1:]
 
     def renderHTTP(self, req):
         self.fp.restat(False)
@@ -385,7 +399,7 @@ class File(StaticRenderMixin):
                 ifp = self.fp.childSearchPreauth(*self.indexNames)
                 if ifp:
                     # Render from the index file
-                    standin = self.createSimilarFile(ifp.path)
+                    standin = self.createSimilarFile(ifp)
                 else:
                     # Render from a DirectoryLister
                     standin = dirlist.DirectoryLister(

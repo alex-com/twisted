@@ -143,7 +143,7 @@ Or to serve a specific host name as a dynamic resource:
         """
         
         if self['root']:
-            if not isintance(self['root'], vhost.NameVirtualHost):
+            if not isinstance(self['root'], vhost.NameVirtualHost):
                 raise usage.UsageError("You may only have one root resource")
         else:
             self['root'] = vhost.NameVirtualHost()

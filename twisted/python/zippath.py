@@ -2,7 +2,7 @@
 
 """
 
-This module contains partial re-implementations of FilePath, pending some
+This module contains partial implementations of IFilePath, pending some
 specification of formal interfaces it is a duck-typing attempt to emulate them
 for certain restricted uses.
 
@@ -18,7 +18,7 @@ import errno
 
 from twisted.python.zipstream import ChunkingZipFile
 
-from twisted.python.filepath import FilePath, _PathHelper
+from twisted.python.filepath import FilePath, AbstractFilePath
 
 # using FilePath here exclusively rather than os to make sure that we don't do
 # anything OS-path-specific here.
@@ -27,10 +27,12 @@ ZIP_PATH_SEP = '/'              # In zipfiles, "/" is universally used as the
                                 # path separator, regardless of platform.
 
 
-class ZipPath(_PathHelper):
+class ZipPath(AbstractFilePath):
     """
     I represent a file or directory contained within a zip file.
     """
+    sep = ZIP_PATH_SEP
+
     def __init__(self, archive, pathInArchive):
         """
         Don't construct me directly.  Use ZipArchive.child().

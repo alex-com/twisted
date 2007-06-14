@@ -65,7 +65,7 @@ class DAVFile (DAVResource, File):
                                       indexNames  = indexNames)
 
     def __repr__(self):
-        return "<%s: %s>" % (self.__class__.__name__, self.fp.path)
+        return "<%s: %s>" % (self.__class__.__name__, self.fp)
 
     ##
     # WebDAV

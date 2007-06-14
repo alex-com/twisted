@@ -28,8 +28,10 @@ from filecmp import dircmp as DirCompare
 from tempfile import mkdtemp
 from shutil import copy
 from random import randrange, choice
+from zope.interface import implements
 
 from twisted.python import log
+from twisted.python.filepath import IFilePath, FilePath
 from twisted.trial import unittest
 from twisted.internet.defer import Deferred
 from twisted.web2.dav.fileop import rmdir
@@ -40,8 +42,6 @@ class TodoTest(Exception):
     pass
 
 class TestCase(unittest.TestCase):
-    docroot = property(lambda(self): self.site.resource.fp.path)
-
     resource_class = DAVFile
 
     def setUp(self):
@@ -84,7 +84,9 @@ class TestCase(unittest.TestCase):
         for path in files[:8]:
             copy(path, docroot)
     
-        self.site = Site(self.resource_class(docroot))
+        self.site = Site(self.resource_class(MinimalFilePath(docroot)))
+
+        self.docroot = docroot
 
     def tearDown(self):
         log.msg("Tearing down %s" % (self.__class__,))
@@ -154,3 +156,30 @@ def serialize(f, work):
     do_serialize(None)
 
     return d
+
+##
+# This exists to provide some verification that we are correctly using the
+# IFilePath interface and not depending on features of a specific
+# implementation.
+###
+
+class MinimalFilePath(object):
+    implements(IFilePath)
+    def __init__(self, *args, **kwargs):
+        self.__dict__["_fp"] = FilePath(*args, **kwargs)
+
+    def __getattr__(self, name):
+        if name not in IFilePath:
+            raise AttributeError("IFilePath has no attribute %s" % (name,))
+
+        attr = getattr(self._fp, name)
+
+        if type(attr) is type(self.__getattr__):
+            def m(*args, **kwargs):
+                return attr(*args, **kwargs)
+            return m
+        else:
+            return attr
+
+    def __setattr__(self, name, value):
+        raise AttributeError("Attributes are read-only")
