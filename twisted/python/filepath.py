@@ -134,23 +134,28 @@ class IFilePath(Interface):
         @raise Exception: if the size cannot be obtained.
         """
 
-    def getmtime():
+    def getModificationTime():
         """
-        @return: the last modification time of the file at this file path in
-            bytes.
-        @raise Exception: if the last modification time cannot be obtained.
+        Retrieve the time of last access from this file.
+
+        @return: a number of seconds from the epoch.
+        @rtype: float
         """
 
-    def getctime():
+    def getStatusChangeTime():
         """
-        @return: the creation time of the file at this file path in bytes.
-        @raise Exception: if the creation time cannot be obtained.
+        Retrieve the time of the last status change for this file.
+
+        @return: a number of seconds from the epoch.
+        @rtype: float
         """
 
-    def getatime():
+    def getAccessTime():
         """
-        @return: the last access time of the file at this file path in bytes.
-        @raise Exception: if the last access time cannot be obtained.
+        Retrieve the time that this file was last accessed.
+
+        @return: a number of seconds from the epoch.
+        @rtype: float
         """
 
     def exists():
@@ -171,55 +176,28 @@ class IFilePath(Interface):
             C{False} otherwise.
         """
 
-    def listdir():
-        """
-        @return: a sequence of the names of the children of the directory at this
-			file path.
-        @raise Exception: if the file at this file path is not a directory.
-        """
-
     def children():
         """
         @return: a sequence of the children of the directory at this file path.
         @raise Exception: if the file at this file path is not a directory.
         """
 
-    def touch():
-        """
-        Updates the last modification time of the file at this file path to the
-        current time, creating a regular file, if not file exists, at this file
-        path.
-        @raise Exception: if unable to create or modify the last modification
-            time of the file.
-        """
-
-    def remove():
-        """
-        Removes the file at this file path.
-        @raise Exception: if unable to remove the file.
-        """
-
-    def makedirs():
-        """
-        Creates a directory, if none exists, at this file path, creating any
-        non-existing intermediate directories as necessary.
-        @raise Exception: if unable to create the directory.
-        """
-
-    def globChildren(pattern):
-        """
-        @return: a list of the children of the directory at this file path.
-        @raise Exception: if the file at this file path is not a directory.
-        """
-
-    def basename(self):
+    def basename():
         """
         @return: the base name of this file path.
         """
 
-    def parent(self):
+    def parent():
         """
-        A file path for the directory containing the file at this file path.
+        @return: A file path for the directory containing the file at this file path.
+        """
+    
+    def sibling(name):
+        """
+        @param name: the name of a sibling of this path. C{name} must be a direct
+            sibling of this path and may not contain a path separator.
+        
+        @return: a sibling file path of this one.
         """
 
 class InsecurePath(Exception):
@@ -641,6 +619,13 @@ class FilePath(AbstractFilePath):
         return 'FilePath(%r)' % (self.path,)
 
     def touch(self):
+        """
+        Updates the last modification time of the file at this file path to the
+        current time, creating a regular file, if not file exists, at this file
+        path.
+        @raise Exception: if unable to create or modify the last modification
+            time of the file.
+        """
         try:
             self.open('a').close()
         except IOError:
@@ -648,6 +633,10 @@ class FilePath(AbstractFilePath):
         utime(self.path, None)
 
     def remove(self):
+        """
+        Removes the file at this file path.
+        @raise Exception: if unable to remove the file.
+        """
         if self.isdir():
             for child in self.children():
                 child.remove()
