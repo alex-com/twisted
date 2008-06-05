@@ -84,7 +84,12 @@ class Client(object):
 
 def main(reactor, jid, secret):
     """
+    Connect to the given Jabber ID and return a L{Deferred} which will be
+    called back when the connection is over.
 
+    @param reactor: The reactor to use for the connection.
+    @param jid: A L{JID} to connect to.
+    @param secret: A C{str}
     """
     return Client(reactor, JID(jid), secret).finished
 
