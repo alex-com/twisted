@@ -14,7 +14,7 @@ import time
 
 from zope.interface import implements
 
-from twisted.python import reflect
+from twisted.python import reflect, log
 
 from twisted.internet import base, defer
 from twisted.internet.interfaces import IReactorTime
@@ -409,6 +409,29 @@ def deferLater(clock, delay, callable, *args, **kw):
 
 
 
+def react(main, argv, _reactor=None):
+    """
+    Call C{main} and run the reactor until the L{Deferred} it returns fires.
+
+    @param main: A callable which returns a L{Deferred}.  It should take as
+        many arguments as there are elements in the list C{argv}.
+
+    @param argv: A list of arguments to pass to C{main}.
+
+    @param _reactor: An implementation detail to allow easier unit testing.  Do
+        not supply this parameter.
+    """
+    stopping = []
+    _reactor.addSystemEventTrigger('before', 'shutdown', stopping.append, True)
+    finished = main(_reactor)
+    finished.addErrback(log.err, "main function encountered error")
+    def cbFinish(ignored):
+        if not stopping:
+            _reactor.callWhenRunning(_reactor.stop)
+    finished.addCallback(cbFinish)
+    _reactor.run()
+
+
 __all__ = [
     'LoopingCall',
 
@@ -416,5 +439,4 @@ __all__ = [
 
     'SchedulerStopped', 'Cooperator', 'coiterate',
 
-    'deferLater',
-    ]
+    'deferLater', 'react']
