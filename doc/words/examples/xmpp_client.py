@@ -96,4 +96,4 @@ def main(reactor, jid, secret):
 
 
 if __name__ == '__main__':
-    react(main, sys.argv[1:])()
+    react(main, sys.argv[1:])
