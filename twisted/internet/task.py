@@ -421,9 +421,11 @@ def react(main, argv, _reactor=None):
     @param _reactor: An implementation detail to allow easier unit testing.  Do
         not supply this parameter.
     """
+    if _reactor is None: # XXX untested
+        from twisted.internet import reactor as _reactor # XXX untested
     stopping = []
     _reactor.addSystemEventTrigger('before', 'shutdown', stopping.append, True)
-    finished = main(_reactor)
+    finished = main(_reactor, *argv)
     finished.addErrback(log.err, "main function encountered error")
     def cbFinish(ignored):
         if not stopping:

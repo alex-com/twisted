@@ -645,3 +645,17 @@ class ReactTests(unittest.TestCase):
         self.assertEqual(r.seconds(), 1)
         errors = self.flushLoggedErrors(ExpectedException)
         self.assertEqual(len(errors), 1)
+
+
+    def test_arguments(self):
+        """
+        L{react} passes the elements of the list it is passed as positional
+        arguments to the function it is passed.
+        """
+        args = []
+        def main(reactor, x, y, z):
+            args.extend((x, y, z))
+            return defer.succeed(None)
+        r = _FakeReactor()
+        task.react(main, [1, 2, 3], _reactor=r)
+        self.assertEqual(args, [1, 2, 3])
