@@ -5,6 +5,7 @@
 import sys
 
 from twisted.internet.defer import Deferred
+from twisted.internet.task import react
 from twisted.names.srvconnect import SRVConnector
 from twisted.words.xish import domish
 from twisted.words.protocols.jabber import xmlstream, client
@@ -94,27 +95,5 @@ def main(reactor, jid, secret):
     return Client(reactor, JID(jid), secret).finished
 
 
-
-def run():
-    """
-    Enable logging and run the reactor until the L{Deferred} returned by
-    L{main} is called back or until the reactor is otherwise shutdown.
-    """
-    from twisted.internet import reactor
-    from twisted.python.log import startLogging, err
-    startLogging(sys.stdout)
-    stopping = []
-    reactor.addSystemEventTrigger('before', 'shutdown', stopping.append, None)
-    def stop(ignored):
-        if not stopping:
-            reactor.stop()
-    d = main(reactor, *sys.argv[1:])
-    d.addErrback(err)
-    d.addCallback(stop)
-    d.addErrback(err)
-    reactor.run()
-
-
-
 if __name__ == '__main__':
-    run()
+    react(main, sys.argv[1:])()
