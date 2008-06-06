@@ -11,7 +11,7 @@ who need to use the 'installReactor' method.
 Maintainer: U{Itamar Shtull-Trauring<mailto:twisted@itamarst.org>}
 """
 
-import error
+from twisted.internet import error
 
 CONNECTION_DONE = error.ConnectionDone('Connection done')
 CONNECTION_LOST = error.ConnectionLost('Connection lost')
@@ -20,8 +20,8 @@ def installReactor(reactor):
     # this stuff should be common to all reactors.
     import twisted.internet
     import sys
-    assert not sys.modules.has_key('twisted.internet.reactor'), \
-           "reactor already installed"
+    assert 'twisted.internet.reactor' not in sys.modules, \
+        "reactor already installed"
     twisted.internet.reactor = reactor
     sys.modules['twisted.internet.reactor'] = reactor
 
