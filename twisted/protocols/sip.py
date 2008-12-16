@@ -8,6 +8,9 @@
 
 Documented in RFC 2543.
 [Superceded by 3261]
+
+Features required by RFC3261 missing from this module:
+ * SIPS support
 """
 
 # system imports
@@ -15,6 +18,7 @@ import socket
 import random
 import time
 import sys
+import urllib
 from zope.interface import implements, Interface
 
 # twisted imports
@@ -115,9 +119,28 @@ specialCases = {
     'www-authenticate': 'WWW-Authenticate',
 }
 
+def headerCapitalize(h):
+    """
+    Return a version of the given header name that's capitalized in the
+    traditional fashion.
+
+    @param h: A SIP header name.
+    """
+    h = h.lower()
+    if h in specialCases:
+        return specialCases[h]
+    if '-' in h:
+        return '-'.join([bit.capitalize() for bit in h.split('-')])
+    return h.capitalize()
+
+
 def dashCapitalize(s):
     ''' Capitalize a string, making sure to treat - as a word seperator '''
     return '-'.join([ x.capitalize() for x in s.split('-')])
+
+
+#dashCapitalize = deprecated(Version("Twisted", 8, 2, 0), dashCapitalize)
+
 
 def unq(s):
     if s[0] == s[-1] == '"':
@@ -250,12 +273,38 @@ def parseViaHeader(value):
     return Via(**result)
 
 
-class URL:
-    """A SIP URL."""
+class URI:
+    """
+    A SIP URI, as defined in RFC 3261, section 19.1.
+
+    @ivar host: A hostname or IP address. Required.
+    @ivar username: The identifier of a particular resource at the host being
+    addressed. Optional.
+    @ivar password: A password associated with the username. Optional.
+    @ivar port: The port number where the request is to be sent. Optional.
+    @ivar transport: The transport mechanism to be used for sending SIP
+    messages. Optional.
+    @ivar usertype: The 'user' URI parameter. May be 'phone' or 'dialstring' -
+    see RFC 3261, 19.1.6., and RFC 4967. Optional.
+    @ivar method: The SIP method to use when forming a request from this
+    URI. (INVITE, REGISTER, etc.) Optional.
+    @ivar ttl: Time-to-live for multicast requests. Used with C{maddr}.
+    @ivar maddr: Server address to be contacted for this user. For use with
+    multicast requests. Optional.
+    @ivar tag: Half of a SIP dialog identifier. See RFC 3261, section
+    19.3. Optional.
+    @ivar other: A dict of any other URI parameters not specifically mentioned
+    here. Optional.
+    @ivar headers: A dict of key-value pairs to be used as headers when forming
+    a request from this URI. Optional.
+    """
 
     def __init__(self, host, username=None, password=None, port=None,
                  transport=None, usertype=None, method=None,
                  ttl=None, maddr=None, tag=None, other=None, headers=None):
+        """
+        Set parameters of this URI.
+        """
         self.username = username
         self.host = host
         self.password = password
@@ -267,7 +316,7 @@ class URL:
         self.ttl = ttl
         self.maddr = maddr
         if other == None:
-            self.other = []
+            self.other = {}
         else:
             self.other = other
         if headers == None:
@@ -275,13 +324,17 @@ class URL:
         else:
             self.headers = headers
 
+
     def toString(self):
+        """
+        Format this object's contents as a SIP URI.
+        """
         l = []; w = l.append
         w("sip:")
         if self.username != None:
-            w(self.username)
+            w(urllib.quote(self.username))
             if self.password != None:
-                w(":%s" % self.password)
+                w(":%s" % (urllib.quote(self.password)))
             w("@")
         w(self.host)
         if self.port != None:
@@ -291,29 +344,69 @@ class URL:
         for n in ("transport", "ttl", "maddr", "method", "tag"):
             v = getattr(self, n)
             if v != None:
-                w(";%s=%s" % (n, v))
-        for v in self.other:
-            w(";%s" % v)
+                w(";%s=%s" % (urllib.quote(n), urllib.quote(v)))
+        for k, v in self.other.iteritems():
+            if v:
+                w(";%s=%s" % (urllib.quote(k), urllib.quote(v)))
+            else:
+                w(";%s" % k)
         if self.headers:
             w("?")
-            w("&".join([("%s=%s" % (specialCases.get(h) or dashCapitalize(h), v)) for (h, v) in self.headers.items()]))
+            w("&".join([("%s=%s" % (headerCapitalize(h), urllib.quote(v)))
+                        for (h, v) in self.headers.items()]))
         return "".join(l)
 
+
     def __str__(self):
+        """
+        Format this object's contents as a SIP URI.
+        """
         return self.toString()
-    
+
+
     def __repr__(self):
-        return '<URL %s:%s@%s:%r/%s>' % (self.username, self.password, self.host, self.port, self.transport)
+        """
+        Provide a debugging representation of this object.
+        """
+        return '<sip.URI %s>' % self.toString()
+
+
+    def __cmp__(self, other):
+        """
+        Incorrect implementation of comparison.  See RFC 3261, section
+        19.1.4. for a description of the correct algorithm, which ignores some
+        differences this method considers significant.
+        """
+        return cmp(self.__dict__, other.__dict__)
+
+
+    def __hash__(self):
+        """
+        Provide a hash value for this URI based on the most common contents.
+        """
+        return hash((self.host, self.username, self.port,
+                     tuple(self.headers.items())))
+
+
+
+#"URL" is the deprecated spelling of this class.
+URL = URI
 
 
 def parseURL(url, host=None, port=None):
-    """Return string into URL object.
-
+    """
+    Parse string into URI object.
     URIs are of of form 'sip:user@example.com'.
+
+    @param url: A string representation of a SIP URI.
+    @param host: The host to use for the URI object returned, overriding the
+    value specified in the input.
+    @param port: The port to use for the URI object returned, overriding the
+    value specified in the input.
     """
     d = {}
     if not url.startswith("sip:"):
-        raise ValueError("unsupported scheme: " + url[:4])
+        raise SIPError(416, "Unsupported URI scheme: " + url[:4])
     parts = url[4:].split(";")
     userdomain, params = parts[0], parts[1:]
     udparts = userdomain.split("@", 1)
@@ -321,10 +414,10 @@ def parseURL(url, host=None, port=None):
         userpass, hostport = udparts
         upparts = userpass.split(":", 1)
         if len(upparts) == 1:
-            d["username"] = upparts[0]
+            d["username"] = urllib.unquote(upparts[0])
         else:
-            d["username"] = upparts[0]
-            d["password"] = upparts[1]
+            d["username"] = urllib.unquote(upparts[0])
+            d["password"] = urllib.unquote(upparts[1])
     else:
         hostport = udparts[0]
     hpparts = hostport.split(":", 1)
@@ -343,12 +436,12 @@ def parseURL(url, host=None, port=None):
             p, headers = p.split("?", 1)
             for header in headers.split("&"):
                 k, v = header.split("=")
-                h[k] = v
+                h[urllib.unquote(k)] = urllib.unquote(v)
         nv = p.split("=", 1)
         if len(nv) == 1:
-            d.setdefault("other", []).append(p)
+            d.setdefault("other", {})[urllib.unquote(p)] = ''
             continue
-        name, value = nv
+        name, value = map(urllib.unquote, nv)
         if name == "user":
             d["usertype"] = value
         elif name in ("transport", "ttl", "maddr", "method", "tag"):
@@ -356,8 +449,9 @@ def parseURL(url, host=None, port=None):
                 value = int(value)
             d[name] = value
         else:
-            d.setdefault("other", []).append(p)
-    return URL(**d)
+            d.setdefault("other", {})[name] = value
+    return URI(**d)
+
 
 
 def cleanRequestURL(url):
@@ -371,35 +465,67 @@ def cleanRequestURL(url):
 def parseAddress(address, host=None, port=None, clean=0):
     """Return (name, uri, params) for From/To/Contact header.
 
+    @param address: A string representation of a SIP address (A 'name-addr', as
+    defined in RFC 3261, section 25.1, plus parameters.)
+
+    @param host: The host to use for the URI object returned, overriding the
+    value specified in the input.
+    @param port: The port to use for the URI object returned, overriding the
+    value specified in the input.
+
     @param clean: remove unnecessary info, usually for From and To headers.
+
+    Although many headers such as From can contain any valid URI, even those
+    with schemes other than 'sip', this function raises SIPError if the scheme
+    is not 'sip' because the upper layers do not support it.
     """
-    address = address.strip()
-    # simple 'sip:foo' case
-    if address.startswith("sip:"):
-        return "", parseURL(address, host=host, port=port), {}
-    params = {}
-    name, url = address.split("<", 1)
-    name = name.strip()
-    if name.startswith('"'):
-        name = name[1:]
-    if name.endswith('"'):
-        name = name[:-1]
-    url, paramstring = url.split(">", 1)
-    url = parseURL(url, host=host, port=port)
-    paramstring = paramstring.strip()
-    if paramstring:
-        for l in paramstring.split(";"):
-            if not l:
-                continue
-            k, v = l.split("=")
-            params[k] = v
-    if clean:
-        # rfc 2543 6.21
-        url.ttl = None
-        url.headers = {}
-        url.transport = None
-        url.maddr = None
-    return name, url, params
+    def splitParams(paramstring):
+        params = {}
+        paramstring = paramstring.strip()
+        if paramstring:
+            for l in paramstring.split(";"):
+                if not l:
+                    continue
+                x = l.split("=")
+                if len(x) > 1:
+                    params[x[0]] = x[1]
+                else:
+                    params [x[0]] = ''
+        return params
+    try:
+        address = address.strip()
+        # simple 'sip:foo' case
+        if not '<' in address:
+            i = address.rfind(";tag=")
+            if i > -1:
+
+                params = splitParams(address[i:])
+                address = address[:i]
+            else:
+                params = {}
+            return "", parseURL(address, host=host, port=port), params
+        params = {}
+        name, url = address.split("<", 1)
+        name = name.strip()
+        if name.startswith('"'):
+            name = name[1:]
+        if name.endswith('"'):
+            name = name[:-1]
+        import re
+        name = re.sub(r'\\(.)', r'\1', name)
+        url, paramstring = url.split(">", 1)
+        url = parseURL(url, host=host, port=port)
+        params = splitParams(paramstring)
+        if clean:
+            # rfc 2543 6.21
+            url.ttl = None
+            url.headers = {}
+            url.transport = None
+            url.maddr = None
+        return name.decode('utf8','replace'), url, params
+    except:
+        log.err()
+        raise SIPError(400)
 
 
 class SIPError(Exception):
@@ -444,7 +570,7 @@ class Message:
         s = "%s\r\n" % self._getHeaderLine()
         for n, vs in self.headers.items():
             for v in vs:
-                s += "%s: %s\r\n" % (specialCases.get(n) or dashCapitalize(n), v)
+                s += "%s: %s\r\n" % (headerCapitalize(n), v)
         s += "\r\n"
         s += self.body
         return s
@@ -676,7 +802,7 @@ class Base(protocol.DatagramProtocol):
         # XXX we don't do multicast yet
         host = destVia.received or destVia.host
         port = destVia.rport or destVia.port or self.PORT
-        destAddr = URL(host=host, port=port)
+        destAddr = URI(host=host, port=port)
         self.sendMessage(destAddr, responseMessage)
 
     def responseFromRequest(self, code, request):
@@ -839,7 +965,7 @@ class Proxy(Base):
         host = destVia.received or destVia.host
         port = destVia.rport or destVia.port or self.PORT
         
-        destAddr = URL(host=host, port=port)
+        destAddr = URI(host=host, port=port)
         self.sendMessage(destAddr, responseMessage)
 
     def responseFromRequest(self, code, request):

@@ -275,25 +275,61 @@ class URLTestCase(unittest.TestCase):
                      ("host", "hosta"), ("port", 123),
                      ("transport", "udp"), ("usertype", "phone"),
                      ("method", "foo"), ("ttl", 12),
-                     ("maddr", "1.2.3.4"), ("other", ["blah", "goo=bar"]),
+                     ("maddr", "1.2.3.4"), ("other", {"blah": "",
+                                                      "goo": "bar"}),
                      ("headers", {"a": "b", "c": "d"})]:
             self.assertEquals(getattr(url, k), v)
+
+
+    def test_escaping(self):
+        """
+        Percent-encoded characters are decoded and encoded correctly.
+        """
+        uriString = ("sip:sips%3Auser%40example.com:x%20x@example.net"
+                           ";m%65thod=foo%00baz?a%62c-foo=de%66")
+        uri = sip.parseURL(uriString)
+        self.assertEqual(uri.username, "sips:user@example.com")
+        self.assertEqual(uri.password, "x x")
+        self.assertEqual(uri.method, "foo\x00baz")
+        self.assertEqual(uri.headers, {"abc-foo": "def"})
+        self.assertEqual(uri.toString(),
+                         ("sip:sips%3Auser%40example.com:x%20x@example.net"
+                           ";method=foo%00baz?Abc-Foo=def"))
 
 
 class ParseTestCase(unittest.TestCase):
 
     def testParseAddress(self):
         for address, name, urls, params in [
-            ('"A. G. Bell" <sip:foo@example.com>', "A. G. Bell", "sip:foo@example.com", {}),
-            ("Anon <sip:foo@example.com>", "Anon", "sip:foo@example.com", {}),
+
+            ('"A. G. Bell" <sip:foo@example.com>',
+             "A. G. Bell", "sip:foo@example.com", {}),
+            (' "A. G. Bell" <sip:foo@example.com>',
+             "A. G. Bell", "sip:foo@example.com", {}),
+            ('"Bell, A. G." <sip:bell@example.com>',
+             "Bell, A. G.", "sip:bell@example.com", {}),
+            ('" \\\\A. G. \\"Bell" <sip:foo@example.com>',
+             " \\A. G. \"Bell", "sip:foo@example.com", {}),
+            ('"\\x21A. G. Bell" <sip:foo@example.com>',
+             "x21A. G. Bell", "sip:foo@example.com", {}),
+            ("abcd1234-.!%*_+`'~ <sip:foo@example.com>",
+             "abcd1234-.!%*_+`'~", "sip:foo@example.com", {}),
+            ('"C\xc3\xa9sar" <sip:C%C3%A9sar@example.com>',
+             u'C\xe9sar', 'sip:C%C3%A9sar@example.com', {}),
+            ("Anon <sip:foo@example.com>",
+             "Anon", "sip:foo@example.com", {}),
             ("sip:foo@example.com", "", "sip:foo@example.com", {}),
             ("<sip:foo@example.com>", "", "sip:foo@example.com", {}),
-            ("foo <sip:foo@example.com>;tag=bar;foo=baz", "foo", "sip:foo@example.com", {"tag": "bar", "foo": "baz"}),
+            ("foo <sip:foo@example.com>;tag=bar;foo=baz",
+             "foo", "sip:foo@example.com", {"tag": "bar", "foo": "baz"}),
+            ("sip:foo@example.com;tag=bar;foo=baz",
+             "", "sip:foo@example.com", {"tag": "bar", "foo": "baz"}),
             ]:
             gname, gurl, gparams = sip.parseAddress(address)
             self.assertEquals(name, gname)
             self.assertEquals(gurl.toString(), urls)
             self.assertEquals(gparams, params)
+
 
 
 class DummyLocator:
