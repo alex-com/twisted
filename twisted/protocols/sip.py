@@ -23,6 +23,7 @@ from zope.interface import implements, Interface
 
 # twisted imports
 from twisted.python import log, util
+from twisted.python.compat import set
 from twisted.python.hashlib import md5
 from twisted.internet import protocol, defer, reactor
 
@@ -291,8 +292,6 @@ class URI:
     @ivar ttl: Time-to-live for multicast requests. Used with C{maddr}.
     @ivar maddr: Server address to be contacted for this user. For use with
     multicast requests. Optional.
-    @ivar tag: Half of a SIP dialog identifier. See RFC 3261, section
-    19.3. Optional.
     @ivar other: A dict of any other URI parameters not specifically mentioned
     here. Optional.
     @ivar headers: A dict of key-value pairs to be used as headers when forming
@@ -301,7 +300,7 @@ class URI:
 
     def __init__(self, host, username=None, password=None, port=None,
                  transport=None, usertype=None, method=None,
-                 ttl=None, maddr=None, tag=None, other=None, headers=None):
+                 ttl=None, maddr=None, other=None, headers=None):
         """
         Set parameters of this URI.
         """
@@ -312,7 +311,6 @@ class URI:
         self.transport = transport
         self.usertype = usertype
         self.method = method
-        self.tag = tag
         self.ttl = ttl
         self.maddr = maddr
         if other == None:
@@ -341,7 +339,7 @@ class URI:
             w(":%d" % self.port)
         if self.usertype != None:
             w(";user=%s" % self.usertype)
-        for n in ("transport", "ttl", "maddr", "method", "tag"):
+        for n in ("transport", "ttl", "maddr", "method"):
             v = getattr(self, n)
             if v != None:
                 w(";%s=%s" % (urllib.quote(n), urllib.quote(v)))
@@ -371,13 +369,53 @@ class URI:
         return '<sip.URI %s>' % self.toString()
 
 
-    def __cmp__(self, other):
+    def __eq__(self, other):
         """
-        Incorrect implementation of comparison.  See RFC 3261, section
-        19.1.4. for a description of the correct algorithm, which ignores some
-        differences this method considers significant.
+        Comparison for URI equivalence, as described in RFC 3261, section
+        19.1.4.
         """
-        return cmp(self.__dict__, other.__dict__)
+        if not isinstance(other, URI):
+            return False
+
+        if self.username != other.username or self.password != other.password:
+            return False
+
+        if self.host.lower() != other.host.lower() or self.port != other.port:
+            return False
+
+        selfParams = set([p.lower() for p in self.other])
+        otherParams = set([p.lower() for p in other.other])
+        comparisonAttributes = ['usertype', 'method', 'ttl', 'maddr',
+                                'transport']
+        comparisonParams = [(name, self.other[name], other.other[name])
+                            for name in selfParams.intersection(otherParams)]
+        comparisonParams.extend([(name, getattr(self, name),
+                                  getattr(other, name))
+                                 for name in comparisonAttributes])
+        for param, left, right in comparisonParams:
+            if  left == right:
+                continue
+            #the parameters that can be ignored have been removed, so those
+            #left must either both be None or strings that are
+            #case-insensitively equal.
+            if ((left is None and right is not None)
+                or
+                (left is not None and right is None)):
+                return False
+            if left.lower() != right.lower():
+                return False
+
+        if self.headers != other.headers:
+            return False
+
+        return True
+
+
+    def __ne__(self, other):
+        """
+        Deal with python's confusing equality model.
+        """
+        return not self.__eq__(other)
 
 
     def __hash__(self):
@@ -405,7 +443,12 @@ def parseURL(url, host=None, port=None):
     value specified in the input.
     """
     d = {}
-    if not url.startswith("sip:"):
+    def parseHeaders(headers):
+        d["headers"] = h = {}
+        for header in headers.split("&"):
+            k, v = header.split("=")
+            h[urllib.unquote(k.lower())] = urllib.unquote(v)
+    if not url[:4].lower() == "sip:":
         raise SIPError(416, "Unsupported URI scheme: " + url[:4])
     parts = url[4:].split(";")
     userdomain, params = parts[0], parts[1:]
@@ -421,30 +464,38 @@ def parseURL(url, host=None, port=None):
     else:
         hostport = udparts[0]
     hpparts = hostport.split(":", 1)
+
     if len(hpparts) == 1:
-        d["host"] = hpparts[0]
+        if "?" in hpparts[0]:
+            _host, headers = hpparts[0].split("?", 1)
+            parseHeaders(headers)
+        else:
+            _host = hpparts[0]
+        d["host"] = _host
     else:
+        if "?" in hpparts[1]:
+            _port, headers = hpparts[1].split("?", 1)
+            parseHeaders(headers)
+        else:
+            _port = hpparts[1]
         d["host"] = hpparts[0]
-        d["port"] = int(hpparts[1])
+        d["port"] = int(_port)
     if host != None:
         d["host"] = host
     if port != None:
         d["port"] = port
     for p in params:
         if p == params[-1] and "?" in p:
-            d["headers"] = h = {}
             p, headers = p.split("?", 1)
-            for header in headers.split("&"):
-                k, v = header.split("=")
-                h[urllib.unquote(k)] = urllib.unquote(v)
+            parseHeaders(headers)
         nv = p.split("=", 1)
         if len(nv) == 1:
-            d.setdefault("other", {})[urllib.unquote(p)] = ''
+            d.setdefault("other", {})[urllib.unquote(p.lower())] = ''
             continue
-        name, value = map(urllib.unquote, nv)
+        name, value = [urllib.unquote(x.lower()) for x in nv]
         if name == "user":
             d["usertype"] = value
-        elif name in ("transport", "ttl", "maddr", "method", "tag"):
+        elif name in ("transport", "ttl", "maddr", "method"):
             if name == "ttl":
                 value = int(value)
             d[name] = value

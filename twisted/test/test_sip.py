@@ -256,13 +256,15 @@ class ViaTestCase(unittest.TestCase):
         
         self.assertNotEquals(v.toString().find("rport=12345"), -1)
 
-class URLTestCase(unittest.TestCase):
-
+class URITestCase(unittest.TestCase):
+    """
+    Tests for L{sip.URI} and {sip.parseURL}.
+    """
     def testRoundtrip(self):
         for url in [
             "sip:j.doe@big.com",
             "sip:j.doe:secret@big.com;transport=tcp",
-            "sip:j.doe@big.com?subject=project",
+            "sip:j.doe@big.com?Subject=project",
             "sip:example.com",
             ]:
             self.assertEquals(sip.parseURL(url).toString(), url)
@@ -281,6 +283,19 @@ class URLTestCase(unittest.TestCase):
             self.assertEquals(getattr(url, k), v)
 
 
+    def test_headers(self):
+        """
+        SIP headers included in the URI are parsed correctly.
+        """
+
+        uris = ["sip:foo@bar.com?header=value",
+                "sip:foo@bar.com:5060?header=value",
+                "sip:foo@bar.com;method=invite?header=value"]
+        for uri in uris:
+            self.assertEquals(sip.parseURL(uri).headers,
+                              {"header": "value"})
+
+
     def test_escaping(self):
         """
         Percent-encoded characters are decoded and encoded correctly.
@@ -295,6 +310,58 @@ class URLTestCase(unittest.TestCase):
         self.assertEqual(uri.toString(),
                          ("sip:sips%3Auser%40example.com:x%20x@example.net"
                            ";method=foo%00baz?Abc-Foo=def"))
+
+
+    def test_equivalence(self):
+        """
+        All the URIs the RFC says are equivalent should compare equal.
+        """
+        def assertEquivalentURIs(l, r):
+            self.assertEqual(sip.parseURL(l), sip.parseURL(r))
+
+        assertEquivalentURIs("sip:%61lice@atlanta.com;transport=TCP",
+                             "sip:alice@AtLanTa.CoM;Transport=tcp")
+        assertEquivalentURIs("sip:carol@chicago.com",
+                             "sip:carol@chicago.com;newparam=5")
+        assertEquivalentURIs("sip:carol@chicago.com",
+                             "sip:carol@chicago.com;security=on")
+        assertEquivalentURIs("sip:carol@chicago.com;security=on",
+                             "sip:carol@chicago.com;newparam=5")
+        assertEquivalentURIs("sip:biloxi.com;transport=tcp;method=REGISTER?"
+                             "to=sip:bob%40biloxi.com",
+                             "sip:biloxi.com;method=REGISTER;transport=tcp?"
+                             "to=sip:bob%40biloxi.com")
+        assertEquivalentURIs("sip:alice@atlanta.com?subject=project%20x"
+                             "&priority=urgent",
+                             "sip:alice@atlanta.com?priority=urgent&"
+                             "subject=project%20x")
+
+    def test_nonequivalence(self):
+        """
+        Ensure that certain difference between similar URIs prevent them from
+        comparing equal.
+        """
+        def assertNonequivalent(l, r):
+            self.assertNotEqual(sip.parseURL(l), sip.parseURL(r))
+
+        assertNonequivalent("sip:carol@chicago.com;security=off",
+                            "sip:carol@chicago.com;security=on")
+        assertNonequivalent("SIP:ALICE@AtLanTa.CoM;Transport=udp",
+                            "sip:alice@AtLanTa.CoM;Transport=UDP")
+        assertNonequivalent("sip:bob@biloxi.com", "sip:bob@biloxi.com:5060")
+        assertNonequivalent("sip:bob@biloxi.com",
+                            "sip:bob@biloxi.com;transport=udp")
+        assertNonequivalent("sip:bob@biloxi.com",
+                            "sip:bob@biloxi.com:5060;transport=udp")
+        assertNonequivalent("sip:bob@biloxi.com",
+                            "sip:bob@biloxi.com:5060;transport=tcp")
+        assertNonequivalent("sip:carol@chicago.com",
+                            "sip:carol@chicago.com?Subject=next%20meeting")
+        assertNonequivalent("sip:bob@localhost", "sip:bob@127.0.0.1")
+
+
+
+
 
 
 class ParseTestCase(unittest.TestCase):
