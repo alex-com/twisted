@@ -543,40 +543,35 @@ def parseAddress(address, host=None, port=None, clean=0):
                 else:
                     params [x[0]] = ''
         return params
-    try:
-        address = address.strip()
-        # simple 'sip:foo' case
-        if not '<' in address:
-            i = address.rfind(";tag=")
-            if i > -1:
-
-                params = splitParams(address[i:])
-                address = address[:i]
-            else:
-                params = {}
-            return "", parseURL(address, host=host, port=port), params
-        params = {}
-        name, url = address.split("<", 1)
-        name = name.strip()
-        if name.startswith('"'):
-            name = name[1:]
-        if name.endswith('"'):
-            name = name[:-1]
-        import re
-        name = re.sub(r'\\(.)', r'\1', name)
-        url, paramstring = url.split(">", 1)
-        url = parseURL(url, host=host, port=port)
-        params = splitParams(paramstring)
-        if clean:
-            # rfc 2543 6.21
-            url.ttl = None
-            url.headers = {}
-            url.transport = None
-            url.maddr = None
-        return name.decode('utf8','replace'), url, params
-    except:
-        log.err()
-        raise SIPError(400)
+    address = address.strip()
+    # simple 'sip:foo' case
+    if not '<' in address:
+        i = address.rfind(";tag=")
+        if i > -1:
+            params = splitParams(address[i:])
+            address = address[:i]
+        else:
+            params = {}
+        return "", parseURL(address, host=host, port=port), params
+    params = {}
+    name, url = address.split("<", 1)
+    name = name.strip()
+    if name.startswith('"'):
+        name = name[1:]
+    if name.endswith('"'):
+        name = name[:-1]
+    import re
+    name = re.sub(r'\\(.)', r'\1', name)
+    url, paramstring = url.split(">", 1)
+    url = parseURL(url, host=host, port=port)
+    params = splitParams(paramstring)
+    if clean:
+        # rfc 2543 6.21
+        url.ttl = None
+        url.headers = {}
+        url.transport = None
+        url.maddr = None
+    return name.decode('utf8','replace'), url, params
 
 
 class SIPError(Exception):
