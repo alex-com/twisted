@@ -269,9 +269,13 @@ class URITestCase(unittest.TestCase):
             ]:
             self.assertEquals(sip.parseURL(url).toString(), url)
 
-    def testComplex(self):
+
+    def test_complex(self):
+        """
+        Test parsing and printing a URI with one of everything.
+        """
         s = ("sip:user:pass@hosta:123;transport=udp;user=phone;method=foo;"
-             "ttl=12;maddr=1.2.3.4;blah;goo=bar?a=b&c=d")
+             "ttl=12;maddr=1.2.3.4;blah;goo=bar?foo-baz=b&c=d")
         url = sip.parseURL(s)
         for k, v in [("username", "user"), ("password", "pass"),
                      ("host", "hosta"), ("port", 123),
@@ -279,8 +283,12 @@ class URITestCase(unittest.TestCase):
                      ("method", "foo"), ("ttl", 12),
                      ("maddr", "1.2.3.4"), ("other", {"blah": "",
                                                       "goo": "bar"}),
-                     ("headers", {"a": "b", "c": "d"})]:
+                     ("headers", {"foo-baz": "b", "c": "d"})]:
             self.assertEquals(getattr(url, k), v)
+        self.assertEquals(
+            str(url),
+            'sip:user:pass@hosta:123;user=phone;transport=udp;'
+            'ttl=12;maddr=1.2.3.4;method=foo;blah;goo=bar?C=d&Foo-Baz=b')
 
 
     def test_headers(self):
@@ -294,6 +302,26 @@ class URITestCase(unittest.TestCase):
         for uri in uris:
             self.assertEquals(sip.parseURL(uri).headers,
                               {"header": "value"})
+
+
+    def test_invalidScheme(self):
+        """
+        Attempts to parse unsupported URI schemes are rejected.
+        """
+        self.assertRaises(sip.SIPError, sip.parseURL, "http://example.com/")
+        self.assertRaises(sip.SIPError, sip.parseURL, "sips:bob@example.com")
+
+
+    def test_hash(self):
+        """
+        URIs are hashable.
+        """
+        d = {
+            sip.URI("example.com"): 1,
+            sip.URI("example.com", "bob"): 2
+            }
+        self.assertEqual(d[sip.URI("example.com")], 1)
+        self.assertEqual(d[sip.URI("example.com", "bob")], 2)
 
 
     def test_escaping(self):
@@ -387,8 +415,9 @@ class ParseTestCase(unittest.TestCase):
              "Anon", "sip:foo@example.com", {}),
             ("sip:foo@example.com", "", "sip:foo@example.com", {}),
             ("<sip:foo@example.com>", "", "sip:foo@example.com", {}),
-            ("foo <sip:foo@example.com>;tag=bar;foo=baz",
-             "foo", "sip:foo@example.com", {"tag": "bar", "foo": "baz"}),
+            ("foo <sip:foo@example.com>;tag=bar;foo=baz;boz",
+             "foo", "sip:foo@example.com", {"tag": "bar", "foo": "baz",
+                                            "boz": ""}),
             ("sip:foo@example.com;tag=bar;foo=baz",
              "", "sip:foo@example.com", {"tag": "bar", "foo": "baz"}),
             ]:

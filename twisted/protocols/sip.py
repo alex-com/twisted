@@ -19,6 +19,7 @@ import random
 import time
 import sys
 import urllib
+import re
 from zope.interface import implements, Interface
 
 # twisted imports
@@ -278,24 +279,35 @@ class URI:
     """
     A SIP URI, as defined in RFC 3261, section 19.1.
 
-    @ivar host: A hostname or IP address. Required.
+    @ivar host: A hostname or IP address.
+    @type host: C{str}
     @ivar username: The identifier of a particular resource at the host being
-    addressed. Optional.
-    @ivar password: A password associated with the username. Optional.
-    @ivar port: The port number where the request is to be sent. Optional.
+    addressed.
+    @type username: C{str}, or None.
+    @ivar password: A password associated with the username.
+    @type password: C{str}, or None.
+    @ivar port: The port number where the request is to be sent.
+    @type port: C{int}, or None.
     @ivar transport: The transport mechanism to be used for sending SIP
-    messages. Optional.
+    messages.
+    @type transport: C{str}, or None.
     @ivar usertype: The 'user' URI parameter. May be 'phone' or 'dialstring' -
-    see RFC 3261, 19.1.6., and RFC 4967. Optional.
+    see RFC 3261, 19.1.6., and RFC 4967.
+    @type usertype: C{str}, or None.
     @ivar method: The SIP method to use when forming a request from this
-    URI. (INVITE, REGISTER, etc.) Optional.
+    URI. (INVITE, REGISTER, etc.)
+    @type method: C{str}, or None.
     @ivar ttl: Time-to-live for multicast requests. Used with C{maddr}.
+    @type ttl: C{int}, or None.
     @ivar maddr: Server address to be contacted for this user. For use with
-    multicast requests. Optional.
-    @ivar other: A dict of any other URI parameters not specifically mentioned
-    here. Optional.
-    @ivar headers: A dict of key-value pairs to be used as headers when forming
-    a request from this URI. Optional.
+    multicast requests.
+    @type maddr: C{str}, or None.
+    @ivar other: Any other URI parameters not specifically mentioned
+    here.
+    @type other: C{dict}, or None.
+    @ivar headers: Key-value pairs to be used as headers when forming
+    a request from this URI.
+    @type headers: C{dict}, or None.
     """
 
     def __init__(self, host, username=None, password=None, port=None,
@@ -342,7 +354,7 @@ class URI:
         for n in ("transport", "ttl", "maddr", "method"):
             v = getattr(self, n)
             if v != None:
-                w(";%s=%s" % (urllib.quote(n), urllib.quote(v)))
+                w(";%s=%s" % (urllib.quote(n), urllib.quote(str(v))))
         for k, v in self.other.iteritems():
             if v:
                 w(";%s=%s" % (urllib.quote(k), urllib.quote(v)))
@@ -560,7 +572,6 @@ def parseAddress(address, host=None, port=None, clean=0):
         name = name[1:]
     if name.endswith('"'):
         name = name[:-1]
-    import re
     name = re.sub(r'\\(.)', r'\1', name)
     url, paramstring = url.split(">", 1)
     url = parseURL(url, host=host, port=port)
@@ -848,7 +859,7 @@ class Base(protocol.DatagramProtocol):
         # XXX we don't do multicast yet
         host = destVia.received or destVia.host
         port = destVia.rport or destVia.port or self.PORT
-        destAddr = URI(host=host, port=port)
+        destAddr = URL(host=host, port=port)
         self.sendMessage(destAddr, responseMessage)
 
     def responseFromRequest(self, code, request):
@@ -1011,7 +1022,7 @@ class Proxy(Base):
         host = destVia.received or destVia.host
         port = destVia.rport or destVia.port or self.PORT
         
-        destAddr = URI(host=host, port=port)
+        destAddr = URL(host=host, port=port)
         self.sendMessage(destAddr, responseMessage)
 
     def responseFromRequest(self, code, request):
