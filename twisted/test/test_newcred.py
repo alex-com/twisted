@@ -11,7 +11,7 @@ from zope.interface import implements, Interface
 
 from twisted.trial import unittest
 from twisted.cred import portal, checkers, credentials, error, util
-from twisted.python import components
+from twisted.python import components, versions
 from twisted.internet import defer
 from twisted.internet.defer import deferredGenerator as dG, waitForDeferred as wFD
 
@@ -256,14 +256,16 @@ class OnDiskDatabaseTestCase(unittest.TestCase):
         d.addCallback(self.assertEquals, [u for u, p in self.users])
         return d
 
-    def testRequestAvatarId_hashed(self):
+    def test_requestAvatarIdHashed(self):
         dbfile = self.mktemp()
         db = checkers.FilePasswordDB(dbfile, caseSensitive=0)
         f = file(dbfile, 'w')
         for (u, p) in self.users:
             f.write('%s:%s\n' % (u, p))
         f.close()
-        creds = [credentials.UsernameHashedPassword(u, p) for u, p in self.users]
+        creds = [credentials.UsernameHashedPassword(u, p)
+                 for u, p in self.users]
+        self.flushWarnings(offendingFunctions=[self.test_requestAvatarIdHashed])
         d = defer.gatherResults(
             [defer.maybeDeferred(db.requestAvatarId, c) for c in creds])
         d.addCallback(self.assertEquals, [u for u, p in self.users])
@@ -315,9 +317,10 @@ class HashedPasswordOnDiskDatabaseTestCase(unittest.TestCase):
         d.addCallback(self._assertFailures, error.UnauthorizedLogin)
         return d
 
-    def testHashedCredentials(self):
+    def test_hashedCredentials(self):
         hashedCreds = [credentials.UsernameHashedPassword(u, crypt(p, u[:2]))
                        for u, p in self.users]
+        self.flushWarnings(offendingFunctions=[self.test_hashedCredentials])
         d = defer.DeferredList([self.port.login(c, None, ITestable)
                                 for c in hashedCreds], consumeErrors=True)
         d.addCallback(self._assertFailures, error.UnhandledCredentials)
@@ -433,13 +436,17 @@ class HashlessFilePasswordDBMixin:
 
     def getGoodCredentials(self):
         for u, p in self._validCredentials:
-            yield self.credClass(u, self.networkHash(p)), u
+            x = self.credClass(u, self.networkHash(p)), u
+            self.flushWarnings(offendingFunctions=[self.getGoodCredentials])
+            yield x
 
     def getBadCredentials(self):
         for u, p in [('user1', 'password3'),
                      ('user2', 'password1'),
                      ('bloof', 'blarf')]:
-            yield self.credClass(u, self.networkHash(p))
+            x = self.credClass(u, self.networkHash(p))
+            self.flushWarnings(offendingFunctions=[self.getBadCredentials])
+            yield x
 
     def getCheckers(self):
         diskHash = self.diskHash or (lambda x: x)
@@ -485,3 +492,15 @@ class LocallyHashedFilePasswordDBCheckerTestCase(LocallyHashedFilePasswordDBMixi
 class NetworkHashedFilePasswordDBCheckerTestCase(NetworkHashedFilePasswordDBMixin, CheckersMixin, unittest.TestCase):
     pass
 
+
+class DeprecationTests(unittest.TestCase):
+    """
+    Tests for deprecation of obsolete components of L{twisted.cred}.
+    """
+    def test_deprecatedUsernameHashedPassword(self):
+        """
+        L{twisted.cred.credentials.UsernameHashedPassword} is deprecated.
+        """
+        self.callDeprecated(versions.Version("Twisted", 9, 0, 0),
+                            credentials.UsernameHashedPassword,
+                            "username", "password")
