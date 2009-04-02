@@ -6,3 +6,4 @@ exclude twisted/protocols/_c_urlarg.c
 exclude twisted/python/_epoll.c
 exclude twisted/runner/portmap.c
 exclude twisted/test/raiser.c
+exclude bin/admin/*
