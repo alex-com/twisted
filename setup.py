@@ -16,7 +16,7 @@ except ImportError:
 import sys, os
 
 
-#  remove the generator_failure_tests.py test which fails on Python 2.3
+#  remove the generator_failure_tests.py test which fails on Python 2.4
 #  with a syntax error
 from distutils.command.sdist import sdist as _sdist
 class twisted_sdist(_sdist):
@@ -34,10 +34,10 @@ class twisted_sdist(_sdist):
 #  For example, see: https://bugzilla.redhat.com/show_bug.cgi?id=198877#c1
 from distutils.command.bdist_rpm import bdist_rpm as _bdist_rpm
 class twisted_bdist_rpm(_bdist_rpm):
-	 def _make_spec_file(self):
-	 	spec_file = _bdist_rpm._make_spec_file(self)
-		spec_file.insert(0, '%define _unpackaged_files_terminate_build 0')
-		return(spec_file)
+    def _make_spec_file(self):
+        spec_file = _bdist_rpm._make_spec_file(self)
+        spec_file.insert(0, '%define _unpackaged_files_terminate_build 0')
+        return(spec_file)
 
 
 def getExtensions():
@@ -114,10 +114,11 @@ dependency resolution is disabled.
         setup_args['include_package_data'] = True
         setup_args['zip_safe'] = False
 
-    #  Python v2.3 and lower...
-    if sys.version_info[0] <= 2 and sys.version_info[1] <= 3:
-        setup_args['cmdclass'] = { 'sdist' : twisted_sdist,
-		          'bdist_rpm' : twisted_bdist_rpm }
+    setup_args['cmdclass'] = { 'sdist' : twisted_sdist }
+
+    #  Python v2.4 and lower...
+    if sys.version_info[0] <= 2 and sys.version_info[1] <= 4:
+        setup_args['cmdclass']['sdist'] = twisted_sdist
 
     setup(**setup_args)
 
