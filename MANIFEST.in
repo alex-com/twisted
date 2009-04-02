@@ -1,0 +1,8 @@
+exclude rpm-post-install
+exclude twisted/internet/cfsupport/cfsupport.c
+exclude twisted/internet/iocpreactor/iocpsupport/iocpsupport.c
+exclude twisted/internet/iocpreactor/iocpsupport/winsock_pointers.c
+exclude twisted/protocols/_c_urlarg.c
+exclude twisted/python/_epoll.c
+exclude twisted/runner/portmap.c
+exclude twisted/test/raiser.c
