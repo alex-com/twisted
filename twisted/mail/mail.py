@@ -137,12 +137,6 @@ class IDomain(Interface):
     def addUser(user, password):
         """Add a username/password to this domain."""
 
-    def startMessage(user):
-        """Create and return a new message to be delivered to the given user.
-
-        DEPRECATED.  Implement validateTo() correctly instead.
-        """
-
     def getCredentialsCheckers():
         """Return a list of ICredentialsChecker implementors for this domain.
         """
