@@ -1,6 +1,10 @@
 # Copyright (c) 2001-2010 Twisted Matrix Laboratories.
 # See LICENSE for details.
 
+"""
+Support for starting, monitoring, and restarting child process.
+"""
+
 import os, time
 
 from twisted.python import log
@@ -216,7 +220,7 @@ class ProcessMonitor(service.Service):
 
     def restartAll(self):
         """
-        Restart all processes. This is useful for 3rd parties management
+        Restart all processes. This is useful for third party management
         services to allow a user to restart servers because of an outside change
         in circumstances -- for example, a new version of a library is
         installed.
