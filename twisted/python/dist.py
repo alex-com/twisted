@@ -12,6 +12,11 @@ from distutils.errors import CompileError
 from distutils import core
 from distutils.core import Extension
 
+try:
+    execfile
+except NameError:
+    from twisted.python.compat3k import execfile
+
 twisted_subprojects = ["conch", "lore", "mail", "names",
                        "news", "pair", "runner", "web", "web2",
                        "words", "vfs"]
@@ -277,11 +282,8 @@ class build_scripts_twisted(build_scripts.build_scripts):
         for f in os.listdir(self.build_dir):
             fpath=os.path.join(self.build_dir, f)
             if not fpath.endswith(".py"):
-                try:
+                if os.path.exists(fpath + ".py"):
                     os.unlink(fpath + ".py")
-                except EnvironmentError, e:
-                    if e.args[1]=='No such file or directory':
-                        pass
                 os.rename(fpath, fpath + ".py")
 
 

@@ -15,6 +15,10 @@ except ImportError:
 
 import sys, os
 
+try:
+    execfile
+except NameError:
+    from twisted.python.compat3k import execfile
 
 def getExtensions():
     """
@@ -81,14 +85,23 @@ on event-based network programming and multiprotocol integration.
         try:
             list(parse_requirements(requirements))
         except:
-            print """You seem to be running a very old version of setuptools.
+            print("""You seem to be running a very old version of setuptools.
 This version of setuptools has a bug parsing dependencies, so automatic
 dependency resolution is disabled.
-"""
+""")
         else:
             setup_args['install_requires'] = requirements
         setup_args['include_package_data'] = True
         setup_args['zip_safe'] = False
+        if getattr(setuptools, '_distribute', False): # set to True in distribute
+            setup_args['use_2to3'] = True
+            if (3,1) <= sys.version_info < (3,2):
+                # fix_callable chokes on twisted/trial/test/test_pyunitcompat.py
+                # reported as http://bugs.python.org/issue7810
+                from distutils.util import Mixin2to3
+                import lib2to3.refactor
+                Mixin2to3.fixer_names = lib2to3.refactor.get_fixers_from_package('lib2to3.fixes')
+                Mixin2to3.fixer_names.remove('lib2to3.fixes.fix_callable')
     setup(**setup_args)
 
 

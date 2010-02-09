@@ -209,7 +209,7 @@ class Version(object):
             formatFile = os.path.join(svn, 'format')
             if os.path.exists(formatFile):
                 # It looks like a less-than-version-10 working copy.
-                format = file(formatFile).read().strip()
+                format = open(formatFile).read().strip()
                 parser = getattr(self, '_parseSVNEntries_' + format, None)
             else:
                 # It looks like a version-10-or-greater working copy, which
@@ -220,7 +220,7 @@ class Version(object):
                 return 'Unknown'
 
             entriesFile = os.path.join(svn, 'entries')
-            entries = file(entriesFile)
+            entries = open(entriesFile)
             try:
                 try:
                     return parser(entries)
