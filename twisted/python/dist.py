@@ -18,7 +18,7 @@ from distutils.core import Extension
 try:
     execfile
 except NameError:
-    from twisted.python.compat3k import execfile
+    from twisted.python.compat import execfile
 
 
 twisted_subprojects = ["conch", "lore", "mail", "names",

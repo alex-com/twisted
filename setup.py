@@ -15,10 +15,12 @@ except ImportError:
 
 import sys, os
 
+
 try:
     execfile
 except NameError:
-    from twisted.python.compat3k import execfile
+    from twisted.python.compat import execfile
+
 
 def getExtensions():
     """

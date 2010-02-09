@@ -6,13 +6,17 @@
 
 """
 Compatibility module to provide backwards compatibility for useful Python
-features.
+features. Also used to provide compatibility with Python 3.x features.
 
 This is mainly for use of internal Twisted code. We encourage you to use
 the latest version of Python directly from your code, if possible.
 """
 
 import sys, string, socket, struct
+
+
+def execfile(filename, *args):
+    return exec(compile(open(filename).read(), filename, 'exec'), *args)
 
 
 def inet_pton(af, addr):
