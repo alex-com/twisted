@@ -1,5 +1,5 @@
 # -*- test-case-name: twisted.python.test.test_versions -*-
-# Copyright (c) 2006-2008 Twisted Matrix Laboratories.
+# Copyright (c) 2006-2010 Twisted Matrix Laboratories.
 # See LICENSE for details.
 
 """
@@ -76,7 +76,7 @@ class Version(object):
 
     def base(self):
         """
-        Like L{short}, but without the +rSVNVer.
+        Like L{short}, but without the C{+rSVNVer}.
         """
         if self.prerelease is None:
             pre = ""
@@ -124,7 +124,7 @@ class Version(object):
         @param other: Another version.
         @type other: L{Version}
 
-        @return: NotImplemented when the other object is not a Version, or one
+        @return: C{NotImplemented} when the other object is not a L{Version}, or one
             of -1, 0, or 1.
 
         @raise IncomparableVersions: when the package names of the versions

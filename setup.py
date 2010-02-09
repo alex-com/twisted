@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright (c) 2001-2009 Twisted Matrix Laboratories.
+# Copyright (c) 2001-2010 Twisted Matrix Laboratories.
 # See LICENSE for details.
 
 """
@@ -41,7 +41,7 @@ def getExtensions():
 
 def main(args):
     """
-    Invoke twisted.python.dist with the appropriate metadata about the
+    Invoke L{twisted.python.dist} with the appropriate metadata about the
     Twisted package.
     """
     if os.path.exists('twisted'):

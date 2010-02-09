@@ -1,3 +1,6 @@
+# Copyright (c) 2010 Twisted Matrix Laboratories.
+# See LICENSE for details.
+
 """
 Distutils convenience functionality.
 
@@ -16,6 +19,7 @@ try:
     execfile
 except NameError:
     from twisted.python.compat3k import execfile
+
 
 twisted_subprojects = ["conch", "lore", "mail", "names",
                        "news", "pair", "runner", "web", "web2",
@@ -50,6 +54,7 @@ def setup(**kw):
     @type conditionalExtensions: C{list} of L{ConditionalExtension}
     """
     return core.setup(**get_setup_args(**kw))
+
 
 def get_setup_args(**kw):
     if 'twisted_subproject' in kw:
@@ -105,6 +110,7 @@ def get_setup_args(**kw):
         kw.setdefault('cmdclass', {})['build_ext'] = my_build_ext
     return kw
 
+
 def getVersion(proj, base="twisted"):
     """
     Extract the version number for a given project.
@@ -133,7 +139,8 @@ EXCLUDE_PATTERNS = ["*.py[cdo]", "*.s[ol]", ".#*", "*~", "*.py"]
 import fnmatch
 
 def _filterNames(names):
-    """Given a list of file names, return those names that should be copied.
+    """
+    Given a list of file names, return those names that should be copied.
     """
     names = [n for n in names
              if n not in EXCLUDE_NAMES]
@@ -144,6 +151,7 @@ def _filterNames(names):
                  if (not fnmatch.fnmatch(n, pattern))
                  and (not n.endswith('.py'))]
     return names
+
 
 def relativeTo(base, relativee):
     """
@@ -205,6 +213,7 @@ def getDataFiles(dname, ignore=None, parent=None):
                                        os.path.join(directory, filename))
                             for filename in resultfiles]))
     return result
+
 
 def getPackages(dname, pkgname=None, results=None, ignore=None, parent=None):
     """

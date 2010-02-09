@@ -1,6 +1,6 @@
 # -*- test-case-name: twisted.test.test_compat -*-
 #
-# Copyright (c) 2001-2007 Twisted Matrix Laboratories.
+# Copyright (c) 2001-2010 Twisted Matrix Laboratories.
 # See LICENSE for details.
 
 
@@ -13,6 +13,7 @@ the latest version of Python directly from your code, if possible.
 """
 
 import sys, string, socket, struct
+
 
 def inet_pton(af, addr):
     if af == socket.AF_INET:
@@ -59,6 +60,7 @@ def inet_pton(af, addr):
         return struct.pack('!8H', *parts)
     else:
         raise socket.error(97, 'Address family not supported by protocol')
+
 
 def inet_ntop(af, addr):
     if af == socket.AF_INET:
@@ -142,6 +144,7 @@ class tsafe(object):
                 finally:
                     self._lock.release()\n""" % (f, f))
 sys.modules['OpenSSL.tsafe'] = tsafe
+
 
 import operator
 try:
