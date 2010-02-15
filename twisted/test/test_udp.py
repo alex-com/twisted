@@ -10,7 +10,10 @@ from twisted.trial import unittest, util
 
 from twisted.internet.defer import Deferred, gatherResults, maybeDeferred
 from twisted.internet import protocol, reactor, error, defer, interfaces
+from twisted.internet.udp import Port
 from twisted.python import runtime
+from twisted.python.runtime import platformType
+import socket
 
 
 class Mixin:
@@ -108,6 +111,23 @@ class BadClient(protocol.DatagramProtocol):
             d, self.d = self.d, None
             d.callback(bytes)
         raise BadClientError("Application code is very buggy!")
+
+
+
+class MockSocket(object):
+    def __init__(self, retvals):
+        self.retvals = retvals
+    def recvfrom(self, size):
+        ret = self.retvals.pop(0)
+        if isinstance(ret, socket.error):
+            raise ret
+        return ret, None
+
+
+
+class MockProtocol(object):
+    def datagramReceived(self, data, addr):
+        pass
 
 
 
@@ -405,6 +425,28 @@ class UDPTestCase(unittest.TestCase):
         d = defer.maybeDeferred(p.stopListening)
         d.addCallback(stoppedListening)
         return d
+
+
+    def testRawSocketReads(self):
+        if platformType == 'win32':
+            from errno import WSAEWOULDBLOCK as EWOULDBLOCK
+            from errno import WSAECONNREFUSED as ECONNREFUSED
+        else:
+            from errno import EWOULDBLOCK, ECONNREFUSED
+
+        port = Port(None, MockProtocol())
+
+        # Normal result, no errors
+        port.socket = MockSocket(["result", "123", socket.error(EWOULDBLOCK)])
+        port.doRead()
+
+        # Try an immediate "connection refused"
+        port.socket = MockSocket([socket.error(ECONNREFUSED)])
+        port.doRead()
+
+        # Some good data, followed by an unknown error
+        port.socket = MockSocket(["good", socket.error(1337)])
+        self.assertRaises(socket.error, port.doRead)
 
 
 class ReactorShutdownInteraction(unittest.TestCase):
