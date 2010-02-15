@@ -1,5 +1,5 @@
 # -*- test-case-name: twisted.test.test_log -*-
-# Copyright (c) 2001-2009 Twisted Matrix Laboratories.
+# Copyright (c) 2001-2010 Twisted Matrix Laboratories.
 # See LICENSE for details.
 
 """
@@ -33,7 +33,7 @@ class ILogContext:
 class ILogObserver(Interface):
     """
     An observer which can do something with log events.
-    
+
     Given that most log observers are actually bound methods, it's okay to not
     explicitly declare provision of this interface.
     """
@@ -64,14 +64,37 @@ context.setDefault(ILogContext,
                     "system": "-"})
 
 def callWithContext(ctx, func, *args, **kw):
+    """
+    Modify the log prefix before calling a function.
+
+    For example, to change C{system} in the log prefix for the duration of a
+    call to C{myFrob(xyzzy)}, you can do::
+        callWithContext({'system': 'My Frobnicator 2.0'}, myFrob, xyzzy)
+
+    @type ctx: C{dict}
+    @param ctx: A dictionary of logging properties to override. See
+        L{ILogObserver.__call__} for a list of commonly available keys.
+
+    @type func: function
+    @param func: The function to call with this modified logging context.
+    """
     newCtx = context.get(ILogContext).copy()
     newCtx.update(ctx)
     return context.call({ILogContext: newCtx}, func, *args, **kw)
 
+
+
 def callWithLogger(logger, func, *args, **kw):
     """
-    Utility method which wraps a function in a try:/except:, logs a failure if
-    one occurrs, and uses the system's logPrefix.
+    Utility method which wraps a function in a C{try:/except:}, logs a failure
+    if one occurs, and uses the system's C{logPrefix}.
+
+    @type logger: An instance of a class implementing L{Logger}.
+    @param logger: The class whose C{logPrefix} is going to be the logging
+        context for the C{func} call.
+
+    @type func: function
+    @param func: The function to call with a particular logging context.
     """
     try:
         lp = logger.logPrefix()
