@@ -6,6 +6,7 @@
 Assorted functionality which is commonly useful when writing unit tests.
 """
 
+import socket
 from StringIO import StringIO
 
 from zope.interface import implements
@@ -16,6 +17,24 @@ from twisted.internet.interfaces import IReactorTCP
 from twisted.protocols import basic
 from twisted.internet import protocol, error
 
+
+
+class StringSocket(object):
+    """
+    A fake socket object, which returns a fixed sequence of strings and/or
+    socket errors.  Useful for testing.
+    
+    @param retvals: The data to return.
+    @type retvals: A C{list} containing either strings or C{socket.error}s.
+    """
+    def __init__(self, retvals):
+        self.retvals = retvals
+    def recvfrom(self, size):
+        ret = self.retvals.pop(0)
+        if isinstance(ret, socket.error):
+            raise ret
+        return ret, None
+        
 
 class AccumulatingProtocol(protocol.Protocol):
     """

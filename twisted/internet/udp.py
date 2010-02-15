@@ -8,6 +8,13 @@ Various asynchronous UDP classes.
 Please do not use this module directly.
 
 Maintainer: Itamar Shtull-Trauring
+
+@var _sockErrReadIgnore: list of symbolic error contants (from the Python 
+    stdlib {errno} module) representing socket errors where the read should
+    be retried.
+@var _sockErrReadRefuse: list of symbolic error contants (from the Python 
+    stdlib {errno} module) representing socket errors where the read should
+    B{not} be retried.
 """
 
 # System Imports
