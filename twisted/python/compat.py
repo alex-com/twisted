@@ -15,8 +15,14 @@ the latest version of Python directly from your code, if possible.
 import sys, string, socket, struct
 
 
-def execfile(filename, *args):
-    return exec(compile(open(filename).read(), filename, 'exec'), *args)
+if sys.version_info >= (3,0):
+    # 3.x doesn't have execfile anymore, so we define our own
+    # The code below is syntactically valid 2.x, but 2.x thinks that a tuple
+    # gets passed to the exec statement.
+    def execfile(filename, globals=None, locals=None):
+        exec(compile(open(filename).read(), filename, 'exec'), globals, locals)
+else:
+    from __builtin__ import execfile
 
 
 def inet_pton(af, addr):

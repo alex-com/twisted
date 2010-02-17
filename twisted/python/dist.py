@@ -15,10 +15,7 @@ from distutils.errors import CompileError
 from distutils import core
 from distutils.core import Extension
 
-try:
-    execfile
-except NameError:
-    from twisted.python.compat import execfile
+from twisted.python.compat import execfile
 
 
 twisted_subprojects = ["conch", "lore", "mail", "names",
