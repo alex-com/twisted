@@ -1,0 +1,76 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <title>Using the WebSocket protocol with Twisted</title>
+  </head>
+
+  <body>
+<h1>Using the WebSocket protocol with Twisted</h1>
+
+<h2>Introduction</h2>
+<p>
+    The WebSocket protocol is a protocol introduced in HTML5, intended to
+    replace Comet and other long-polling solutions, to provide a rich
+    communication mechanism over HTTP. See <a
+    href="http://tools.ietf.org/html/draft-hixie-thewebsocketprotocol">the
+    specification</a> for more information about the protocol itself.
+
+    <code class="API" base="twisted.web">websocket</code> implements the server
+    side of the WebSocket protocol.
+</p>
+<h2>Using WebSocketResource</h2>
+<p>
+    <code class="API" base="twisted.web.websocket">WebSocketResource</code> is
+    a <code class="API" base="twisted.web.resource">Resource</code> class
+    handling the WebSocket handshake and dispatching request to <code
+    class="API" base="twisted.web.websocket">WebSocketHandler</code> instances.
+    Like other resource instances, it can be inserted anywhere in the resource
+    tree, making the subset of the tree a WebSocket root.
+    The following example creates a file listing server, with /ws being the
+    root of the WebSocket handling. Thus any path behind that can be registered
+    as WebSocket resources.
+</p>
+<pre class="python">
+from twisted.internet import reactor
+from twisted.web.websocket import WebSocketHandler, WebSocketResource
+from twisted.web.server import Site
+from twisted.web.static import File
+
+class Echohandler(WebSocketHandler):
+
+    def frameReceived(self, frame):
+        self.sendFrame(frame)
+
+if __name__ == "__main__":
+    root = File(".")
+    websocketResource = WebSocketResource()
+    websocketResource.addHandler("/echo", Echohandler)
+    root.putChild("ws", websocketResource)
+    site = Site(root)
+    reactor.listenTCP(8080, site)
+    reactor.run()
+</pre>
+<h2>Using WebSocketHandler</h2>
+<p>
+    <code class="API" base="twisted.web.websocket">WebSocketHandler</code>
+    provides basic facility to help you write a WebSocket resource handler. The
+    <code>frameReceived</code> method will be called with every frame sent by
+    the client. The <code>sendFrame</code> method can be used to send data back
+    to the client. Calling the <code>close</code> method will simply close the
+    connection. To be notified of close by the client, you can access the
+    <code>request</code> attribute and call its <code>notifyOnFinish</code>
+    method, which will return a <code>Deferred</code> firing when the
+    connection is closed.
+</p>
+<p>
+    The WebSocket specification specifies that frames must be encoded in UTF-8,
+    but the implementation in Twisted doesn't make any check. Your application
+    code must ensure that it only sends frames correctly encoded in UTF-8, and
+    possibly be able to handle frames sent by the client which are not
+    correctly encoded.
+</p>
+  </body>
+</html>
