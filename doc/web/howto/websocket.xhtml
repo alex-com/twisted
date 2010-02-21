@@ -23,32 +23,29 @@
 </p>
 <h2>Using WebSocketResource</h2>
 <p>
-    <code class="API" base="twisted.web.websocket">WebSocketResource</code> is
-    a <code class="API" base="twisted.web.resource">Resource</code> class
+    <code class="API" base="twisted.web.websocket">WebSocketSite</code> is
+    a <code class="API" base="twisted.web.server">Site</code> class
     handling the WebSocket handshake and dispatching request to <code
     class="API" base="twisted.web.websocket">WebSocketHandler</code> instances.
-    Like other resource instances, it can be inserted anywhere in the resource
-    tree, making the subset of the tree a WebSocket root.
-    The following example creates a file listing server, with /ws being the
-    root of the WebSocket handling. Thus any path behind that can be registered
-    as WebSocket resources.
+    Like other site instances, it can serve any normal HTTP requests, rendering
+    WebSocket if the Connection: Upgrade header has been sent.
+    The following example creates a file listing server, with /ws being reserved
+    for handling WebSocket requests.
 </p>
 <pre class="python">
 from twisted.internet import reactor
-from twisted.web.websocket import WebSocketHandler, WebSocketResource
-from twisted.web.server import Site
+from twisted.web.websocket import WebSocketHandler, WebSocketSite
 from twisted.web.static import File
 
 class Echohandler(WebSocketHandler):
 
     def frameReceived(self, frame):
-        self.sendFrame(frame)
+        self.transport.write(frame)
 
 if __name__ == "__main__":
     root = File(".")
-    websocketResource = WebSocketResource()
-    websocketResource.addHandler("/echo", Echohandler)
-    root.putChild("ws", websocketResource)
+    site = WebSocketSite(root)
+    site.addHandler("/echo", Echohandler)
     site = Site(root)
     reactor.listenTCP(8080, site)
     reactor.run()
@@ -58,12 +55,10 @@ if __name__ == "__main__":
     <code class="API" base="twisted.web.websocket">WebSocketHandler</code>
     provides basic facility to help you write a WebSocket resource handler. The
     <code>frameReceived</code> method will be called with every frame sent by
-    the client. The <code>sendFrame</code> method can be used to send data back
-    to the client. Calling the <code>close</code> method will simply close the
-    connection. To be notified of close by the client, you can access the
-    <code>request</code> attribute and call its <code>notifyOnFinish</code>
-    method, which will return a <code>Deferred</code> firing when the
-    connection is closed.
+    the client. The <code>transport</code> object can be used to send data back
+    to the client, using the <code>write</code>, or closing the connection,
+    using the <code>close</code>method.  The <code>connectionLost</code>
+    callback will be called when the connection is closed.
 </p>
 <p>
     The WebSocket specification specifies that frames must be encoded in UTF-8,
