@@ -65,7 +65,7 @@ class WebSocketSiteTestCase(TestCase):
         if headers is None:
             headers = [
                 ("Upgrade", "WebSocket"), ("Connection", "Upgrade"),
-                ("Host", "localhost"), ("Origin", "http://localhost")]
+                ("Host", "localhost"), ("Origin", "http://localhost/")]
         channel = DummyChannel()
         if ssl:
             channel.transport = channel.SSL()
@@ -121,7 +121,7 @@ class WebSocketSiteTestCase(TestCase):
 
     def test_multipleOriginHeaders(self):
         """
-        If more than one I{Origin} headers are present, the connection is
+        If more than one I{Origin} header is present, the connection is
         dropped.
         """
         channel = self.renderRequest(
@@ -138,19 +138,19 @@ class WebSocketSiteTestCase(TestCase):
         """
         channel = self.renderRequest(
             headers=[("Upgrade", "WebSocket"), ("Connection", "Upgrade"),
-                     ("Origin", "http://localhost")])
+                     ("Origin", "http://localhost/")])
         self.assertFalse(channel.transport.written.getvalue())
         self.assertTrue(channel.transport.disconnected)
 
 
     def test_multipleHostHeaders(self):
         """
-        If more than one I{Host} headers are present, the connection is
+        If more than one I{Host} header is present, the connection is
         dropped.
         """
         channel = self.renderRequest(
             headers=[("Upgrade", "WebSocket"), ("Connection", "Upgrade"),
-                     ("Origin", "http://localhost"), ("Host", "foo"),
+                     ("Origin", "http://localhost/"), ("Host", "foo"),
                      ("Host", "bar")])
         self.assertFalse(channel.transport.written.getvalue())
         self.assertTrue(channel.transport.disconnected)
@@ -173,7 +173,7 @@ class WebSocketSiteTestCase(TestCase):
         """
         channel = self.renderRequest(
             headers=[("Upgrade", "WebSocket"), ("Host", "localhost"),
-                     ("Origin", "http://localhost")])
+                     ("Origin", "http://localhost/")])
         self.assertIn("404 Not Found", channel.transport.written.getvalue())
 
 
@@ -184,7 +184,7 @@ class WebSocketSiteTestCase(TestCase):
         """
         channel = self.renderRequest(
             headers=[("Connection", "Upgrade"), ("Host", "localhost"),
-                     ("Origin", "http://localhost")])
+                     ("Origin", "http://localhost/")])
         self.assertIn("404 Not Found", channel.transport.written.getvalue())
 
 
@@ -200,7 +200,7 @@ class WebSocketSiteTestCase(TestCase):
             "HTTP/1.1 101 Web Socket Protocol Handshake\r\n"
             "Upgrade: WebSocket\r\n"
             "Connection: Upgrade\r\n"
-            "WebSocket-Origin: http://localhost\r\n"
+            "WebSocket-Origin: http://localhost/\r\n"
             "WebSocket-Location: ws://localhost/test\r\n\r\n")
         self.assertFalse(channel.transport.disconnected)
 
@@ -217,7 +217,7 @@ class WebSocketSiteTestCase(TestCase):
             "HTTP/1.1 101 Web Socket Protocol Handshake\r\n"
             "Upgrade: WebSocket\r\n"
             "Connection: Upgrade\r\n"
-            "WebSocket-Origin: http://localhost\r\n"
+            "WebSocket-Origin: http://localhost/\r\n"
             "WebSocket-Location: wss://localhost/test\r\n\r\n")
         self.assertFalse(channel.transport.disconnected)
 
@@ -248,7 +248,7 @@ class WebSocketSiteTestCase(TestCase):
         channel = self.renderRequest(
             headers = [
             ("Upgrade", "WebSocket"), ("Connection", "Upgrade"),
-            ("Host", "localhost"), ("Origin", "http://localhost"),
+            ("Host", "localhost"), ("Origin", "http://localhost/"),
             ("WebSocket-Protocol", "pixiedust")])
         self.assertTrue(channel.raw)
         self.assertEquals(
@@ -256,7 +256,7 @@ class WebSocketSiteTestCase(TestCase):
             "HTTP/1.1 101 Web Socket Protocol Handshake\r\n"
             "Upgrade: WebSocket\r\n"
             "Connection: Upgrade\r\n"
-            "WebSocket-Origin: http://localhost\r\n"
+            "WebSocket-Origin: http://localhost/\r\n"
             "WebSocket-Location: ws://localhost/test\r\n"
             "WebSocket-Protocol: pixiedust\r\n\r\n")
         self.assertFalse(channel.transport.disconnected)
@@ -271,7 +271,7 @@ class WebSocketSiteTestCase(TestCase):
         channel = self.renderRequest(
             headers = [
             ("Upgrade", "WebSocket"), ("Connection", "Upgrade"),
-            ("Host", "localhost"), ("Origin", "http://localhost"),
+            ("Host", "localhost"), ("Origin", "http://localhost/"),
             ("WebSocket-Protocol", "pixiedust"),
             ("WebSocket-Protocol", "fairymagic")])
         self.assertFalse(channel.transport.written.getvalue())
@@ -287,7 +287,7 @@ class WebSocketSiteTestCase(TestCase):
         channel = self.renderRequest(
             headers = [
             ("Upgrade", "WebSocket"), ("Connection", "Upgrade"),
-            ("Host", "localhost"), ("Origin", "http://localhost"),
+            ("Host", "localhost"), ("Origin", "http://localhost/"),
             ("WebSocket-Protocol", "fairymagic")])
         self.assertFalse(channel.transport.written.getvalue())
         self.assertTrue(channel.transport.disconnected)
