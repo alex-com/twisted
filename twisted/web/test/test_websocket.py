@@ -78,21 +78,6 @@ class WebSocketSiteTestCase(TestCase):
         return channel
 
 
-    def test_emptyPostpath(self):
-        """
-        If the URL is empty, we can register a handle for it using C{/}.
-        """
-        handlers = []
-        def handlerFactory(request):
-            handler = TestHandler(request)
-            handlers.append(handler)
-            return handler
-        self.site.addHandler("/", handlerFactory)
-        channel = self.renderRequest(url="/")
-        self.assertEquals(len(handlers), 1)
-        self.assertFalse(channel.transport.disconnected)
-
-
     def test_multiplePostpath(self):
         """
         A resource name can consist of several path elements.
@@ -125,7 +110,7 @@ class WebSocketSiteTestCase(TestCase):
 
     def test_noOriginHeader(self):
         """
-        If no C{Origin} header is present, the connection is closed.
+        If no I{Origin} header is present, the connection is closed.
         """
         channel = self.renderRequest(
             headers=[("Upgrade", "WebSocket"), ("Connection", "Upgrade"),
@@ -136,7 +121,7 @@ class WebSocketSiteTestCase(TestCase):
 
     def test_multipleOriginHeaders(self):
         """
-        If more than one C{Origin} headers are present, the connection is
+        If more than one I{Origin} headers are present, the connection is
         dropped.
         """
         channel = self.renderRequest(
@@ -149,7 +134,7 @@ class WebSocketSiteTestCase(TestCase):
 
     def test_noHostHeader(self):
         """
-        If no C{Host} header is present, the connection is dropped.
+        If no I{Host} header is present, the connection is dropped.
         """
         channel = self.renderRequest(
             headers=[("Upgrade", "WebSocket"), ("Connection", "Upgrade"),
@@ -160,7 +145,7 @@ class WebSocketSiteTestCase(TestCase):
 
     def test_multipleHostHeaders(self):
         """
-        If more than one C{Host} headers are present, the connection is
+        If more than one I{Host} headers are present, the connection is
         dropped.
         """
         channel = self.renderRequest(
@@ -183,7 +168,7 @@ class WebSocketSiteTestCase(TestCase):
 
     def test_noConnectionUpgrade(self):
         """
-        If the C{Connection: Upgrade} header is not present, the connection is
+        If the I{Connection: Upgrade} header is not present, the connection is
         dropped.
         """
         channel = self.renderRequest(
@@ -194,7 +179,7 @@ class WebSocketSiteTestCase(TestCase):
 
     def test_noUpgradeWebSocket(self):
         """
-        If the C{Upgrade: WebSocket} header is not present, the connection is
+        If the I{Upgrade: WebSocket} header is not present, the connection is
         dropped.
         """
         channel = self.renderRequest(
@@ -222,8 +207,8 @@ class WebSocketSiteTestCase(TestCase):
 
     def test_secureRender(self):
         """
-        If the WebSocket connection is over SSL, the C{WebSocket-Location}
-        header specified C{wss} as scheme.
+        If the WebSocket connection is over SSL, the I{WebSocket-Location}
+        header specified I{wss} as scheme.
         """
         channel = self.renderRequest(ssl=True)
         self.assertTrue(channel.raw)
@@ -256,7 +241,7 @@ class WebSocketSiteTestCase(TestCase):
 
     def test_websocketProtocolAccepted(self):
         """
-        The C{WebSocket-Protocol} header is echoed by the server if the
+        The I{WebSocket-Protocol} header is echoed by the server if the
         protocol is among the supported protocols.
         """
         self.site.supportedProtocols.append("pixiedust")
@@ -279,7 +264,7 @@ class WebSocketSiteTestCase(TestCase):
 
     def test_tooManyWebSocketProtocol(self):
         """
-        If more than one C{WebSocket-Protocol} headers are specified, the
+        If more than one I{WebSocket-Protocol} headers are specified, the
         connection is dropped.
         """
         self.site.supportedProtocols.append("pixiedust")
@@ -295,7 +280,7 @@ class WebSocketSiteTestCase(TestCase):
 
     def test_unsupportedProtocols(self):
         """
-        If the C{WebSocket-Protocol} header specified an unsupported protocol,
+        If the I{WebSocket-Protocol} header specified an unsupported protocol,
         the connection is dropped.
         """
         self.site.supportedProtocols.append("pixiedust")

@@ -51,9 +51,9 @@ class WebSocketRequest(Request):
         """
         Verify client handshake, closing the connection in case of problem.
 
-        @return: C{None} if a problem was detected, or a tuple of C{Origin}
-            header, C{Host} header, C{WebSocket-Protocol} header, and
-            C{WebSocketHandler} instance. The C{WebSocket-Protocol} header will
+        @return: C{None} if a problem was detected, or a tuple of I{Origin}
+            header, I{Host} header, I{WebSocket-Protocol} header, and
+            C{WebSocketHandler} instance. The I{WebSocket-Protocol} header will
             be C{None} if not specified by the client.
         """
         def finish():
@@ -133,7 +133,7 @@ class WebSocketSite(Site):
     """
     @ivar handlers: a C{dict} of names to L{WebSocketHandler} factories.
     @type handlers: C{dict}
-    @ivar supportedProtocols: a C{list} of supported C{WebSocket-Protocol}
+    @ivar supportedProtocols: a C{list} of supported I{WebSocket-Protocol}
         values. If a value is passed at handshake and doesn't figure in this
         list, the connection is closed.
     @type supportedProtocols: C{list}
@@ -192,7 +192,7 @@ class WebSocketTransport(object):
         """
         Send the given frame to the connected client.
 
-        @param frame: a C{UTF-8} encoded C{str} to send to the client.
+        @param frame: a I{UTF-8} encoded C{str} to send to the client.
         @type frame: C{str}
         """
         self._request.write("\x00%s\xff" % frame)
@@ -227,7 +227,7 @@ class WebSocketHandler(object):
         """
         Called when a frame is received.
 
-        @param frame: a C{UTF-8} encoded C{str} sent by the client.
+        @param frame: a I{UTF-8} encoded C{str} sent by the client.
         @type frame: C{str}
         """
 
