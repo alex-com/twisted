@@ -190,7 +190,7 @@ class WebSocketSiteTestCase(TestCase):
 
     def test_render(self):
         """
-        If the handshake is successfull, we can read back the server handshake,
+        If the handshake is successful, we can read back the server handshake,
         and the channel is setup for raw mode.
         """
         channel = self.renderRequest()
@@ -356,7 +356,7 @@ class WebSocketFrameDecoderTestCase(TestCase):
 
     def test_missingNull(self):
         """
-        If a frame not starting with C{\x00} is received, the connection is
+        If a frame not starting with C{\\x00} is received, the connection is
         dropped.
         """
         self.decoder.dataReceived("frame\xff")
@@ -365,8 +365,8 @@ class WebSocketFrameDecoderTestCase(TestCase):
 
     def test_missingNullAfterGoodFrame(self):
         """
-        If a frame not starting with C{\x00} is received after a correct frame,
-        the connection is dropped.
+        If a frame not starting with C{\\x00} is received after a correct
+        frame, the connection is dropped.
         """
         self.decoder.dataReceived("\x00frame\xfffoo")
         self.assertTrue(self.channel.transport.disconnected)
@@ -428,7 +428,7 @@ class WebSocketHandlerTestCase(TestCase):
 
     def test_write(self):
         """
-        L{WebSocketTransport.write} adds the required C{\x00} and C{\xff}
+        L{WebSocketTransport.write} adds the required C{\\x00} and C{\\xff}
         around sent frames, and write it to the request.
         """
         self.handler.transport.write("hello")
