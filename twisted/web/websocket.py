@@ -67,7 +67,6 @@ class WebSocketRequest(Request):
         if len(hostHeaders) != 1:
             return finish()
 
-        # XXX maybe refuse fragments in URL
         handlerFactory = self.site.handlers.get(self.uri)
         if not handlerFactory:
             return finish()
