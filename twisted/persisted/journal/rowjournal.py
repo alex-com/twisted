@@ -1,21 +1,9 @@
-# Copyright (c) 2001-2004 Twisted Matrix Laboratories.
+# Copyright (c) 2001-2010 Twisted Matrix Laboratories.
 # See LICENSE for details.
 
-# 
-
-"""Journal using twisted.enterprise.row RDBMS support.
-
-You're going to need the following table in your database::
-
-    | CREATE TABLE journalinfo
-    | (
-    |   commandIndex int
-    | );
-    | INSERT INTO journalinfo VALUES (0);
-
-"""
 
 from __future__ import nested_scopes
+import warnings
 
 # twisted imports
 from twisted.internet import defer
@@ -28,8 +16,14 @@ import base
 INSERT, DELETE, UPDATE = range(3)
 
 
+warnings.warn("twisted.persisted.journal.rowjournal "
+              "is deprecated as of Twisted 10.1" , DeprecationWarning,
+              stacklevel=2)
+
+
 class RowJournal(base.Journal):
-    """Journal that stores data 'snapshot' in using twisted.enterprise.row.
+    """
+    Journal that stores data 'snapshot'.
 
     Use this as the reflector instead of the original reflector.
 
@@ -41,21 +35,30 @@ class RowJournal(base.Journal):
         self.commands = []
         self.syncing = 0
         base.Journal.__init__(self, log, journaledService)
-    
+
     def updateRow(self, obj):
-        """Mark on object for updating when sync()ing."""
+        """
+        Mark on object for updating when sync()ing.
+        """
         self.commands.append((UPDATE, obj))
 
     def insertRow(self, obj):
-        """Mark on object for inserting when sync()ing."""
+        """
+        Mark on object for inserting when sync()ing.
+        """
         self.commands.append((INSERT, obj))
 
     def deleteRow(self, obj):
-        """Mark on object for deleting when sync()ing."""
+        """
+        Mark on object for deleting when sync()ing.
+        """
         self.commands.append((DELETE, obj))
 
-    def loadObjectsFrom(self, tableName, parentRow=None, data=None, whereClause=None, forceChildren=0):
-        """Flush all objects to the database and then load objects."""
+    def loadObjectsFrom(self, tableName, parentRow=None, data=None,
+                        whereClause=None, forceChildren=0):
+        """
+        Flush all objects to the database and then load objects.
+        """
         d = self.sync()
         d.addCallback(lambda result: self.reflector.loadObjectsFrom(
             tableName, parentRow=parentRow, data=data, whereClause=whereClause,
@@ -63,7 +66,9 @@ class RowJournal(base.Journal):
         return d
 
     def sync(self):
-        """Commit changes to database."""
+        """
+        Commit changes to database.
+        """
         if self.syncing:
             raise ValueError, "sync already in progress"
         comandMap = {INSERT : self.reflector.insertRowSQL,
@@ -82,18 +87,25 @@ class RowJournal(base.Journal):
             return defer.succeed(1)
 
     def _sync(self, txn, index, commands):
-        """Do the actual database synchronization."""
+        """
+        Do the actual database synchronization.
+        """
         for c in commands:
             txn.execute(c)
         txn.update("UPDATE journalinfo SET commandIndex = %d" % index)
-    
+
     def _syncDone(self, result):
         self.syncing = 0
         return result
-    
+
     def getLastSnapshot(self):
-        """Return command index of last snapshot."""
+        """
+        Return command index of last snapshot.
+        """
         conn = self.reflector.dbpool.connect()
         cursor = conn.cursor()
         cursor.execute("SELECT commandIndex FROM journalinfo")
         return cursor.fetchall()[0][0]
+
+
+__all__ = ['RowJournal']
