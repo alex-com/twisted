@@ -8,7 +8,7 @@ WebSocket server protocol.
 See U{http://tools.ietf.org/html/draft-hixie-thewebsocketprotocol} for the
 current version of the specification.
 
-@since: 10.0
+@since: 10.1
 """
 
 

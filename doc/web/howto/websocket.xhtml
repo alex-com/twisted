@@ -21,7 +21,7 @@
     <code class="API" base="twisted.web">websocket</code> implements the server
     side of the WebSocket protocol.
 </p>
-<h2>Using WebSocketResource</h2>
+<h2>Using WebSocketSite</h2>
 <p>
     <code class="API" base="twisted.web.websocket">WebSocketSite</code> is
     a <code class="API" base="twisted.web.server">Site</code> class
@@ -29,24 +29,25 @@
     class="API" base="twisted.web.websocket">WebSocketHandler</code> instances.
     Like other site instances, it can serve any normal HTTP requests, rendering
     WebSocket if the Connection: Upgrade header has been sent.
-    The following example creates a file listing server, with /ws being reserved
-    for handling WebSocket requests.
+    The following example creates a file listing server, with echo being
+    registered as a WebSocket resource.
 </p>
 <pre class="python">
 from twisted.internet import reactor
 from twisted.web.websocket import WebSocketHandler, WebSocketSite
 from twisted.web.static import File
 
+
 class Echohandler(WebSocketHandler):
 
     def frameReceived(self, frame):
         self.transport.write(frame)
 
+
 if __name__ == "__main__":
     root = File(".")
     site = WebSocketSite(root)
     site.addHandler("/echo", Echohandler)
-    site = Site(root)
     reactor.listenTCP(8080, site)
     reactor.run()
 </pre>
@@ -57,9 +58,36 @@ if __name__ == "__main__":
     <code>frameReceived</code> method will be called with every frame sent by
     the client. The <code>transport</code> object can be used to send data back
     to the client, using the <code>write</code>, or closing the connection,
-    using the <code>close</code>method.  The <code>connectionLost</code>
-    callback will be called when the connection is closed.
+    using the <code>close</code> method.  The <code>connectionLost</code>
+    callback will be called when the connection is closed. The following
+    example shows the usage of those different APIs.
 </p>
+<pre class="python">
+from twisted.web.websocket import WebSocketHandler
+from twisted.python import log
+
+
+class ExampleWebSocketHandler(WebSocketHandler):
+
+    def __init__(self, transport):
+        WebSocketHandler.__init__(self, transport)
+        self.counter = 0
+        self.transport.write("hello world")
+
+    def frameReceived(self, frame):
+        self.counter += 1
+        if self.counter == 10:
+            self.transport.write("Enough play")
+            self.transport.close()
+        elif self.counter % 2:
+            self.transport.write("Now we're even")
+        else:
+            self.transport.write("That was odd")
+
+    def connectionLost(self, reason):
+        log.msg("Connection closed after %d frames" % self.counter)
+</pre>
+<h3>Notes</h3>
 <p>
     The WebSocket specification specifies that frames must be encoded in UTF-8,
     but the implementation in Twisted doesn't make any check. Your application
