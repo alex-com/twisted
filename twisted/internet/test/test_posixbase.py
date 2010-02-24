@@ -5,6 +5,8 @@
 Tests for L{twisted.internet.posixbase} and supporting code.
 """
 
+import errno, os
+
 from twisted.python.compat import set
 from twisted.trial.unittest import TestCase
 from twisted.internet.defer import Deferred
@@ -15,6 +17,10 @@ from twisted.internet import reactor
 
 
 class TrivialReactor(PosixReactorBase):
+    """
+    L{TrivialReactor} is a reactor which can keep track of readers and
+    writers but not actually monitor them for events.
+    """
     def __init__(self):
         self._readers = {}
         self._writers = {}
@@ -37,6 +43,21 @@ class TrivialReactor(PosixReactorBase):
         del self._writers[writer]
 
 
+    def doIteration(self, timeout):
+        """
+        Iterate by doing nothing.
+        """
+
+
+    def removeAll(self):
+        """
+        No-op implementation of non-internal reader/writer removal.
+        This is only present because the reactor cannot be stopped if
+        the base implementation is not overridden.
+        """
+        return []
+
+
 
 class PosixReactorBaseTests(TestCase):
     """
@@ -56,6 +77,24 @@ class PosixReactorBaseTests(TestCase):
         """
         reactor = TrivialReactor()
         self._checkWaker(reactor)
+
+
+    def test_wakerPipesClosed(self):
+        """
+        When L{PosixReactorBase} is stopped, it closes all of its
+        internal readers.
+        """
+        reactor = TrivialReactor()
+        readers = []
+        def stop():
+            readers.extend([reader.fileno() for reader in reactor._internalReaders])
+            reactor.stop()
+        reactor.callWhenRunning(stop)
+        reactor.run()
+        self.assertFalse(reactor._internalReaders)
+        for fileno in readers:
+            err = self.assertRaises(OSError, os.fstat, fileno)
+            self.assertEquals(err.errno, errno.EBADF)
 
 
     def test_removeAllSkipsInternalReaders(self):
