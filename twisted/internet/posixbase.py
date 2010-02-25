@@ -290,8 +290,11 @@ class PosixReactorBase(_SignalReactorMixin, ReactorBase):
 
 
     def _disconnectInternal(self):
+        if self._childWaker is not None:
+            self._childWaker.uninstall()
+            self._childWaker = None
         ReactorBase._disconnectInternal(self)
-        self._sigchldWaker = None
+        self._childWaker = None
 
 
     def _uninstallHandler(self):
@@ -310,7 +313,6 @@ class PosixReactorBase(_SignalReactorMixin, ReactorBase):
         # base class, anyway).  See #3063 for that cleanup task.
         if self._childWaker:
             self._childWaker.uninstall()
-            self._childWaker = None
 
     # IReactorProcess
 
