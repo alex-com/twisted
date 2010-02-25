@@ -65,13 +65,16 @@ context.setDefault(ILogContext,
 
 def callWithContext(ctx, func, *args, **kw):
     """
-    Modify the log prefix before calling a function.
+    Modify the logging context before calling a function.
 
-    For example, to change C{system} in the log prefix for the duration of a
-    call to C{myFrob(xyzzy)}, you can do::
+    For example, to change C{system} in the context for the duration of a call
+    to C{myFrob(xyzzy)}, you can do::
         callWithContext({'system': 'My Frobnicator 2.0'}, myFrob, xyzzy)
 
-    @type ctx: C{dict}
+    Typically L{callWithLogger} calls L{callWithContext} and L{callWithContext}
+    is not invoked directly.
+
+    @type ctx: C{dict} mapping C{str} to C{str}
     @param ctx: A dictionary of logging properties to override. See
         L{ILogObserver.__call__} for a list of commonly available keys.
 
@@ -87,11 +90,12 @@ def callWithContext(ctx, func, *args, **kw):
 def callWithLogger(logger, func, *args, **kw):
     """
     Utility method which wraps a function in a C{try:/except:}, logs a failure
-    if one occurs, and uses the system's C{logPrefix}.
+    if one occurs, and uses the C{logger}'s C{logPrefix} as the system
+    information written to the log for the event.
 
-    @type logger: An instance of a class implementing L{Logger}.
-    @param logger: The class whose C{logPrefix} is going to be the logging
-        context for the C{func} call.
+    @type logger: An instance of a class extending L{Logger}.
+    @param logger: The class whose C{logPrefix} is going to be the system
+        information string in the logging context for the C{func} call.
 
     @type func: function
     @param func: The function to call with a particular logging context.
