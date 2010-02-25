@@ -118,7 +118,8 @@ class SystemEventTestsBuilder(ReactorBuilder):
 
         sawPhase = [None]
         def fakeSignal(signum, action):
-            sawPhase[0] = phase[0]
+            if action != signal.SIG_DFL:
+                sawPhase[0] = phase[0]
         self.patch(signal, 'signal', fakeSignal)
         reactor.callWhenRunning(reactor.stop)
         self.assertEqual(phase[0], None)
