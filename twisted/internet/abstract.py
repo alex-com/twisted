@@ -17,8 +17,14 @@ from twisted.persisted import styles
 from twisted.internet import interfaces, main
 
 
+# Internal marker used to indicate a sendfile transfer
+SendfileMarker = object()
+
+
+
 class FileDescriptor(object):
-    """An object which can be operated on by select().
+    """
+    An object which can be operated on by select().
 
     This is an abstract superclass of all objects which may be notified when
     they are readable or writable; e.g. they have a file-descriptor that is
@@ -52,6 +58,7 @@ class FileDescriptor(object):
         self.reactor = reactor
         self._tempDataBuffer = [] # will be added to dataBuffer in doWrite
         self._tempDataLen = 0
+        self._sendFileBuffer = []
 
     def connectionLost(self, reason):
         """The connection was lost.
@@ -106,19 +113,40 @@ class FileDescriptor(object):
         indicates no write was done, and a result of None indicates that a
         write was done.
         """
-        if len(self.dataBuffer) - self.offset < self.SEND_LIMIT:
-            # If there is currently less than SEND_LIMIT bytes left to send
-            # in the string, extend it with the array data.
-            self.dataBuffer = buffer(self.dataBuffer, self.offset) + "".join(self._tempDataBuffer)
-            self.offset = 0
-            self._tempDataBuffer = []
-            self._tempDataLen = 0
-
-        # Send as much data as you can.
-        if self.offset:
-            l = self.writeSomeData(buffer(self.dataBuffer, self.offset))
+        if self._sendFileBuffer and self._tempDataBuffer[0] is SendfileMarker:
+            l = self.doSendfile(self._sendFileBuffer[0])
+            if l > 0 and self._sendFileBuffer[0].count == self._sendFileBuffer[0].offset:
+                self._sendFileBuffer.pop(0)
+                self._tempDataBuffer.pop(0)
+            if l < 0 or isinstance(l, Exception) or l is SendfileMarker:
+                self._sendFileBuffer.pop(0)
+                self._tempDataBuffer.pop(0)
+            if l is SendfileMarker:
+                l = 0
         else:
-            l = self.writeSomeData(self.dataBuffer)
+            if len(self.dataBuffer) - self.offset < self.SEND_LIMIT:
+                # If there is currently less than SEND_LIMIT bytes left to send
+                # in the string, extend it with the array data.
+                if SendfileMarker in self._tempDataBuffer:
+                    idx = self._tempDataBuffer.index(SendfileMarker)
+                    tempBuffer = "".join(self._tempDataBuffer[:idx])
+                    self.dataBuffer = (buffer(self.dataBuffer, self.offset) +
+                                       tempBuffer)
+                    self.offset = 0
+                    self._tempDataBuffer = self._tempDataBuffer[idx:]
+                    self._tempDataLen -= len(tempBuffer)
+                else:
+                    self.dataBuffer = (buffer(self.dataBuffer, self.offset) +
+                                       "".join(self._tempDataBuffer))
+                    self.offset = 0
+                    self._tempDataBuffer = []
+                    self._tempDataLen = 0
+
+            # Send as much data as you can.
+            if self.offset:
+                l = self.writeSomeData(buffer(self.dataBuffer, self.offset))
+            else:
+                l = self.writeSomeData(self.dataBuffer)
 
         # There is no writeSomeData implementation in Twisted which returns
         # 0, but the documentation for writeSomeData used to claim negative
@@ -132,7 +160,8 @@ class FileDescriptor(object):
             result = None
         self.offset += l
         # If there is nothing left to send,
-        if self.offset == len(self.dataBuffer) and not self._tempDataLen:
+        if (self.offset == len(self.dataBuffer) and not self._tempDataLen
+            and not self._sendFileBuffer):
             self.dataBuffer = ""
             self.offset = 0
             # stop writing.
@@ -153,6 +182,15 @@ class FileDescriptor(object):
                 self._writeDisconnected = True
                 return result
         return result
+
+
+    def doSendfile(self, sfi):
+        """
+        Subclasses must override this method.
+        """
+        raise NotImplementedError("%s does not implement doSendfile" %
+                                  reflect.qual(self.__class__))
+
 
     def _postLoseConnection(self):
         """Called after a loseConnection(), when all data has been written.
@@ -175,7 +213,8 @@ class FileDescriptor(object):
         self.connectionLost(reason)
 
     def write(self, data):
-        """Reliably write some data.
+        """
+        Reliably write some data.
 
         The data is buffered until the underlying file descriptor is ready
         for writing. If there is more than C{self.bufferSize} data in the
@@ -199,7 +238,8 @@ class FileDescriptor(object):
             self.startWriting()
 
     def writeSequence(self, iovec):
-        """Reliably write a sequence of data.
+        """
+        Reliably write a sequence of data.
 
         Currently, this is a convenience method roughly equivalent to::
 
@@ -226,6 +266,27 @@ class FileDescriptor(object):
                 self.producerPaused = 1
                 self.producer.pauseProducing()
         self.startWriting()
+
+
+    def _sendfile(self, sfi):
+        """
+        Internal implementation for starting sendfile.
+
+        @param sfi: an object taken by L{doSendfile}.
+        """
+        if not self.connected or self._writeDisconnected:
+            return
+        self._sendFileBuffer.append(sfi)
+        self._tempDataBuffer.append(SendfileMarker)
+        # If we are responsible for pausing our producer,
+        if self.producer is not None and self.streamingProducer:
+            # and our buffer is full,
+            if len(self.dataBuffer) + self._tempDataLen > self.bufferSize:
+                # pause it.
+                self.producerPaused = 1
+                self.producer.pauseProducing()
+        self.startWriting()
+
 
     def loseConnection(self, _connDone=failure.Failure(main.CONNECTION_DONE)):
         """Close the connection at the next available opportunity.
@@ -382,3 +443,4 @@ def isIPAddress(addr):
 
 
 __all__ = ["FileDescriptor"]
+

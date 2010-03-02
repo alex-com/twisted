@@ -27,7 +27,6 @@ except ImportError:
 
 from twisted.python.runtime import platformType
 
-
 if platformType == 'win32':
     # no such thing as WSAEPERM or error code 10001 according to winsock.h or MSDN
     EPERM = object()
@@ -78,6 +77,11 @@ from twisted.python.util import unsignedID
 from twisted.internet.error import CannotListenError
 from twisted.internet import abstract, main, interfaces, error
 
+
+try:
+    from twisted.python._sendfile import sendfile
+except ImportError:
+    sendfile = None
 
 
 class _SocketCloser:
@@ -358,8 +362,111 @@ def _getTLSClass(klass, _existing={}):
     if klass not in _existing:
         class TLSConnection(_TLSMixin, klass):
             implements(interfaces.ISSLTransport)
+            def sendfile(self, f, offset=0, count=0):
+                """
+                Send the file over the wire.
+                """
+                sfi = SendfileInfo(f, offset, count)
+                producer = SendfileProducer(self, sfi)
+                return sfi.deferred
         _existing[klass] = TLSConnection
     return _existing[klass]
+
+
+
+class SendfileInfo(object):
+    """
+    Hold information about a sendfile transfer.
+
+    @ivar started: whether the sendfile transfer has started or not.
+    @type started: C{bool}
+
+    @ivar deferred: C{Deferred} fired when transfer is finished or when an
+        error occurs.
+    @param deferred: C{Deferred}
+
+    @ivar fallback: C{Deferred} fired when first call of sendfile syscall
+        fails.
+    @param fallback: C{Deferred}
+    """
+
+    def __init__(self, f, offset=0, count=0):
+        """
+        @param f: a file object, supported by sendfile(2) system call.
+        @type f: C{file}
+
+        @param offset: if specified, starting offset of the file. Defaults to
+            the beginning of the file
+        @type offset: C{int}
+
+        @param count: how many bytes of the file to send. Defaults to the file
+            size.
+        @type count: C{int}
+        """
+        # Fail early if we don't have a valid file
+        if not f.fileno():
+            raise ValueError("Invalid file object")
+        self.file = f
+        self.offset = offset
+        if not count:
+            current = f.tell()
+            f.seek(0, 2)
+            self.count = f.tell()
+            f.seek(current)
+        else:
+            self.count = count
+        self.deferred = defer.Deferred()
+        self.fallback = defer.Deferred()
+        self.started = False
+
+
+
+class SendfileProducer(object):
+    """
+    A producer to send a file-like object over the network.
+    """
+    implements(interfaces.IPullProducer)
+
+    bufferSize = abstract.FileDescriptor.bufferSize
+
+    def __init__(self, transport, sfi):
+        """
+        @param transport: a L{Connection} object.
+        @param sfi: a L{SendfileInfo} object.
+        """
+        self.transport = transport
+        self.sfi = sfi
+        transport.registerProducer(self, False)
+
+
+    def resumeProducing(self):
+        """
+        Read data from the file and write data read in the socket.
+        """
+        try:
+            data = self.sfi.file.read(min(self.bufferSize,
+                                          self.sfi.count - self.sfi.offset))
+        except Exception, e:
+            self.transport.unregisterProducer()
+            self.transport = None
+            self.sfi.deferred.errback(e)
+        else:
+            if data:
+                l = len(data)
+                self.sfi.offset += l
+                self.transport.write(data)
+            if self.sfi.count == self.sfi.offset:
+                self.transport.unregisterProducer()
+                self.transport = None
+                self.sfi.deferred.callback(None)
+
+
+    def stopProducing(self):
+        """
+        Close the file and remove reference to transport.
+        """
+        self.sfi.file.close()
+        self.transport = None
 
 
 
@@ -460,6 +567,58 @@ class Connection(abstract.FileDescriptor, _SocketCloser):
         return self.protocol.dataReceived(data)
 
 
+    if sendfile is not None:
+        def doSendfile(self, sfi):
+            """
+            Wrapper around sendfile(2) call.
+
+            @param sfi: a L{SendfileInfo} object.
+            """
+            try:
+                l, sfi.offset = sendfile(self.fileno(), sfi.file.fileno(),
+                                         sfi.offset, sfi.count)
+            except IOError, e:
+                if e.errno == EWOULDBLOCK:
+                    return 0
+                elif not sfi.started:
+                    sfi.fallback.callback(None)
+                    return abstract.SendfileMarker
+                else:
+                    sfi.deferred.errback(e)
+                    return main.CONNECTION_LOST
+            except Exception, e:
+                sfi.deferred.errback(e)
+                return e
+            else:
+                sfi.started = True
+                if sfi.count == sfi.offset:
+                    sfi.deferred.callback(None)
+                return l
+
+
+        def sendfile(self, f, offset=0, count=0):
+            """
+            Send the file over the wire, using the sendfile(2) system call if
+            available, or fallback on standard producer.
+            """
+            sfi = SendfileInfo(f, offset, count)
+            def fallback(ign):
+                producer = SendfileProducer(self, sfi)
+            sfi.fallback.addCallback(fallback)
+            abstract.FileDescriptor._sendfile(self, sfi)
+            return sfi.deferred
+
+
+    else: # sendfile is None
+        def sendfile(self, f, offset=0, count=0):
+            """
+            Send the file over the wire using a standard producer.
+            """
+            sfi = SendfileInfo(f, offset, count)
+            producer = SendfileProducer(self, sfi)
+            return sfi.deferred
+
+
     def writeSomeData(self, data):
         """
         Write as much as possible of the given data to this TCP connection.
@@ -526,7 +685,8 @@ class Connection(abstract.FileDescriptor, _SocketCloser):
         return self.logstr
 
     def getTcpNoDelay(self):
-        return operator.truth(self.socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY))
+        return operator.truth(self.socket.getsockopt(socket.IPPROTO_TCP,
+                                                     socket.TCP_NODELAY))
 
     def setTcpNoDelay(self, enabled):
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, enabled)
@@ -538,11 +698,27 @@ class Connection(abstract.FileDescriptor, _SocketCloser):
     def setTcpKeepAlive(self, enabled):
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, enabled)
 
+    def getTcpCork(self):
+        """
+        Return the current settings of TCP_CORK for the socket.
+        """
+        return operator.truth(self.socket.getsockopt(socket.IPPROTO_TCP,
+                                                     socket.TCP_CORK))
+
+    def setTcpCork(self, enabled):
+        """
+        Set TCP_CORK on or off on the socket.
+        """
+        self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, enabled)
+
+
 if SSL:
     classImplements(Connection, interfaces.ITLSTransport)
 
+
 class BaseClient(Connection):
-    """A base class for client TCP (and similiar) sockets.
+    """
+    A base class for client TCP (and similiar) sockets.
     """
     addressFamily = socket.AF_INET
     socketType = socket.SOCK_STREAM
@@ -779,6 +955,7 @@ class Server(Connection):
         """
         return address.IPv4Address('TCP', *(self.client + ('INET',)))
 
+
 class Port(base.BasePort, _SocketCloser):
     """
     A TCP server port, listening for connections.
@@ -944,9 +1121,9 @@ class Port(base.BasePort, _SocketCloser):
             #
             # There is no "except SSL.Error:" above because SSL may be
             # None if there is no SSL support.  In any case, all the
-            # "except SSL.Error:" suite would probably do is log.deferr()
+            # "except SSL.Error:" suite would probably do is log.err()
             # and return, so handling it here works just as well.
-            log.deferr()
+            log.err()
 
     def _preMakeConnection(self, transport):
         return transport
@@ -1000,6 +1177,7 @@ class Port(base.BasePort, _SocketCloser):
         """
         return address.IPv4Address('TCP', *(self.socket.getsockname() + ('INET',)))
 
+
 class Connector(base.BaseConnector):
     def __init__(self, host, port, factory, timeout, bindAddress, reactor=None):
         self.host = host
@@ -1017,3 +1195,4 @@ class Connector(base.BaseConnector):
 
     def getDestination(self):
         return address.IPv4Address('TCP', self.host, self.port, 'INET')
+

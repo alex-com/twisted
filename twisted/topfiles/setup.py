@@ -50,6 +50,15 @@ extensions = [
     Extension("twisted.internet._sigchld",
               ["twisted/internet/_sigchld.c"],
               condition=lambda builder: sys.platform != "win32"),
+    Extension("twisted.python._sendfile",
+              ["twisted/python/_sendfile.c"],
+              condition=lambda builder:
+                  # Linux
+                  builder._check_header("sys/sendfile.h") or
+                  # OS X >= 10.5
+                  sys.platform == "darwin" or
+                  # FreeBSD
+                  'freebsd' in sys.platform),
 ]
 
 # Figure out which plugins to include: all plugins except subproject ones
