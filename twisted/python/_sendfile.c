@@ -1,5 +1,5 @@
 /*
- * _sendfile_linux.c  a wrapper for sendfile(2)
+ * _sendfile.c  a wrapper for sendfile(2)
  * Copyright (c) 2007-2010 Twisted Matrix Laboratories
  * See LICENSE for licensing information.
  */
@@ -15,12 +15,14 @@
 #include <sys/uio.h>
 #endif
 
+
 PyDoc_STRVAR(_sendfile_doc,
 "sendfile(inFd, outFd, offset, count)\n\
 \n\
 Copies data between the file descriptor inFd open for reading and the file\n\
 descriptor outFd open for writing. Returns the number of bytes written to\n\
 outFd and the offset in inFd.");
+
 
 static PyObject * _sendfile(PyObject *self, PyObject *args) {
     int outFd, inFd;
@@ -98,7 +100,7 @@ static PyMethodDef sendfilemethods[] = {
     {NULL},
 };
 
+
 void init_sendfile(void) {
     Py_InitModule("_sendfile", sendfilemethods);
 }
-
