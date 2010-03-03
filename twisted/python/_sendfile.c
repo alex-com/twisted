@@ -9,7 +9,7 @@
 #include <sys/sendfile.h>
 #endif
 
-#if defined(__FreeBSD__) || defined(__DragonFly__) || defined(MACOSX)
+#if defined(__FreeBSD__) || defined(__DragonFly__) || defined(DARWIN)
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/uio.h>
@@ -49,7 +49,7 @@ static PyObject * _sendfile(PyObject *self, PyObject *args) {
     offset += sbytes;
     return Py_BuildValue("LL", sbytes, offset);
 #else
-#ifdef MACOSX
+#if defined(DARWIN)
     int sts;
     off_t nbytes;
 
