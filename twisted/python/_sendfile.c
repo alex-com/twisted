@@ -5,11 +5,11 @@
  */
 
 #include <Python.h>
-#ifdef __linux__
+#if defined(__linux__)
 #include <sys/sendfile.h>
 #endif
 
-#if defined(__FreeBSD__) || defined(__DragonFly__) || defined(DARWIN)
+#if defined(__FreeBSD__) || defined(__DragonFly__) || defined(__APPLE__)
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/uio.h>
@@ -49,7 +49,7 @@ static PyObject * _sendfile(PyObject *self, PyObject *args) {
     offset += sbytes;
     return Py_BuildValue("LL", sbytes, offset);
 #else
-#if defined(DARWIN)
+#if defined(__APPLE__)
     int sts;
     off_t nbytes;
 
