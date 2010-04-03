@@ -322,12 +322,12 @@ class ChatUI:
     @ivar groupConversations: A cache of all the group windows.
 
     @type persons: C{dict} with keys that are a C{tuple} of (C{str},
-        L{basesupport.AbstractAccount}) and values that are
+        L{Account<interfaces.IAccount>}) and values that are
         L{Person<interfaces.IPerson>}.
     @ivar persons: A cache of all the users associated with this client.
 
     @type groups: C{dict} with keys that are a C{tuple} of (C{str},
-        L{basesupport.AbstractAccount}) and values that are
+        L{Account<interfaces.IAccount>}) and values that are
         L{Group<interfaces.IGroup>}
     @ivar groups: A cache of all the groups associated with this client.
 
@@ -346,12 +346,12 @@ class ChatUI:
         @param groupConversations: A cache of all the group windows.
 
         @type persons: C{dict} with keys that are a C{tuple} of (C{str},
-            L{basesupport.AbstractAccount}) and values that are
+            L{Account<interfaces.IAccount>}) and values that are
             L{Person<interfaces.IPerson>}.
         @param persons: A cache of all the users associated with this client.
 
         @type groups: C{dict} with keys that are a C{tuple} of (C{str},
-            L{basesupport.AbstractAccount}) and values that are
+            L{Account<interfaces.IAccount>}) and values that are
             L{Group<interfaces.IGroup>}
         @param groups: A cache of all the groups associated with this client.
 
@@ -469,9 +469,9 @@ class ChatUI:
 
     def getPerson(self, name, client):
         """
-        For the given name and account client, returns the instance of the
-        L{basesupport.AbstractPerson} subclass, or creates and returns a new
-        L{basesupport.AbstractPerson} subclass.
+        For the given name and account client, returns an instance of an
+        L{Group<interfaces.IPerson>} implementer or creates and returns a new
+        instance of an L{Group<interfaces.IPerson>} implementer.
 
         @type name: C{str}
         @param name: The name of the person of interest.
@@ -492,9 +492,9 @@ class ChatUI:
 
     def getGroup(self, name, client):
         """
-        For the given name and account client, returns the instance of the
-        L{basesupport.AbstractGroup} subclass, or creates and returns a new
-        L{basesupport.AbstractGroup} subclass.
+        For the given name and account client, returns an instance of an
+        L{Group<interfaces.IGroup>} implementer or creates and returns a new
+        instance of an L{Group<interfaces.IGroup>} implementer.
 
         @type name: C{str}
         @param name: The name of the group of interest.
