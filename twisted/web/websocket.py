@@ -170,7 +170,7 @@ class WebSocketTransport(object):
 
     def __init__(self, request):
         self._request = request
-        self._request.notifyFinish().addCallback(self._connectionLost)
+        self._request.notifyFinish().addErrback(self._connectionLost)
 
 
     def _attachHandler(self, handler):

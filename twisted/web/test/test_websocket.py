@@ -5,6 +5,10 @@
 Tests for L{twisted.web.websocket}.
 """
 
+from twisted.internet.main import CONNECTION_DONE
+from twisted.internet.error import ConnectionDone
+from twisted.python.failure import Failure
+
 from twisted.web.websocket import WebSocketHandler, WebSocketFrameDecoder
 from twisted.web.websocket import WebSocketSite, WebSocketTransport
 
@@ -34,15 +38,21 @@ class TestHandler(WebSocketHandler):
     A L{WebSocketHandler} recording every frame received.
 
     @ivar frames: C{list} of frames received.
+    @ivar lostReason: reason for connection closing.
     """
 
     def __init__(self, request):
         WebSocketHandler.__init__(self, request)
         self.frames = []
+        self.lostReason = None
 
 
     def frameReceived(self, frame):
         self.frames.append(frame)
+
+
+    def connectionLost(self, reason):
+        self.lostReason = reason
 
 
 
@@ -418,7 +428,7 @@ class WebSocketHandlerTestCase(TestCase):
 
     def setUp(self):
         self.channel = DummyChannel()
-        request = Request(self.channel, False)
+        self.request = request = Request(self.channel, False)
         # Simulate request handling
         request.startedWriting = True
         transport = WebSocketTransport(request)
@@ -445,3 +455,12 @@ class WebSocketHandlerTestCase(TestCase):
         """
         self.handler.transport.loseConnection()
         self.assertTrue(self.channel.transport.disconnected)
+
+
+    def test_connectionLost(self):
+        """
+        L{WebSocketHandler.connectionLost} is called with the reason of the
+        connection closing when L{Request.connectionLost} is called.
+        """
+        self.request.connectionLost(Failure(CONNECTION_DONE))
+        self.handler.lostReason.trap(ConnectionDone)
