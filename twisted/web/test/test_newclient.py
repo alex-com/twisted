@@ -13,7 +13,7 @@ from zope.interface.verify import verifyObject
 from twisted.python.failure import Failure
 from twisted.internet.interfaces import IConsumer, IPushProducer
 from twisted.internet.error import ConnectionDone
-from twisted.internet.defer import Deferred, succeed, fail
+from twisted.internet.defer import CancelledError, Deferred, succeed, fail, gatherResults
 from twisted.internet.protocol import Protocol
 from twisted.trial.unittest import TestCase
 from twisted.test.proto_helpers import StringTransport, AccumulatingProtocol
@@ -776,8 +776,11 @@ class SlowRequest:
     method = 'GET'
     stopped = False
 
-    def writeTo(self, transport):
+    def __init__(self):
         self.finished = Deferred()
+
+
+    def writeTo(self, transport):
         return self.finished
 
 
@@ -820,6 +823,36 @@ class HTTP11ClientProtocolTests(TestCase):
         """
         self.protocol.request(SimpleRequest())
         self.assertEqual(self.transport.value(), 'SOME BYTES')
+
+
+    def test_transmissionCancelled(self):
+        """
+        Cancelling the L{Deferred} returned by L{HTTP11ClientProtocol.request}
+        while the request is still being transmitted causes the request
+        transmission Deferred to be cancelled.
+        """
+        request = SlowRequest()
+        self.assertFailure(request.finished, CancelledError)
+        def cbFailed(error):
+            # Turn it back into an exception so the callbacks added later can
+            # enjoy the fun.
+            raise error
+        request.finished.addCallback(cbFailed)
+        result = self.protocol.request(request)
+
+        d = self.assertFailure(result, RequestGenerationFailed)
+        def cbFailed(failed):
+            failed.reasons[0].trap(CancelledError)
+        d.addCallback(cbFailed)
+
+        result.cancel()
+
+        d = gatherResults([result, request.finished])
+        def cbFinished(ignored):
+            self.assertTrue(self.transport.disconnecting)
+            self.assertIdentical(self.transport.producer, None)
+        d.addCallback(cbFinished)
+        return d
 
 
     def test_secondRequest(self):
@@ -957,6 +990,20 @@ class HTTP11ClientProtocolTests(TestCase):
             "HTTP/1.1 200 OK\r\n"
             "Content-Length: 0\r\n"
             "\r\n")
+        return d
+
+
+    def test_receiveCancelled(self):
+        """
+        Cancelling the L{Deferred} returned by L{HTTP11ClientProtocol.request}
+        while waiting for a response to arrive, it fails with L{CancelledError}.
+        """
+        d = self.protocol.request(Request('GET', '/', _boringHeaders, None))
+        d.cancel()
+        self.assertFailure(d, CancelledError)
+        def cbCancelled(ignored):
+            self.assertTrue(self.transport.disconnecting)
+        d.addCallback(cbCancelled)
         return d
 
 

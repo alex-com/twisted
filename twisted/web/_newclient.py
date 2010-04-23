@@ -1203,6 +1203,9 @@ class HTTP11ClientProtocol(Protocol):
         allows C{_parser} to pause and resume the transport in a way which
         L{HTTP11ClientProtocol} can exert some control over.
 
+    @ivar _transmissionDeferred: In the C{'TRANSMITTING'} state, this is the
+        L{Deferred} returned by L{Request.writeTo}.
+
     @ivar _responseDeferred: After a request is issued, the L{Deferred} from
         C{_parser} which will fire with a L{Response} when one has been
         received.  This is eventually chained with C{_finishedRequest}, but
@@ -1263,8 +1266,8 @@ class HTTP11ClientProtocol(Protocol):
             return fail(RequestNotSent())
 
         self._state = 'TRANSMITTING'
-        _requestDeferred = maybeDeferred(request.writeTo, self.transport)
-        self._finishedRequest = Deferred()
+        self._transmissionDeferred = maybeDeferred(request.writeTo, self.transport)
+        self._finishedRequest = Deferred(self._canceller)
 
         # Keep track of the Request object in case we need to call stopWriting
         # on it.
@@ -1293,9 +1296,34 @@ class HTTP11ClientProtocol(Protocol):
             else:
                 log.err(err, "foo")
 
-        _requestDeferred.addCallbacks(cbRequestWrotten, ebRequestWriting)
+        self._transmissionDeferred.addCallbacks(cbRequestWrotten, ebRequestWriting)
 
         return self._finishedRequest
+
+
+    def _canceller(self, deferred):
+        """
+        Implement cancellation for the Deferred returned by the C{request}
+        method.
+        """
+    _canceller = makeStatefulDispatcher('canceller', _canceller)
+
+
+    def _canceller_TRANSMITTING(self, deferred):
+        """
+        Cancel a request which is still being transmitted.
+        """
+        # Cancelling the transmission Deferred lets the Request clean up.  The
+        # error will eventually propagate to the Deferred returned from request.
+        self._transmissionDeferred.cancel()
+
+
+    def _canceller_WAITING(self, deferred):
+        """
+        Cancel a request which has been fully transmitted, but the response to
+        which has not yet been received.
+        """
+        self.transport.loseConnection()
 
 
     def _finishResponse(self, rest):
