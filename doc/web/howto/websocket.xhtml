@@ -57,7 +57,7 @@ if __name__ == "__main__":
     provides basic facility to help you write a WebSocket resource handler. The
     <code>frameReceived</code> method will be called with every frame sent by
     the client. The <code>transport</code> object can be used to send data back
-    to the client, using the <code>write</code>, or closing the connection,
+    to the client, using the <code>write</code> method, or closing the connection,
     using the <code>close</code> method.  The <code>connectionLost</code>
     callback will be called when the connection is closed. The following
     example shows the usage of those different APIs.
