@@ -22,7 +22,7 @@ from twisted.python import util, context, reflect
 
 class ILogContext:
     """
-    Actually, this interface is just a synoym for the dictionary interface,
+    Actually, this interface is just a synonym for the dictionary interface,
     but it serves as a key for the default information in a log.
 
     I do not inherit from Interface because the world is a cruel place.
@@ -72,7 +72,8 @@ def callWithContext(ctx, func, *args, **kw):
         callWithContext({'system': 'My Frobnicator 2.0'}, myFrob, xyzzy)
 
     Typically L{callWithLogger} calls L{callWithContext} and L{callWithContext}
-    is not invoked directly.
+    is not invoked directly. L{callWithContext} may be invoked directly to use
+    an arbitrary prefix instead of one associated with a particular logger.
 
     @type ctx: C{dict} mapping C{str} to C{str}
     @param ctx: A dictionary of logging properties to override. See
@@ -80,6 +81,15 @@ def callWithContext(ctx, func, *args, **kw):
 
     @type func: function
     @param func: The function to call with this modified logging context.
+
+    @type *args: C{tuple}.
+    @param *args: the arguments to pass to C{func}.
+
+    @type **kw: C{dict} mapping C{str} to C{str}.
+    @param **kw: the keyword arguments to pass to C{func}.
+
+    @see: L{twisted.python.context}
+    @see: L{twisted.log.ILogContext}
     """
     newCtx = context.get(ILogContext).copy()
     newCtx.update(ctx)
@@ -89,16 +99,22 @@ def callWithContext(ctx, func, *args, **kw):
 
 def callWithLogger(logger, func, *args, **kw):
     """
-    Utility method which wraps a function in a C{try:/except:}, logs a failure
-    if one occurs, and uses the C{logger}'s C{logPrefix} as the system
-    information written to the log for the event.
+    Run the given function with the given logger's C{logPrefix} as the system
+    information written to the log for the event, catching all exceptions and
+    logging a failure if one occurs.
 
-    @type logger: An instance of a class extending L{Logger}.
+    @type logger: L{Logger}.
     @param logger: The class whose C{logPrefix} is going to be the system
         information string in the logging context for the C{func} call.
 
     @type func: function
     @param func: The function to call with a particular logging context.
+
+    @type *args: C{tuple}.
+    @param *args: the arguments to pass to C{func}.
+
+    @type **kw: C{dict}.
+    @param **kw: the keyword arguments to pass to C{func}.
     """
     try:
         lp = logger.logPrefix()
