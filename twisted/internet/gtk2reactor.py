@@ -32,7 +32,7 @@ try:
         pygtk.require('2.0')
 except (ImportError, AttributeError):
     pass # maybe we're using pygtk before this hack existed.
-import gobject
+import gobject, glib
 if hasattr(gobject, "threads_init"):
     # recent versions of python-gtk expose this. python-gtk=2.4.1
     # (wrapping glib-2.4.7) does. python-gtk=2.0.0 (wrapping
@@ -139,9 +139,9 @@ class Gtk2Reactor(posixbase.PosixReactorBase):
             # handle python objects
             def wrapper(source, condition, real_s=source, real_cb=callback):
                 return real_cb(real_s, condition)
-            return gobject.io_add_watch(source.fileno(), condition, wrapper)
+            return gobject.io_add_watch(source.fileno(), condition, wrapper, priority=glib.PRIORITY_DEFAULT_IDLE)
         else:
-            return gobject.io_add_watch(source, condition, callback)
+            return gobject.io_add_watch(source, condition, callback, priority=glib.PRIORITY_DEFAULT_IDLE)
 
 
     def _add(self, source, primary, other, primaryFlag, otherFlag):
