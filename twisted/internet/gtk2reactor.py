@@ -137,11 +137,15 @@ class Gtk2Reactor(posixbase.PosixReactorBase):
     def input_add(self, source, condition, callback):
         if hasattr(source, 'fileno'):
             # handle python objects
-            def wrapper(source, condition, real_s=source, real_cb=callback):
-                return real_cb(real_s, condition)
-            return gobject.io_add_watch(source.fileno(), condition, wrapper, priority=glib.PRIORITY_DEFAULT_IDLE)
+            def wrapper(ignored, condition):
+                return callback(source, condition)
+            fileno = source.fileno()
         else:
-            return gobject.io_add_watch(source, condition, callback, priority=glib.PRIORITY_DEFAULT_IDLE)
+            fileno = source
+            wrapper = callback
+        return gobject.io_add_watch(
+            fileno, condition, wrapper,
+            priority=glib.PRIORITY_DEFAULT_IDLE)
 
 
     def _add(self, source, primary, other, primaryFlag, otherFlag):
