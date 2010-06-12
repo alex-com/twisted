@@ -17,16 +17,16 @@ class ContactsList:
     @type chatui: L{ChatUI}
 
     @param contacts: The contacts.
-    @type contacts: L{dict} mapping C{str} to an implementer of
-        L{Person<interfaces.IPerson>}
+    @type contacts: L{dict} mapping C{str} to a L{Person<interfaces.IPerson>}
+        provider
 
     @param onlineContacts: The contacts who are currently online (have a status
         that is not L{locals.OFFLINE}).
-    @type onlineContacts: L{dict} mapping C{str} to an implementer of
-        L{Person<interfaces.IPerson>}
+    @type onlineContacts: L{dict} mapping C{str} to a
+        L{Person<interfaces.IPerson>} provider
 
     @param clients: The signed-on clients.
-    @type clients: L{list} of implementers of L{Client<interfaces.IClient>}
+    @type clients: L{list} of L{Client<interfaces.IClient>} providers
     """
     def __init__(self, chatui):
         """
@@ -44,7 +44,7 @@ class ContactsList:
         Inform the user that a person's status has changed.
 
         @param person: The person whose status has changed.
-        @type person: L{Person<interfaces.IPerson>}
+        @type person: L{Person<interfaces.IPerson>} provider
         """
         if not self.contacts.has_key(person.name):
             self.contacts[person.name] = person
@@ -61,7 +61,7 @@ class ContactsList:
         Notify the user that an account client has been signed on to.
 
         @param client: The client being added to your list of account clients.
-        @type client: L{Client<interfaces.IClient>}
+        @type client: L{Client<interfaces.IClient>} provider
         """
         if not client in self.clients:
             self.clients.append(client)
@@ -74,7 +74,7 @@ class ContactsList:
 
         @param client: The client being removed from the list of account
             clients.
-        @type client: L{Client<interfaces.IClient>}
+        @type client: L{Client<interfaces.IClient>} provider
         """
         if client in self.clients:
             self.clients.remove(client)
@@ -87,7 +87,7 @@ class ContactsList:
 
         @param person: The person in your contacts list whose nickname is
             changing.
-        @type person: L{Person<interfaces.IPerson>}
+        @type person: L{Person<interfaces.IPerson>} provider
 
         @param newnick: The new nickname for this person.
         @type newnick: C{str}
@@ -108,7 +108,7 @@ class Conversation:
     A GUI window of a conversation with a specific person.
 
     @ivar person: The person who you're having this conversation with.
-    @type person: L{Person<interfaces.IPerson>}
+    @type person: L{Person<interfaces.IPerson>} provider
 
     @ivar chatui: The GUI chat client associated with this conversation.
     @type chatui: L{ChatUI}
@@ -116,7 +116,7 @@ class Conversation:
     def __init__(self, person, chatui):
         """
         @param person: The person who you're having this conversation with.
-        @type person: L{Person<interfaces.IPerson>}
+        @type person: L{Person<interfaces.IPerson>} provider
 
         @param chatui: The GUI chat client associated with this conversation.
         @type chatui: L{ChatUI}
@@ -169,7 +169,7 @@ class Conversation:
         Change a person's name.
 
         @param person: The person whose nickname is changing.
-        @type person: L{Person<interfaces.IPerson>}
+        @type person: L{Person<interfaces.IPerson>} provider
 
         @param newnick: The new nickname for this person.
         @type newnick: C{str}
@@ -186,7 +186,7 @@ class GroupConversation:
     @type chatui: L{ChatUI}
 
     @ivar group: The group of people that are having this conversation.
-    @type group: Implementer of L{Group<interfaces.IGroup>}
+    @type group: L{Group<interfaces.IGroup>} provider
 
     @ivar members: The names of the people in this conversation.
     @type members: C{list} of C{str}
@@ -197,7 +197,7 @@ class GroupConversation:
         @type chatui: L{ChatUI}
 
         @param group: The group of people that are having this conversation.
-        @type group: Implementer of L{Group<interfaces.IGroup>}
+        @type group: L{Group<interfaces.IGroup>} provider
         """
         self.chatui = chatui
         self.group = group
@@ -315,52 +315,29 @@ class ChatUI:
     """
     A GUI chat client.
 
-    @type conversations: C{dict} of L{Conversation}.
+    @type conversations: C{dict} of L{Conversation}
     @ivar conversations: A cache of all the direct windows.
 
-    @type groupConversations: C{dict} of L{GroupConversation}.
+    @type groupConversations: C{dict} of L{GroupConversation}
     @ivar groupConversations: A cache of all the group windows.
 
     @type persons: C{dict} with keys that are a C{tuple} of (C{str},
-        L{Account<interfaces.IAccount>}) and values that are
-        L{Person<interfaces.IPerson>}.
+       L{Account<interfaces.IAccount>} provider) and values that are
+       L{Person<interfaces.IPerson>} provider
     @ivar persons: A cache of all the users associated with this client.
 
     @type groups: C{dict} with keys that are a C{tuple} of (C{str},
-        L{Account<interfaces.IAccount>}) and values that are
-        L{Group<interfaces.IGroup>}
+        L{Account<interfaces.IAccount>} provider) and values that are
+        L{Group<interfaces.IGroup>} provider
     @ivar groups: A cache of all the groups associated with this client.
 
-    @type onlineClients: C{list} of L{Client<interfaces.IClient>}
+    @type onlineClients: C{list} of L{Client<interfaces.IClient>} providers
     @ivar onlineClients: A list of message sources currently online.
 
     @type contactsList: L{ContactsList}
     @ivar contactsList: A contacts list.
     """
     def __init__(self):
-        """
-        @type conversations: C{dict} of L{Conversation}.
-        @param conversations: A cache of all the direct windows.
-
-        @type groupConversations: C{dict} of L{GroupConversation}.
-        @param groupConversations: A cache of all the group windows.
-
-        @type persons: C{dict} with keys that are a C{tuple} of (C{str},
-            L{Account<interfaces.IAccount>}) and values that are
-            L{Person<interfaces.IPerson>}.
-        @param persons: A cache of all the users associated with this client.
-
-        @type groups: C{dict} with keys that are a C{tuple} of (C{str},
-            L{Account<interfaces.IAccount>}) and values that are
-            L{Group<interfaces.IGroup>}
-        @param groups: A cache of all the groups associated with this client.
-
-        @type onlineClients: C{list} of L{Client<interfaces.IClient>}
-        @param onlineClients: A list of message sources currently online.
-
-        @type contactsList: L{ContactsList}
-        @param contactsList: A contacts list.
-        """
         self.conversations = {}
         self.groupConversations = {}
         self.persons = {}
@@ -373,11 +350,11 @@ class ChatUI:
         """
         Notifies user that an account has been signed on to.
 
-        @type client: L{Client<interfaces.IClient>}
+        @type client: L{Client<interfaces.IClient>} provider
         @param client: The client account for the person who has just signed on.
 
-        @rtype client: L{Client<interfaces.IClient>}
-        @returns: The client, so that it may be used in a callback chain.
+        @rtype client: L{Client<interfaces.IClient>} provider
+        @return: The client, so that it may be used in a callback chain.
         """
         self.onlineClients.append(client)
         self.contactsList.registerAccountClient(client)
@@ -388,7 +365,7 @@ class ChatUI:
         """
         Notifies user that an account has been signed off or disconnected.
 
-        @type client: L{Client<interfaces.IClient>}
+        @type client: L{Client<interfaces.IClient>} provider
         @param client: The client account for the person who has just signed
             off.
         """
@@ -401,7 +378,7 @@ class ChatUI:
         Gets the contacts list associated with this chat window.
 
         @rtype: L{ContactsList}
-        @returns: The contacts list associated with this chat window.
+        @return: The contacts list associated with this chat window.
         """
         return self.contactsList
 
@@ -411,10 +388,10 @@ class ChatUI:
         For the given person object, returns the conversation window
         or creates and returns a new conversation window if one does not exist.
 
-        @type person: L{Person<interfaces.IPerson>}
+        @type person: L{Person<interfaces.IPerson>} provider
         @param person: The person whose conversation window we want to get.
 
-        @type Class: L{Conversation<interfaces.IConversation>} class
+        @type Class: L{Conversation<interfaces.IConversation>} provider class
         @param: The kind of conversation window we want. If the conversation
             window for this person didn't already exist, create one of this type.
 
@@ -422,8 +399,8 @@ class ChatUI:
         @param stayHidden: Whether or not the conversation window should stay
             hidden.
 
-        @rtype: L{Conversation<interfaces.IConversation>}
-        @returns The conversation window.
+        @rtype: L{Conversation<interfaces.IConversation>} provider
+        @return: The conversation window.
         """
         conv = self.conversations.get(person)
         if not conv:
@@ -442,10 +419,10 @@ class ChatUI:
         For the given group object, returns the group conversation window or
         creates and returns a new group conversation window if it doesn't exist.
 
-        @type group: L{Group<interfaces.IGroup>}
+        @type group: L{Group<interfaces.IGroup>} provider
         @param group: The group whose conversation window we want to get.
 
-        @type Class: L{Conversation<interfaces.IConversation>} class
+        @type Class: L{Conversation<interfaces.IConversation>} provider class
         @param: The kind of conversation window we want. If the conversation
             window for this person didn't already exist, create one of this type.
 
@@ -453,8 +430,8 @@ class ChatUI:
         @param stayHidden: Whether or not the conversation window should stay
             hidden.
 
-        @rtype: L{GroupConversation<interfaces.IGroupConversation>}
-        @returns The group conversation window.
+        @rtype: L{GroupConversation<interfaces.IGroupConversation>} provider
+        @return: The group conversation window.
         """
         conv = self.groupConversations.get(group)
         if not conv:
@@ -469,18 +446,18 @@ class ChatUI:
 
     def getPerson(self, name, client):
         """
-        For the given name and account client, returns an instance of an
-        L{Group<interfaces.IPerson>} implementer or creates and returns a new
-        instance of an L{Group<interfaces.IPerson>} implementer.
+        For the given name and account client, returns an instance of a
+        L{Group<interfaces.IPerson>} provider or creates and returns a new
+        instance of a L{Group<interfaces.IPerson>} provider.
 
         @type name: C{str}
         @param name: The name of the person of interest.
 
-        @type client: L{Client<interfaces.IClient>}
+        @type client: L{Client<interfaces.IClient>} provider
         @param client: The client account of interest.
 
-        @rtype: L{Person<interfaces.IPerson>}
-        @returns: The person with that C{name}.
+        @rtype: L{Person<interfaces.IPerson>} provider
+        @return: The person with that C{name}.
         """
         account = client.account
         p = self.persons.get((name, account))
@@ -492,18 +469,18 @@ class ChatUI:
 
     def getGroup(self, name, client):
         """
-        For the given name and account client, returns an instance of an
-        L{Group<interfaces.IGroup>} implementer or creates and returns a new
-        instance of an L{Group<interfaces.IGroup>} implementer.
+        For the given name and account client, returns an instance of a
+        L{Group<interfaces.IGroup>} provider or creates and returns a new
+        instance of a L{Group<interfaces.IGroup>} provider.
 
         @type name: C{str}
         @param name: The name of the group of interest.
 
-        @type client: L{Client<interfaces.IClient>}
+        @type client: L{Client<interfaces.IClient>} provider
         @param client: The client account of interest.
 
-        @rtype: L{Group<interfaces.IGroup>}
-        @returns: The group with that C{name}.
+        @rtype: L{Group<interfaces.IGroup>} provider
+        @return: The group with that C{name}.
         """
         # I accept 'client' instead of 'account' in my signature for
         # backwards compatibility.  (Groups changed to be Account-oriented
@@ -522,7 +499,7 @@ class ChatUI:
         and tell the contact list and any conversation windows with that
         C{person} to change as well.
 
-        @type person: L{Person<interfaces.IPerson>}
+        @type person: L{Person<interfaces.IPerson>} provider
         @param person: The person whose nickname will get changed.
 
         @type newnick: C{str}
