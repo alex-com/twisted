@@ -11,7 +11,7 @@ from __future__ import division
 import sys
 import time
 import warnings
-from datetime import datetime
+from datetime import datetime, timedelta, tzinfo
 import logging
 
 from zope.interface import Interface
@@ -386,6 +386,64 @@ def textFromEventDict(eventDict):
     return text
 
 
+
+class _NameAndOffsetInfo(tzinfo):
+    """
+    Represents a named, DST unaware, fixed offset time zone.
+
+    @type _name: C{str}
+    @ivar _name: name of this time zone.
+    @type _offset: C{datetime.timedelta}
+    @ivar _offset: time zone offset from UTC. East is positive, west is
+        negative.
+    """
+
+    def __init__(self, name, offset):
+        """
+        @type name: C{str}
+        @param name: name of this time zone.
+        @type offset: C{datetime.timedelta}
+        @param offset: timezone offset from UTC.
+        """
+        self._name = name
+        self._offset = offset
+
+
+    def utcoffset(self, dt):
+        """
+        Return offset of local time from UTC, in minutes east of UTC.
+
+        @rtype: C{datetime.timedelta}
+        """
+        return self._offset
+
+
+    def dst(self, dt):
+        """
+        Return the daylight saving time adjustment for local time.
+
+        C{_NamedFixedOffset} objects are not aware of DST, so this always
+        returns C{None}.
+        """
+        return None
+
+
+    def tzname(self, dt):
+        """
+        Return this time zone's name.
+        """
+        return self._name
+
+
+    def fromutc(self, dt):
+        """
+        Return an aware local C{datetime.datetime} object, equivalent to
+        UTC C{datetime.datetime} object C{dt}.
+        """
+        return dt + self._offset
+
+
+
 class FileLogObserver:
     """
     Log observer that writes to a file-like object.
@@ -399,11 +457,12 @@ class FileLogObserver:
         self.write = f.write
         self.flush = f.flush
 
+
     def getTimezoneOffset(self, when):
         """
         Return the current local timezone offset from UTC.
 
-        @type when: C{int}
+        @type when: C{float}
         @param when: POSIX (ie, UTC) timestamp for which to find the offset.
 
         @rtype: C{int}
@@ -413,36 +472,62 @@ class FileLogObserver:
         offset = datetime.utcfromtimestamp(when) - datetime.fromtimestamp(when)
         return offset.days * (60 * 60 * 24) + offset.seconds
 
+
+    def getTimezoneInfo(self, when):
+        """
+        Return timezone information coresponding to the C{when} timestamp.
+
+        @type when: C{float}
+        @param when: POSIX (ie, UTC) timestamp for which to find the timezone
+            information.
+
+        @rtype: C{datetime.tzinfo}
+        @return: Timezone information for the given timestamp.
+
+        By default, the timezone information returned contains UTC offset
+        information and the name of the local timezone at the C{when}
+        moment in time.
+
+        You can overwrite this method if you want the logged time to be
+        reported in a different timezone, e.g. if you want to always log in
+        C{US/Eastern} time::
+
+            import pytz # a separate package
+            from twisted.python import log
+
+            class EasternFileLogObserver(log.FileLogObserver):
+
+                def getTimezoneInfo(self, when):
+                    return pytz.timezone("US/Eastern")
+        """
+        offset = self.getTimezoneOffset(when)
+        isdst = time.localtime(when).tm_isdst
+        name = time.tzname[isdst]
+        return _NameAndOffsetInfo(name, timedelta(seconds=-offset))
+
+
     def formatTime(self, when):
         """
-        Format the given UTC value as a string representing that time in the
-        local timezone.
+        Format the given UTC timestamp as a string representing that time in
+        the C{self.getTimezoneInfo(when)} timezone.
 
         By default it's formatted as a ISO8601-like string (ISO8601 date and
-        ISO8601 time separated by a space). It can be customized using the
-        C{timeFormat} attribute, which will be used as input for the underlying
-        C{time.strftime} call.
+        ISO8601 time separated by a space, followed by local timezone offset).
+        It can be customized using the C{timeFormat} attribute, which will be
+        used as input for the underlying C{datetime.strftime} call.
 
-        @type when: C{int}
-        @param when: POSIX (ie, UTC) timestamp for which to find the offset.
+        @type when: C{float}
+        @param when: POSIX (ie, UTC) timestamp to format.
 
         @rtype: C{str}
         """
-        if self.timeFormat is not None:
-            return time.strftime(self.timeFormat, time.localtime(when))
+        info = self.getTimezoneInfo(when)
+        awareDateTime = datetime.fromtimestamp(when, info)
+        timeFormat = self.timeFormat
+        if timeFormat is None:
+            timeFormat = "%Y-%m-%d %H:%M:%S%z"
+        return awareDateTime.strftime(timeFormat)
 
-        tzOffset = -self.getTimezoneOffset(when)
-        when = datetime.utcfromtimestamp(when + tzOffset)
-        tzHour = abs(int(tzOffset / 60 / 60))
-        tzMin = abs(int(tzOffset / 60 % 60))
-        if tzOffset < 0:
-            tzSign = '-'
-        else:
-            tzSign = '+'
-        return '%d-%02d-%02d %02d:%02d:%02d%s%02d%02d' % (
-            when.year, when.month, when.day,
-            when.hour, when.minute, when.second,
-            tzSign, tzHour, tzMin)
 
     def emit(self, eventDict):
         text = textFromEventDict(eventDict)
