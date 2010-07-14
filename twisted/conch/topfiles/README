@@ -1,4 +1,6 @@
 Twisted Conch 10.1.0
 
-Conch depends on Python Crypto (<http://www.pycrypto.org>)
-extensions and the pyasn1 module (<http://pyasn1.sourceforge.net/>).
+Conch depends on Python Crypto (<http://www.pycrypto.org>) extensions and the
+pyasn1 module (<http://pyasn1.sourceforge.net/>).  On Python 2.4, pyshadow
+(<http://www.twistedmatrix.com/users/z3p/files/pyshadow-0.2.tar.gz>) is also
+necessary to check passwords against a shadow password database.
