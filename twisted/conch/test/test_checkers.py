@@ -76,11 +76,11 @@ class HelperTests(TestCase):
         """
         password = 'password'
         salt = '$1$salt'
-        encrypted = crypt.crypt(password, salt)
+        crypted = crypt.crypt(password, salt)
         self.assertTrue(
             checkers.verifyCryptedPassword(encrypted, password),
             '%r supposed to be valid encrypted password for %s' % (
-                encrypted, password))
+                crypted, password))
 
 
     def test_refuteCryptedPassword(self):
@@ -94,7 +94,7 @@ class HelperTests(TestCase):
         self.assertFalse(
             checkers.verifyCryptedPassword(encrypted, wrong),
             '%r not supposed to be valid encrypted password for %s' % (
-                encrypted, wrong))
+                crypted, wrong))
 
 
     def test_pwdGetByName(self):
