@@ -46,10 +46,14 @@ else:
 
 class HelperTests(TestCase):
     """
-    Tests for functionality used to implement checkers in
-    L{twisted.conch.checkers}.
+    Tests for helper functions L{verifyCryptedPassword}, L{_pwdGetByName} and
+    L{_shadowGetByName}.
     """
     skip = cryptSkip or dependencySkip
+
+    def setUp(self):
+        self.mockos = MockOS()
+
 
     def test_verifyCryptedPassword(self):
         """
@@ -57,8 +61,26 @@ class HelperTests(TestCase):
         passed to it matches the encrypted password passed to it.
         """
         password = 'secret string'
-        crypted = crypt.crypt(password, password)
-        self.assertTrue(verifyCryptedPassword(crypted, password))
+        salt = 'salty'
+        crypted = crypt.crypt(password, salt)
+        self.assertTrue(
+            verifyCryptedPassword(crypted, password),
+            '%r supposed to be valid encrypted password for %r' % (
+                crypted, password))
+
+
+    def test_verifyCryptedPasswordMD5(self):
+        """
+        L{verifyCryptedPassword} returns True if the provided cleartext password
+        matches the provided MD5 password hash.
+        """
+        password = 'password'
+        salt = '$1$salt'
+        encrypted = crypt.crypt(password, salt)
+        self.assertTrue(
+            checkers.verifyCryptedPassword(encrypted, password),
+            '%r supposed to be valid encrypted password for %s' % (
+                encrypted, password))
 
 
     def test_refuteCryptedPassword(self):
@@ -67,9 +89,91 @@ class HelperTests(TestCase):
         passed to it does not match the encrypted password passed to it.
         """
         password = 'string secret'
+        wrong = 'secret string'
         crypted = crypt.crypt(password, password)
-        self.assertFalse(verifyCryptedPassword(crypted, 'secret string'))
+        self.assertFalse(
+            checkers.verifyCryptedPassword(encrypted, wrong),
+            '%r not supposed to be valid encrypted password for %s' % (
+                encrypted, wrong))
 
+
+    def test_pwdGetByName(self):
+        """
+        L{_pwdGetByName} returns a tuple of items from the UNIX /etc/passwd
+        database if the L{pwd} module is present.
+        """
+        userdb = UserDatabase()
+        userdb.addUser(
+            'alice', 'secrit', 1, 2, 'first last', '/foo', '/bin/sh')
+        self.patch(checkers, 'pwd', userdb)
+        self.assertEquals(
+            checkers._pwdGetByName('alice'), userdb.getpwnam('alice'))
+
+
+    def test_pwdGetByNameWithoutPwd(self):
+        """
+        If the C{pwd} module isn't present, L{_pwdGetByName} returns C{None}.
+        """
+        self.patch(checkers, 'pwd', None)
+        self.assertIdentical(checkers._pwdGetByName('alice'), None)
+
+
+    def test_shadowGetByName(self):
+        """
+        L{_shadowGetByName} returns a tuple of items from the UNIX /etc/shadow
+        database if the L{spwd} is present.
+        """
+        userdb = ShadowDatabase()
+        userdb.addUser('bob', 'passphrase', 1, 2, 3, 4, 5, 6, 7)
+        self.patch(checkers, 'spwd', userdb)
+
+        self.mockos.euid = 2345
+        self.mockos.egid = 1234
+        self.patch(os, "geteuid", self.mockos.geteuid)
+        self.patch(os, "getegid", self.mockos.getegid)
+        self.patch(os, "seteuid", self.mockos.seteuid)
+        self.patch(os, "setegid", self.mockos.setegid)
+
+        self.assertEquals(
+            checkers._shadowGetByName('bob'), userdb.getspnam('bob'))
+        self.assertEquals(self.mockos.seteuidCalls, [0, 2345])
+        self.assertEquals(self.mockos.setegidCalls, [0, 1234])
+
+
+    def test_shadowGetByNameWithoutSpwd(self):
+        """
+        L{_shadowGetByName} uses the C{shadow} module to return a tuple of items
+        from the UNIX /etc/shadow database if the C{spwd} module is not present
+        and the C{shadow} module is.
+        """
+        userdb = ShadowDatabase()
+        userdb.addUser('bob', 'passphrase', 1, 2, 3, 4, 5, 6, 7)
+        self.patch(checkers, 'spwd', None)
+        self.patch(checkers, 'shadow', userdb)
+
+        self.mockos.euid = 2345
+        self.mockos.egid = 1234
+        self.patch(os, "geteuid", self.mockos.geteuid)
+        self.patch(os, "getegid", self.mockos.getegid)
+        self.patch(os, "seteuid", self.mockos.seteuid)
+        self.patch(os, "setegid", self.mockos.setegid)
+
+        self.assertEquals(
+            checkers._shadowGetByName('bob'), userdb.getspnam('bob'))
+        self.assertEquals(self.mockos.seteuidCalls, [0, 2345])
+        self.assertEquals(self.mockos.setegidCalls, [0, 1234])
+
+
+    def test_shadowGetByNameWithoutEither(self):
+        """
+        L{_shadowGetByName} returns C{None} if neither C{spwd} nor C{shadow} is
+        present.
+        """
+        self.patch(checkers, 'spwd', None)
+        self.patch(checkers, 'shadow', None)
+        self.assertIdentical(checkers._shadowGetByName('bob'), None)
+        self.assertEquals(self.mockos.seteuidCalls, [])
+        self.assertEquals(self.mockos.setegidCalls, [])
 
 
 
@@ -319,126 +423,6 @@ class SSHProtocolCheckerTestCase(TestCase):
         The default L{SSHProcotolChecker.areDone} should simply return True.
         """
         self.assertEquals(checkers.SSHProtocolChecker().areDone(None), True)
-
-
-
-class HelperFunctionTests(TestCase):
-    """
-    Tests for helper functions L{verifyCryptedPassword}, L{_pwdGetByName} and
-    L{_shadowGetByName}.
-    """
-    skip = cryptSkip or dependencySkip
-
-
-    def setUp(self):
-        self.mockos = MockOS()
-
-
-    def test_verifyCryptedPassword(self):
-        """
-        L{verifyCryptedPassword} returns True if the provided cleartext
-        password matches the provided password hash.
-        """
-        password = 'password'
-        salt = 'sa'
-        encrypted = crypt.crypt(password, salt)
-        self.assertTrue(checkers.verifyCryptedPassword(
-                encrypted,
-                password), '%r not valid encrypted password for %s' % (
-                encrypted, password))
-
-
-    def test_verifyCryptedPassword_md5(self):
-        """
-        L{verifyCryptedPassword} returns True if the provided cleartext
-        password matches the provided MD5 password hash.
-        """
-        password = 'password'
-        salt = '$1$salt'
-        encrypted = crypt.crypt(password, salt)
-        self.assertTrue(checkers.verifyCryptedPassword(
-                encrypted,
-                password), '%r not valid encrypted password for %s' % (
-                encrypted, password))
-
-
-    def test_pwdGetByName(self):
-        """
-        L{_pwdGetByName} returns a tuple of items from the UNIX /etc/passwd
-        database if the L{pwd} module is present.
-        """
-        userdb = UserDatabase()
-        userdb.addUser(
-            'alice', 'secrit', 1, 2, 'first last', '/foo', '/bin/sh')
-        self.patch(checkers, 'pwd', userdb)
-        self.assertEquals(
-            checkers._pwdGetByName('alice'), userdb.getpwnam('alice'))
-
-
-    def test_pwdGetByNameWithoutPwd(self):
-        """
-        If the C{pwd} module isn't present, L{_pwdGetByName} returns C{None}.
-        """
-        self.patch(checkers, 'pwd', None)
-        self.assertIdentical(checkers._pwdGetByName('alice'), None)
-
-
-    def test_shadowGetByName(self):
-        """
-        L{_shadowGetByName} returns a tuple of items from the UNIX /etc/shadow
-        database if the L{spwd} is present.
-        """
-        userdb = ShadowDatabase()
-        userdb.addUser('bob', 'passphrase', 1, 2, 3, 4, 5, 6, 7)
-        self.patch(checkers, 'spwd', userdb)
-
-        self.mockos.euid = 2345
-        self.mockos.egid = 1234
-        self.patch(os, "geteuid", self.mockos.geteuid)
-        self.patch(os, "getegid", self.mockos.getegid)
-        self.patch(os, "seteuid", self.mockos.seteuid)
-        self.patch(os, "setegid", self.mockos.setegid)
-
-        self.assertEquals(
-            checkers._shadowGetByName('bob'), userdb.getspnam('bob'))
-        self.assertEquals(self.mockos.seteuidCalls, [0, 2345])
-        self.assertEquals(self.mockos.setegidCalls, [0, 1234])
-
-
-    def test_shadowGetByNameWithoutSpwd(self):
-        """
-        L{_shadowGetByName} uses the C{shadow} module to return a tuple of items
-        from the UNIX /etc/shadow database if the C{spwd} module is not present
-        and the C{shadow} module is.
-        """
-        userdb = ShadowDatabase()
-        userdb.addUser('bob', 'passphrase', 1, 2, 3, 4, 5, 6, 7)
-        self.patch(checkers, 'spwd', None)
-        self.patch(checkers, 'shadow', userdb)
-
-        self.mockos.euid = 2345
-        self.mockos.egid = 1234
-        self.patch(os, "geteuid", self.mockos.geteuid)
-        self.patch(os, "getegid", self.mockos.getegid)
-        self.patch(os, "seteuid", self.mockos.seteuid)
-        self.patch(os, "setegid", self.mockos.setegid)
-
-        self.assertEquals(
-            checkers._shadowGetByName('bob'), userdb.getspnam('bob'))
-        self.assertEquals(self.mockos.seteuidCalls, [0, 2345])
-        self.assertEquals(self.mockos.setegidCalls, [0, 1234])
-
-
-    def test_shadowGetByNameWithoutEither(self):
-        """
-        L{_shadowGetByName} returns C{None} if neither C{spwd} nor C{shadow} is
-        present.
-        """
-        self.patch(checkers, 'spwd', None)
-        self.patch(checkers, 'shadow', None)
-        self.assertIdentical(checkers._shadowGetByName('bob'), None)
-        self.assertEquals(self.mockos.seteuidCalls, [])
-        self.assertEquals(self.mockos.setegidCalls, [])
 
 
 
