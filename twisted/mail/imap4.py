@@ -4810,19 +4810,28 @@ def unquote(s):
         return s[1:-1]
     return s
 
-def getBodyStructure(msg, extended=False):
-    # XXX - This does not properly handle multipart messages
-    # BODYSTRUCTURE is obscenely complex and criminally under-documented.
 
+def _getBodyDisposition(msg):
+    headers = msg.getHeaders(False, 'content-disposition', 'content-language')
+    disp = headers.get('content-disposition')
+    if disp:
+        disp = disp.split('; ')
+        if len(disp) == 1:
+            disp = (disp[0].lower(), None)
+        elif len(disp) > 1:
+            disp = (disp[0].lower(), [x.split('=') for x in disp[1:]])
+    return disp
+
+
+
+def _mimeType(headers):
     attrs = {}
-    headers = 'content-type', 'content-id', 'content-description', 'content-transfer-encoding'
-    headers = msg.getHeaders(False, *headers)
     mm = headers.get('content-type')
     if mm:
         mm = ''.join(mm.splitlines())
         mimetype = mm.split(';')
         if mimetype:
-            type = mimetype[0].split('/', 1)
+            type = mimetype[0].lower().split('/', 1)
             if len(type) == 1:
                 major = type[0]
                 minor = None
@@ -4835,73 +4844,64 @@ def getBodyStructure(msg, extended=False):
             major = minor = None
     else:
         major = minor = None
+    return major, minor, attrs
 
 
-    size = str(msg.getSize())
-    unquotedAttrs = [(k, unquote(v)) for (k, v) in attrs.iteritems()]
-    result = [
-        major, minor,                       # Main and Sub MIME types
-        unquotedAttrs,                      # content-type parameter list
-        headers.get('content-id'),
-        headers.get('content-description'),
-        headers.get('content-transfer-encoding'),
-        size,                               # Number of octets total
-    ]
 
-    if major is not None:
-        if major.lower() == 'text':
+def getBodyStructure(msg, extended=False):
+    headers = 'content-type', 'content-id', 'content-description', 'content-transfer-encoding'
+    headers = msg.getHeaders(False, *headers)
+    major, minor, attrs = _mimeType(headers)
+
+    if major == 'multipart':
+        # The basic fields of a multipart
+        result = []
+        i = 0
+        while True:
+            try:
+                sub = msg.getSubPart(i)
+            except IndexError:
+                break
+            else:
+                result.append(getBodyStructure(sub, extended))
+                i += 1
+        result.append(minor)
+    else:
+        size = str(msg.getSize())
+        unquotedAttrs = [(k, unquote(v)) for (k, v) in attrs.iteritems()]
+        result = [
+            major, minor,                       # Main and Sub MIME types
+            unquotedAttrs,                      # content-type parameter list
+            headers.get('content-id'),
+            headers.get('content-description'),
+            headers.get('content-transfer-encoding'),
+            size,                               # Number of octets total
+        ]
+
+    if extended:
+        if major == 'multipart':
+            result.extend([
+                    attrs.items(),
+                    _getBodyDisposition(msg),
+                    headers.get('content-length'),
+                    ])
+        elif major == 'text':
             result.append(str(getLineCount(msg)))
-        elif (major.lower(), minor.lower()) == ('message', 'rfc822'):
+        elif (major, minor) == ('message', 'rfc822'):
             contained = msg.getSubPart(0)
             result.append(getEnvelope(contained))
             result.append(getBodyStructure(contained, False))
             result.append(str(getLineCount(contained)))
-
-    if not extended or major is None:
-        return result
-
-    if major.lower() != 'multipart':
-        headers = 'content-md5', 'content-disposition', 'content-language'
-        headers = msg.getHeaders(False, *headers)
-        disp = headers.get('content-disposition')
-
-        # XXX - I dunno if this is really right
-        if disp:
-            disp = disp.split('; ')
-            if len(disp) == 1:
-                disp = (disp[0].lower(), None)
-            elif len(disp) > 1:
-                disp = (disp[0].lower(), [x.split('=') for x in disp[1:]])
-
-        result.append(headers.get('content-md5'))
-        result.append(disp)
-        result.append(headers.get('content-language'))
-    else:
-        result = [result]
-        try:
-            i = 0
-            while True:
-                submsg = msg.getSubPart(i)
-                result.append(getBodyStructure(submsg))
-                i += 1
-        except IndexError:
-            result.append(minor)
-            result.append(attrs.items())
-
-            # XXX - I dunno if this is really right
-            headers = msg.getHeaders(False, 'content-disposition', 'content-language')
-            disp = headers.get('content-disposition')
-            if disp:
-                disp = disp.split('; ')
-                if len(disp) == 1:
-                    disp = (disp[0].lower(), None)
-                elif len(disp) > 1:
-                    disp = (disp[0].lower(), [x.split('=') for x in disp[1:]])
-
-            result.append(disp)
+        else:
+            headers = 'content-md5', 'content-disposition', 'content-language'
+            headers = msg.getHeaders(False, *headers)
+            result.append(headers.get('content-md5'))
+            result.append(_getBodyDisposition(msg))
             result.append(headers.get('content-language'))
 
     return result
+
+
 
 class IMessagePart(Interface):
     def getHeaders(negate, *names):

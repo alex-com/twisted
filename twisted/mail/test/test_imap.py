@@ -56,6 +56,50 @@ def sortNest(l):
             l[i] = tuple(sortNest(list(l[i])))
     return l
 
+
+
+class FakeyMessage(util.FancyStrMixin):
+    implements(imap4.IMessage)
+
+    showAttributes = ('headers', 'flags', 'date', 'body', 'uid')
+
+    def __init__(self, headers, flags, date, body, uid, subpart):
+        self.headers = headers
+        self.flags = flags
+        self.body = StringIO(body)
+        self.size = len(body)
+        self.date = date
+        self.uid = uid
+        self.subpart = subpart
+
+    def getHeaders(self, negate, *names):
+        self.got_headers = negate, names
+        return self.headers
+
+    def getFlags(self):
+        return self.flags
+
+    def getInternalDate(self):
+        return self.date
+
+    def getBodyFile(self):
+        return self.body
+
+    def getSize(self):
+        return self.size
+
+    def getUID(self):
+        return self.uid
+
+    def isMultipart(self):
+        return self.subpart is not None
+
+    def getSubPart(self, part):
+        self.got_subpart = part
+        return self.subpart[part]
+
+
+
 class IMAP4UTF7TestCase(unittest.TestCase):
     tests = [
         [u'Hello world', 'Hello world'],
@@ -883,6 +927,60 @@ class IMAP4HelperTestCase(unittest.TestCase):
                 L = len(imap4.parseIdList(input))
                 self.assertEquals(L, expected,
                                   "len(%r) = %r != %r" % (input, L, expected))
+
+
+
+class BodyStructureTests(unittest.TestCase):
+    """
+    Tests for L{getBodyStructure}, which constructs BODYSTRUCTURE data lists
+    according to RFC 3501, section 7.4.2.
+    """
+    plain = FakeyMessage(
+        {'content-type': 'text/plain'}, (), 'date',
+        'Stuff', 54321,  None)
+
+    alternative = FakeyMessage(
+        {'content-type': 'multipart/alternative'}, (), '',
+        'Irrelevant', 12345, [
+            plain,
+            FakeyMessage(
+                {'content-type': 'text/html'}, (), 'date',
+                'Things', 32415, None)])
+
+    def test_plain(self):
+        """
+        For a I{text/plain} message, L{getBodyStructure} returns a list of seven
+        elements::
+
+            - a C{str} giving major mime type
+            - a C{str} giving minor mime type
+            - a C{list} giving content-type attributes
+            - the value of the I{content-id} header
+            - the value of the I{content-description} header
+            - the value of the I{content-transfer-encoding} header
+            - the size of the message in bytes
+        """
+        self.assertEquals(
+            imap4.getBodyStructure(self.plain),
+            ['text', 'plain', [], None, None, None, '5'])
+
+
+    def test_alternative(self):
+        """
+        For a I{multipart/alternative} message, L{getBodyStructure} a list of
+        two elements::
+
+            - a C{list} of the body structure of each sub-part
+            - a C{str} giving the minor mime type
+        """
+        self.assertEquals(
+            imap4.getBodyStructure(self.alternative),
+            [['text', 'plain', [], None, None, None, '5'],
+             ['text', 'html', [], None, None, None, '6'],
+             'alternative'])
+
+
+
 
 class SimpleMailbox:
     implements(imap4.IMailboxInfo, imap4.IMailbox, imap4.ICloseableMailbox)
@@ -3267,45 +3365,7 @@ class FakeyServer(imap4.IMAP4Server):
     def sendServerGreeting(self):
         pass
 
-class FakeyMessage(util.FancyStrMixin):
-    implements(imap4.IMessage)
 
-    showAttributes = ('headers', 'flags', 'date', 'body', 'uid')
-
-    def __init__(self, headers, flags, date, body, uid, subpart):
-        self.headers = headers
-        self.flags = flags
-        self.body = StringIO(body)
-        self.size = len(body)
-        self.date = date
-        self.uid = uid
-        self.subpart = subpart
-
-    def getHeaders(self, negate, *names):
-        self.got_headers = negate, names
-        return self.headers
-
-    def getFlags(self):
-        return self.flags
-
-    def getInternalDate(self):
-        return self.date
-
-    def getBodyFile(self):
-        return self.body
-
-    def getSize(self):
-        return self.size
-
-    def getUID(self):
-        return self.uid
-
-    def isMultipart(self):
-        return self.subpart is not None
-
-    def getSubPart(self, part):
-        self.got_subpart = part
-        return self.subpart[part]
 
 class NewStoreTestCase(unittest.TestCase, IMAP4HelperMixin):
     result = None
@@ -3567,6 +3627,24 @@ class NewFetchTestCase(unittest.TestCase, IMAP4HelperMixin):
 
     def testFetchSimplifiedBodyRFC822UID(self):
         return self.testFetchSimplifiedBodyRFC822(1)
+
+
+    def test_fetchSimplifiedBodyMultipart(self):
+        self.function = self.client.fetchSimplifiedBody
+        self.messages = '21'
+        self.msgObjs = [
+            FakeyMessage(
+                {'content-type': 'multipart/alternative'}, (), '',
+                'Irrelevant', 12345, [
+                    FakeyMessage(
+                        {'content-type': 'text/plain'}, (), 'date',
+                        'Stuff', 54321,  None),
+                    FakeyMessage(
+                        {'content-type': 'text/html'}, (), 'date',
+                        'Things', 32415, None)])]
+        self.expected = {}
+        return self._fetchWork(False)
+
 
     def testFetchMessage(self, uid=0):
         self.function = self.client.fetchMessage
