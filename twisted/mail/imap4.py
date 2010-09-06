@@ -5,7 +5,7 @@
 """
 An IMAP4 protocol implementation
 
-@author: Jp Calderone
+@author: Jean-Paul Calderone
 
 To do::
   Suspend idle timeout while server is processing
@@ -4812,7 +4812,7 @@ def unquote(s):
 
 
 def _getBodyDisposition(msg):
-    headers = msg.getHeaders(False, 'content-disposition', 'content-language')
+    headers = msg.getHeaders(False, 'content-disposition')
     disp = headers.get('content-disposition')
     if disp:
         disp = disp.split('; ')
@@ -4849,7 +4849,9 @@ def _mimeType(headers):
 
 
 def getBodyStructure(msg, extended=False):
-    headers = 'content-type', 'content-id', 'content-description', 'content-transfer-encoding'
+    headers = (
+        'content-type', 'content-id', 'content-description',
+        'content-transfer-encoding')
     headers = msg.getHeaders(False, *headers)
     major, minor, attrs = _mimeType(headers)
 
@@ -4877,6 +4879,13 @@ def getBodyStructure(msg, extended=False):
             headers.get('content-transfer-encoding'),
             size,                               # Number of octets total
         ]
+        if major == 'text':
+            result.append(str(getLineCount(msg)))
+        elif (major, minor) == ('message', 'rfc822'):
+            contained = msg.getSubPart(0)
+            result.append(getEnvelope(contained))
+            result.append(getBodyStructure(contained, False))
+            result.append(str(getLineCount(contained)))
 
     if extended:
         if major == 'multipart':
@@ -4885,19 +4894,15 @@ def getBodyStructure(msg, extended=False):
                     _getBodyDisposition(msg),
                     headers.get('content-length'),
                     ])
-        elif major == 'text':
-            result.append(str(getLineCount(msg)))
-        elif (major, minor) == ('message', 'rfc822'):
-            contained = msg.getSubPart(0)
-            result.append(getEnvelope(contained))
-            result.append(getBodyStructure(contained, False))
-            result.append(str(getLineCount(contained)))
         else:
-            headers = 'content-md5', 'content-disposition', 'content-language'
+            headers = (
+                'content-md5', 'content-disposition',
+                'content-language', 'content-location')
             headers = msg.getHeaders(False, *headers)
             result.append(headers.get('content-md5'))
             result.append(_getBodyDisposition(msg))
             result.append(headers.get('content-language'))
+            result.append(headers.get('content-location'))
 
     return result
 

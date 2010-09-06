@@ -949,7 +949,7 @@ class BodyStructureTests(unittest.TestCase):
 
     def test_plain(self):
         """
-        For a I{text/plain} message, L{getBodyStructure} returns a list of seven
+        For a I{text/plain} message, L{getBodyStructure} returns a list of eight
         elements::
 
             - a C{str} giving major mime type
@@ -959,10 +959,28 @@ class BodyStructureTests(unittest.TestCase):
             - the value of the I{content-description} header
             - the value of the I{content-transfer-encoding} header
             - the size of the message in bytes
+            - the number of lines in the encoded message body
         """
         self.assertEquals(
             imap4.getBodyStructure(self.plain),
-            ['text', 'plain', [], None, None, None, '5'])
+            ['text', 'plain', [], None, None, None, '5', '0'])
+
+
+    def test_plainExtended(self):
+        """
+        For a I{text/plain} message, if passed C{True} for the extended flag,
+        L{getBodyStructure} returns a list of twelve elements.  The first eight
+        are the same as the C{test_plain} case.  The additional four are::
+
+          - the value of the I{content-md5} header
+          - a C{list} giving the body disposition information
+          - the value of the I{content-language} header
+          - the value of the I{content-location} header
+        """
+        self.assertEquals(
+            imap4.getBodyStructure(self.plain, True),
+            ['text', 'plain', [], None, None, None, '5', '0', None, None,
+             None, None])
 
 
     def test_alternative(self):
@@ -975,8 +993,8 @@ class BodyStructureTests(unittest.TestCase):
         """
         self.assertEquals(
             imap4.getBodyStructure(self.alternative),
-            [['text', 'plain', [], None, None, None, '5'],
-             ['text', 'html', [], None, None, None, '6'],
+            [['text', 'plain', [], None, None, None, '5', '1'],
+             ['text', 'html', [], None, None, None, '6', '1'],
              'alternative'])
 
 
@@ -3558,7 +3576,7 @@ class NewFetchTestCase(unittest.TestCase, IMAP4HelperMixin):
         self.expected = {0: {'BODYSTRUCTURE': [
             'text', 'plain', [['name', 'thing'], ['key', 'value']],
             'this-is-the-content-id', 'describing-the-content-goes-here!',
-            '8BIT', '20', '4', None, None, None]}}
+            '8BIT', '20', '4', None, None, None, None]}}
         return self._fetchWork(uid)
 
     def testFetchBodyStructureUID(self):
