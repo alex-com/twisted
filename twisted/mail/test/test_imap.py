@@ -3660,7 +3660,12 @@ class NewFetchTestCase(unittest.TestCase, IMAP4HelperMixin):
                     FakeyMessage(
                         {'content-type': 'text/html'}, (), 'date',
                         'Things', 32415, None)])]
-        self.expected = {}
+        self.expected = {
+            0: {'BODY': [
+                    ['text', 'plain', [], None, None, None, '5', '1'],
+                    ['text', 'html', [], None, None, None, '6', '1'],
+                    'alternative']}}
+
         return self._fetchWork(False)
 
 
