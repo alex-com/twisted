@@ -2781,12 +2781,14 @@ COLOR = '\x03'
 REVERSE_VIDEO = '\x16'
 UNDERLINE = '\x1f'
 
-IRC_COLORS = dict(
+# Mapping of IRC color names to their color values.
+_IRC_COLORS = dict(
     zip(['white', 'black', 'blue', 'green', 'lightRed', 'red', 'magenta',
          'orange', 'yellow', 'lightGreen', 'cyan', 'lightCyan', 'lightBlue',
          'lightMagenta', 'gray', 'lightGray'], range(16)))
 
-IRC_COLOR_NAMES = dict((code, name) for name, code in IRC_COLORS.items())
+# Mapping of IRC color values to their color names.
+_IRC_COLOR_NAMES = dict((code, name) for name, code in _IRC_COLORS.items())
 
 
 
@@ -2841,8 +2843,10 @@ class CharacterAttributes(insulttext.CharacterAttributes):
     @ivar bg: Background colors accessed by attribute name, see above
         for possible names.
     """
-    fg = insulttext._ColorAttribute(insulttext._ForegroundColorAttr, IRC_COLORS)
-    bg = insulttext._ColorAttribute(insulttext._BackgroundColorAttr, IRC_COLORS)
+    fg = insulttext._ColorAttribute(
+        insulttext._ForegroundColorAttr, _IRC_COLORS)
+    bg = insulttext._ColorAttribute(
+        insulttext._BackgroundColorAttr, _IRC_COLORS)
 
     attrs = {
         'bold': BOLD,
@@ -3038,8 +3042,8 @@ class _FormattingState(_CommandDispatcherMixin):
             self._buffer += ch
         else:
             if self._buffer:
-                col = int(self._buffer) % len(IRC_COLORS)
-                self.foreground = getattr(attributes.fg, IRC_COLOR_NAMES[col])
+                col = int(self._buffer) % len(_IRC_COLORS)
+                self.foreground = getattr(attributes.fg, _IRC_COLOR_NAMES[col])
             else:
                 # If there were no digits, then this has been an empty color
                 # code and we can reset the color state.
@@ -3072,8 +3076,8 @@ class _FormattingState(_CommandDispatcherMixin):
             self._buffer += ch
         else:
             if self._buffer:
-                col = int(self._buffer) % len(IRC_COLORS)
-                self.background = getattr(attributes.bg, IRC_COLOR_NAMES[col])
+                col = int(self._buffer) % len(_IRC_COLORS)
+                self.background = getattr(attributes.bg, _IRC_COLOR_NAMES[col])
                 self._buffer = ''
 
             self.emit()
