@@ -14,26 +14,51 @@ from zope.interface import implements
 
 from twisted.internet import defer, protocol, reactor
 from twisted.python import log
-
+from twisted.python.util import FancyEqMixin
 from twisted.conch.insults import insults
 
 FOREGROUND = 30
 BACKGROUND = 40
 BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE, N_COLORS = range(9)
 
-class CharacterAttribute:
-    """Represents the attributes of a single character.
+
+
+class DefaultCharacterAttribute(object, FancyEqMixin):
+    """
+    A character attribute that does nothing, thus applying no attributes to
+    text.
+    """
+    def copy(self):
+        """
+        Make a copy of this character attribute.
+        """
+        return type(self)()
+
+
+    def wantOne(self, **kw):
+        return self.copy()
+
+
+    def toVT102(self):
+        """
+        Emit a VT102 control sequence that will set up all the attributes this
+        character attribute has set.
+        """
+        return ''
+
+
+
+class CharacterAttribute(DefaultCharacterAttribute):
+    """
+    Represents the attributes of a single character.
 
     Character set, intensity, underlinedness, blinkitude, video
     reversal, as well as foreground and background colors made up a
     character's attributes.
     """
-    def __init__(self, charset=insults.G0,
-                 bold=False, underline=False,
-                 blink=False, reverseVideo=False,
-                 foreground=WHITE, background=BLACK,
-
-                 _subtracting=False):
+    def __init__(self, charset=insults.G0, bold=False, underline=False,
+                 blink=False, reverseVideo=False, foreground=WHITE,
+                 background=BLACK, _subtracting=False):
         self.charset = charset
         self.bold = bold
         self.underline = underline
@@ -41,19 +66,14 @@ class CharacterAttribute:
         self.reverseVideo = reverseVideo
         self.foreground = foreground
         self.background = background
-
         self._subtracting = _subtracting
 
-    def __eq__(self, other):
-        return vars(self) == vars(other)
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
 
     def copy(self):
-        c = self.__class__()
+        c = super(CharacterAttribute, self).copy()
         c.__dict__.update(vars(self))
         return c
+
 
     def wantOne(self, **kw):
         k, v = kw.popitem()
@@ -64,6 +84,7 @@ class CharacterAttribute:
             return attr
         else:
             return self.copy()
+
 
     def toVT102(self):
         # Spit out a vt102 control sequence that will set up
@@ -86,6 +107,8 @@ class CharacterAttribute:
         if attrs:
             return '\x1b[' + ';'.join(map(str, attrs)) + 'm'
         return ''
+
+
 
 # XXX - need to support scroll regions and scroll history
 class TerminalBuffer(protocol.Protocol):

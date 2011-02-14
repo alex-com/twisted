@@ -32,15 +32,19 @@ Test coverage needs to be better.
 """
 
 import errno, os, random, re, stat, struct, sys, time, types, traceback
+import operator
 import string, socket
 import warnings
 import textwrap
+from copy import deepcopy
 from os import path
 
+from twisted.conch.insults import helper as insulthelper, text as insulttext
 from twisted.internet import reactor, protocol
 from twisted.persisted import styles
 from twisted.protocols import basic
 from twisted.python import log, reflect, text
+from twisted.python.compat import set
 
 NUL = chr(0)
 CR = chr(015)
@@ -2755,6 +2759,363 @@ class DccFileReceive(DccFileReceiveBasic):
         s = ("<%s at %x: GET %s>"
              % (self.__class__, id(self), self.filename))
         return s
+
+
+
+OFF = '\x0f'
+BOLD = '\x02'
+COLOR = '\x03'
+REVERSE_VIDEO = '\x16'
+UNDERLINE = '\x1f'
+
+IRC_COLORS = dict(
+    zip(['white', 'black', 'blue', 'green', 'lightRed', 'red', 'magenta',
+         'orange', 'yellow', 'lightGreen', 'cyan', 'lightCyan', 'lightBlue',
+         'lightMagenta', 'gray', 'lightGray'], range(16)))
+
+IRC_COLOR_NAMES = dict((code, name) for name, code in IRC_COLORS.items())
+
+
+
+class CharacterAttributes(insulttext.CharacterAttributes):
+    fg = insulttext._ColorAttribute(insulttext._ForegroundColorAttr, IRC_COLORS)
+    bg = insulttext._ColorAttribute(insulttext._BackgroundColorAttr, IRC_COLORS)
+
+    attrs = {
+        'bold': BOLD,
+        'reverseVideo': REVERSE_VIDEO,
+        'underline': UNDERLINE}
+
+
+
+attributes = CharacterAttributes()
+
+
+
+class CharacterAttribute(insulthelper.CharacterAttribute):
+    """
+    Attributes of a single character.
+
+    Attributes include:
+        - Formatting nullifier
+        - Bold
+        - Underline
+        - Reverse video
+        - Foreground color
+        - Background color
+    """
+    def __init__(self, off=False, bold=False, underline=False,
+                 reverseVideo=False, foreground=None, background=None):
+        self.off = off
+        self.bold = bold
+        self.underline = underline
+        self.reverseVideo = reverseVideo
+        self.foreground = foreground
+        self.background = background
+
+
+    # XXX: It's not really VT102.
+    def toVT102(self):
+        attrs = []
+        if self.bold:
+            attrs.append(BOLD)
+        if self.underline:
+            attrs.append(UNDERLINE)
+        if self.reverseVideo:
+            attrs.append(REVERSE_VIDEO)
+        if self.foreground is not None or self.background is not None:
+            c = ''
+            if self.foreground is not None:
+                c += '%02d' % (self.foreground,)
+            if self.background is not None:
+                c += ',%02d' % (self.background,)
+            attrs.append(COLOR + c)
+        return OFF + ''.join(map(str, attrs))
+
+
+
+def foldr(f, z, xs):
+    """
+    Apply a function of two arguments cumulatively to the items of
+    a sequence, from right to left, so as to reduce the sequence to
+    a single value.
+
+    @type f: C{callable} taking 2 arguments
+
+    @param z: Initial value.
+
+    @param xs: Sequence to reduce.
+
+    @return: Single value resulting from reducing C{xs}.
+    """
+    return reduce(lambda x, y: f(y, x), reversed(xs), z)
+
+
+
+class _FormattingState(_CommandDispatcherMixin):
+    """
+    A finite-state machine that parses formatted IRC text.
+
+    Currently handled formatting includes: bold, reverse, underline,
+    mIRC color codes and the ability to remove all current formatting.
+
+    @see: U{http://www.mirc.co.uk/help/color.txt}
+
+    @type _formatCodes: C{dict} mapping C{str} to C{str}
+    @cvar _formatCodes: Mapping of format code values to names.
+
+    @type state: C{str}
+    @ivar state: Current state of the finite-state machine.
+
+    @type _buffer: C{str}
+    @ivar _buffer: Accumulation buffer.
+
+    @type _attrs: C{set}
+    @ivar _attrs: Current state of text attributes.
+
+    @ivar _result: Current parse result.
+    """
+    prefix = 'state'
+
+
+    _formatCodes = {
+        OFF: 'off',
+        BOLD: 'bold',
+        COLOR: 'color',
+        REVERSE_VIDEO: 'reverseVideo',
+        UNDERLINE: 'underline'}
+
+
+    def __init__(self):
+        self.state = 'text'
+        self._buffer = ''
+        self._attrs = set()
+        self._result = None
+        self.foreground = None
+        self.background = None
+
+
+    def process(self, ch):
+        """
+        Handle input.
+
+        @type ch: C{str}
+        @param ch: A single character of input to process
+        """
+        self.dispatch(self.state, ch)
+
+
+    def complete(self):
+        """
+        Flush the current buffer and return the final parsed result.
+
+        @return: Structured text and attributes.
+        """
+        self.emit()
+        if self._result is None:
+            self._result = attributes.normal
+        return self._result
+
+
+    def emit(self):
+        """
+        Add the currently parsed input to the result.
+        """
+        if self._buffer:
+            attrs = [getattr(attributes, name) for name in self._attrs]
+            attrs.extend(
+                filter(None, [
+                    deepcopy(self.foreground), deepcopy(self.background)]))
+            if not attrs:
+                attrs.append(attributes.normal)
+            attrs.append(self._buffer)
+
+            attr = foldr(operator.getitem, attrs.pop(), attrs)
+            if self._result is None:
+                self._result = attr
+            else:
+                self._result[attr]
+            self._buffer = ''
+
+
+    def state_text(self, ch):
+        """
+        Handle the "text" state.
+
+        Along with regular text, single token formatting codes are handled
+        in this state too.
+        """
+        formatName = self._formatCodes.get(ch)
+        if formatName == 'color':
+            self.emit()
+            self.state = 'colorForeground'
+        else:
+            if formatName is None:
+                self._buffer += ch
+            else:
+                if self._buffer:
+                    self.emit()
+
+                if formatName == 'off':
+                    self._attrs = set()
+                else:
+                    self._attrs.symmetric_difference_update([formatName])
+
+
+    def state_colorForeground(self, ch):
+        """
+        Handle the foreground color state.
+
+        Foreground colors can consist of up to two digits and may optionally
+        end in a C{,}. Any non-digit or non-comma characters are treated as
+        invalid input and result in the state being reset to "text".
+        """
+        # Color codes may only be a maximum of two characters.
+        if ch.isdigit() and len(self._buffer) < 2:
+            self._buffer += ch
+        else:
+            if self._buffer:
+                col = int(self._buffer) % len(IRC_COLORS)
+                self.foreground = getattr(attributes.fg, IRC_COLOR_NAMES[col])
+            else:
+                # If there were no digits, then this has been an empty color
+                # code and we can reset the color state.
+                self.foreground = self.background = None
+
+            if ch == ',' and self._buffer:
+                # If there's a comma and it's not the first thing, move on to
+                # the background state.
+                self._buffer = ''
+                self.state = 'colorBackground'
+            else:
+                # Otherwise, this is a bogus color code, fall back to text.
+                self._buffer = ''
+                self.state = 'text'
+                self.emit()
+                self.process(ch)
+
+
+    def state_colorBackground(self, ch):
+        """
+        Handle the background color state.
+
+        Background colors can consist of up to two digits and must occur after
+        a foreground color and must be preceded by a C{,}. Any non-digit
+        character is treated as invalid input and results in the state being
+        set to "text".
+        """
+        # Color codes may only be a maximum of two characters.
+        if ch.isdigit() and len(self._buffer) < 2:
+            self._buffer += ch
+        else:
+            if self._buffer:
+                col = int(self._buffer) % len(IRC_COLORS)
+                self.background = getattr(attributes.bg, IRC_COLOR_NAMES[col])
+                self._buffer = ''
+
+            self.emit()
+            self.state = 'text'
+            self.process(ch)
+
+
+
+def parseFormattedText(text):
+    """
+    Parse text containing IRC formatting codes into structured information.
+
+    @type text: C{str}
+
+    @return: Structured text and attributes.
+
+    @since: 11.0
+    """
+    state = _FormattingState()
+    for ch in text:
+        state.process(ch)
+    return state.complete()
+
+
+
+def assembleFormattedText(formatted):
+    """
+    Assemble formatted text from structured information.
+
+    Currently handled formatting includes: bold, reverse, underline,
+    mIRC color codes and the ability to remove all current formatting.
+
+    For example::
+
+        from twisted.words.protocols.irc import attributes as A
+        assembleFormattedText(
+            A.normal[A.bold['Time: '], A.fg.lightRed['Now!']])
+
+    Would produce "Time: " in bold formatting, followed by "Now!" with a
+    foreground color of light red and without any additional formatting.
+
+    A more complicated example::
+
+        from twisted.words.protocols.irc import attributes as A
+        assembleFormattedText(
+            A.bold[
+                'WARNING: Do ',
+                A.underline['NOT'],
+                ' cross the ',
+                A.fg.white[A.bg.red['red']],
+                ' line!'])
+
+    Would produce "WARNING: Do NOT cross the red line!" in bold formatting,
+    additionally "NOT" would be underlined and the word "red" would be
+    white-on-red.
+
+    Available attributes are:
+        - bold
+        - reverseVideo
+        - underline
+
+    Available colors are:
+        0. white
+        1. black
+        2. blue
+        3. green
+        4. light red
+        5. red
+        6. magenta
+        7. orange
+        8. yellow
+        9. light green
+        10. cyan
+        11. light cyan
+        12. light blue
+        13. light magenta
+        14. gray
+        15. light gray
+
+    @see: U{http://www.mirc.co.uk/help/color.txt}
+
+    @type formatted: Structured text and attributes.
+
+    @rtype: C{str}
+
+    @since: 11.0
+    """
+    return insulttext.flatten(formatted, CharacterAttribute())
+
+
+
+def stripFormatting(text):
+    """
+    Remove all formatting codes from C{text}, leaving only the text.
+
+    @type text: C{str}
+
+    @rtype: C{str}
+
+    @since: 11.0
+    """
+    formatted = parseFormattedText(text)
+    return insulttext.flatten(
+        formatted, insulthelper.DefaultCharacterAttribute())
+
 
 
 # CTCP constants and helper functions

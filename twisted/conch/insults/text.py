@@ -1,5 +1,5 @@
 # -*- test-case-name: twisted.conch.test.test_text -*-
-# Copyright (c) 2001-2004 Twisted Matrix Laboratories.
+# Copyright (c) 2001-2011 Twisted Matrix Laboratories.
 # See LICENSE for details.
 
 """
@@ -53,10 +53,20 @@ caused it to be on.  For example::
 """
 
 from twisted.conch.insults import helper, insults
+from twisted.python.util import FancyEqMixin
 
-class _Attribute(object):
+
+
+class _Attribute(object, FancyEqMixin):
+    compareAttributes = ('children',)
+
     def __init__(self):
         self.children = []
+
+
+    def __repr__(self):
+        return '<%s %r>' % (type(self).__name__, vars(self))
+
 
     def __getitem__(self, item):
         assert isinstance(item, (list, tuple, _Attribute, str))
@@ -65,6 +75,7 @@ class _Attribute(object):
         else:
             self.children.append(item)
         return self
+
 
     def serialize(self, write, attrs=None):
         if attrs is None:
@@ -76,73 +87,98 @@ class _Attribute(object):
                 write(attrs.toVT102())
                 write(ch)
 
+
+
 class _NormalAttr(_Attribute):
     def serialize(self, write, attrs):
         attrs.__init__()
         super(_NormalAttr, self).serialize(write, attrs)
 
+
+
 class _OtherAttr(_Attribute):
+    compareAttributes = ('attrname', 'attrvalue', 'children')
+
     def __init__(self, attrname, attrvalue):
+        super(_OtherAttr, self).__init__()
         self.attrname = attrname
         self.attrvalue = attrvalue
-        self.children = []
+
 
     def __neg__(self):
         result = _OtherAttr(self.attrname, not self.attrvalue)
         result.children.extend(self.children)
         return result
 
+
     def serialize(self, write, attrs):
         attrs = attrs.wantOne(**{self.attrname: self.attrvalue})
         super(_OtherAttr, self).serialize(write, attrs)
 
+
+
 class _ColorAttr(_Attribute):
+    compareAttributes = ('color', 'ground', 'children')
+
     def __init__(self, color, ground):
+        super(_ColorAttr, self).__init__()
         self.color = color
         self.ground = ground
-        self.children = []
+
 
     def serialize(self, write, attrs):
         attrs = attrs.wantOne(**{self.ground: self.color})
         super(_ColorAttr, self).serialize(write, attrs)
 
+
+
 class _ForegroundColorAttr(_ColorAttr):
     def __init__(self, color):
         super(_ForegroundColorAttr, self).__init__(color, 'foreground')
+
+
 
 class _BackgroundColorAttr(_ColorAttr):
     def __init__(self, color):
         super(_BackgroundColorAttr, self).__init__(color, 'background')
 
+
+
+TEXT_COLORS = {
+    'black': helper.BLACK,
+    'red': helper.RED,
+    'green': helper.GREEN,
+    'yellow': helper.YELLOW,
+    'blue': helper.BLUE,
+    'magenta': helper.MAGENTA,
+    'cyan': helper.CYAN,
+    'white': helper.WHITE}
+
+
+
+class _ColorAttribute(object):
+    def __init__(self, ground, attrs):
+        self.ground = ground
+        self.attrs = attrs
+
+    def __getattr__(self, name):
+        try:
+            return self.ground(self.attrs[name])
+        except KeyError:
+            raise AttributeError(name)
+
+
+
 class CharacterAttributes(object):
-    class _ColorAttribute(object):
-        def __init__(self, ground):
-            self.ground = ground
-
-        attrs = {
-            'black': helper.BLACK,
-            'red': helper.RED,
-            'green': helper.GREEN,
-            'yellow': helper.YELLOW,
-            'blue': helper.BLUE,
-            'magenta': helper.MAGENTA,
-            'cyan': helper.CYAN,
-            'white': helper.WHITE}
-
-        def __getattr__(self, name):
-            try:
-                return self.ground(self.attrs[name])
-            except KeyError:
-                raise AttributeError(name)
-
-    fg = _ColorAttribute(_ForegroundColorAttr)
-    bg = _ColorAttribute(_BackgroundColorAttr)
+    fg = _ColorAttribute(_ForegroundColorAttr, TEXT_COLORS)
+    bg = _ColorAttribute(_BackgroundColorAttr, TEXT_COLORS)
 
     attrs = {
         'bold': insults.BOLD,
         'blink': insults.BLINK,
         'underline': insults.UNDERLINE,
         'reverseVideo': insults.REVERSE_VIDEO}
+
 
     def __getattr__(self, name):
         if name == 'normal':
@@ -151,8 +187,11 @@ class CharacterAttributes(object):
             return _OtherAttr(name, True)
         raise AttributeError(name)
 
+
+
 def flatten(output, attrs):
-    """Serialize a sequence of characters with attribute information
+    """
+    Serialize a sequence of characters with attribute information
 
     The resulting string can be interpreted by VT102-compatible
     terminals so that the contained characters are displayed and, for
