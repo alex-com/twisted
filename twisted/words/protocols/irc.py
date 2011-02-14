@@ -3,7 +3,20 @@
 # See LICENSE for details.
 
 """
-Internet Relay Chat Protocol for client and server.
+Internet Relay Chat protocol for client and server.
+
+Formatted (color, bold, etc.) text information is created by accessing the
+various attributes on the L{attributes} (see L{CharacterAttributes} for more
+information) module-level attribute. Formatted text information can then be
+converted into raw bytes with L{assembleFormattedText} that may be sent (e.g.
+with L{IRCClient.msg}). Raw bytes containing formatting codes can be parsed
+back into structured information with L{parseFormattedText}. Formatting can be
+removed altogether from raw bytes with L{stripFormatting}. See
+L{assembleFormattedText} for examples of constructing formatted text
+information.
+
+@var attributes: Singleton instance of L{CharacterAttributes}, used for
+    constructing formatted text information.
 
 Future Plans
 ============
@@ -2778,6 +2791,56 @@ IRC_COLOR_NAMES = dict((code, name) for name, code in IRC_COLORS.items())
 
 
 class CharacterAttributes(insulttext.CharacterAttributes):
+    """
+    Factory for character attributes, including foreground and background color
+    and non-color attributes such as bold, reverse video and underline.
+
+    Character attributes are applied to actual text by using object
+    indexing-syntax (C{obj['abc']}) after accessing a factory attribute, for
+    example::
+
+        attributes.bold['Some text']
+
+    These can be nested to mix attributes::
+
+        attributes.bold[attributes.underline['Some text']]
+
+    And multiple values can be passed::
+
+        attributes.normal[attributes.bold['Some'], ' text']
+
+    Non-color attributes can be accessed by attribute name, available
+    attributes are::
+
+        - bold
+        - reverseVideo
+        - underline
+
+    Available colors are::
+
+        0. white
+        1. black
+        2. blue
+        3. green
+        4. light red
+        5. red
+        6. magenta
+        7. orange
+        8. yellow
+        9. light green
+        10. cyan
+        11. light cyan
+        12. light blue
+        13. light magenta
+        14. gray
+        15. light gray
+
+    @ivar fg: Foreground colors accessed by attribute name, see above
+        for possible names.
+
+    @ivar bg: Background colors accessed by attribute name, see above
+        for possible names.
+    """
     fg = insulttext._ColorAttribute(insulttext._ForegroundColorAttr, IRC_COLORS)
     bg = insulttext._ColorAttribute(insulttext._BackgroundColorAttr, IRC_COLORS)
 
