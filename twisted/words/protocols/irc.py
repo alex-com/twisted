@@ -2875,6 +2875,10 @@ class CharacterAttribute(insulthelper.CharacterAttribute):
         - Foreground color
         - Background color
     """
+    compareAttributes = (
+        'off', 'bold', 'underline', 'reverseVideo', 'foreground', 'background')
+
+
     def __init__(self, off=False, bold=False, underline=False,
                  reverseVideo=False, foreground=None, background=None):
         self.off = off

@@ -361,6 +361,38 @@ class FormattedTextTests(unittest.TestCase):
 
 
 
+class CharacterAttributeTests(unittest.TestCase):
+    """
+    Tests for L{twisted.words.protocols.irc.CharacterAttribute}.
+    """
+    def test_equality(self):
+        """
+        L{CharacterAttribute}s must have matching character attribute values
+        (bold, underline, etc) with the same values to be considered
+        equal.
+        """
+        self.assertEquals(
+            irc.CharacterAttribute(),
+            irc.CharacterAttribute())
+
+        self.assertEquals(
+            irc.CharacterAttribute(),
+            irc.CharacterAttribute(off=False))
+
+        self.assertEquals(
+            irc.CharacterAttribute(
+                bold=True, underline=True, off=False, reverseVideo=True,
+                foreground=irc._IRC_COLORS['blue']),
+            irc.CharacterAttribute(
+                bold=True, underline=True, off=False, reverseVideo=True,
+                foreground=irc._IRC_COLORS['blue']))
+
+        self.assertNotEquals(
+            irc.CharacterAttribute(bold=True),
+            irc.CharacterAttribute(bold=False))
+
+
+
 stringSubjects = [
     "Hello, this is a nice string with no complications.",
     "xargs%(NUL)smight%(NUL)slike%(NUL)sthis" % {'NUL': irc.NUL },

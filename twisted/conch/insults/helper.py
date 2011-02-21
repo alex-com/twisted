@@ -28,6 +28,11 @@ class DefaultCharacterAttribute(object, FancyEqMixin):
     A character attribute that does nothing, thus applying no attributes to
     text.
     """
+    compareAttributes = ('_dummy',)
+
+    _dummy = 0
+
+
     def copy(self):
         """
         Make a copy of this character attribute.
@@ -56,6 +61,11 @@ class CharacterAttribute(DefaultCharacterAttribute):
     reversal, as well as foreground and background colors made up a
     character's attributes.
     """
+    compareAttributes = (
+        'charset', 'bold', 'underline', 'blink', 'reverseVideo', 'foreground',
+        'background', '_subtracting')
+
+
     def __init__(self, charset=insults.G0, bold=False, underline=False,
                  blink=False, reverseVideo=False, foreground=WHITE,
                  background=BLACK, _subtracting=False):
