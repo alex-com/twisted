@@ -2954,7 +2954,7 @@ class _FormattingState(_CommandDispatcherMixin):
 
 
     def __init__(self):
-        self.state = 'text'
+        self.state = 'TEXT'
         self._buffer = ''
         self._attrs = set()
         self._result = None
@@ -3005,7 +3005,7 @@ class _FormattingState(_CommandDispatcherMixin):
             self._buffer = ''
 
 
-    def state_text(self, ch):
+    def state_TEXT(self, ch):
         """
         Handle the "text" state.
 
@@ -3015,7 +3015,7 @@ class _FormattingState(_CommandDispatcherMixin):
         formatName = self._formatCodes.get(ch)
         if formatName == 'color':
             self.emit()
-            self.state = 'colorForeground'
+            self.state = 'COLOR_FOREGROUND'
         else:
             if formatName is None:
                 self._buffer += ch
@@ -3029,7 +3029,7 @@ class _FormattingState(_CommandDispatcherMixin):
                     self._attrs.symmetric_difference_update([formatName])
 
 
-    def state_colorForeground(self, ch):
+    def state_COLOR_FOREGROUND(self, ch):
         """
         Handle the foreground color state.
 
@@ -3053,16 +3053,16 @@ class _FormattingState(_CommandDispatcherMixin):
                 # If there's a comma and it's not the first thing, move on to
                 # the background state.
                 self._buffer = ''
-                self.state = 'colorBackground'
+                self.state = 'COLOR_BACKGROUND'
             else:
                 # Otherwise, this is a bogus color code, fall back to text.
                 self._buffer = ''
-                self.state = 'text'
+                self.state = 'TEXT'
                 self.emit()
                 self.process(ch)
 
 
-    def state_colorBackground(self, ch):
+    def state_COLOR_BACKGROUND(self, ch):
         """
         Handle the background color state.
 
@@ -3081,7 +3081,7 @@ class _FormattingState(_CommandDispatcherMixin):
                 self._buffer = ''
 
             self.emit()
-            self.state = 'text'
+            self.state = 'TEXT'
             self.process(ch)
 
 
