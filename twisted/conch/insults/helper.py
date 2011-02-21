@@ -80,7 +80,7 @@ class CharacterAttribute(DefaultCharacterAttribute):
 
 
     def copy(self):
-        c = super(CharacterAttribute, self).copy()
+        c = DefaultCharacterAttribute.copy(self)
         c.__dict__.update(vars(self))
         return c
 

@@ -93,7 +93,7 @@ class _Attribute(object, FancyEqMixin):
 class _NormalAttr(_Attribute):
     def serialize(self, write, attrs, attributeRenderer):
         attrs.__init__()
-        super(_NormalAttr, self).serialize(write, attrs, attributeRenderer)
+        _Attribute.serialize(self, write, attrs, attributeRenderer)
 
 
 
@@ -101,7 +101,7 @@ class _OtherAttr(_Attribute):
     compareAttributes = ('attrname', 'attrvalue', 'children')
 
     def __init__(self, attrname, attrvalue):
-        super(_OtherAttr, self).__init__()
+        _Attribute.__init__(self)
         self.attrname = attrname
         self.attrvalue = attrvalue
 
@@ -114,34 +114,32 @@ class _OtherAttr(_Attribute):
 
     def serialize(self, write, attrs, attributeRenderer):
         attrs = attrs.wantOne(**{self.attrname: self.attrvalue})
-        super(_OtherAttr, self).serialize(write, attrs, attributeRenderer)
-
+        _Attribute.serialize(self, write, attrs, attributeRenderer)
 
 
 class _ColorAttr(_Attribute):
     compareAttributes = ('color', 'ground', 'children')
 
     def __init__(self, color, ground):
-        super(_ColorAttr, self).__init__()
+        _Attribute.__init__(self)
         self.color = color
         self.ground = ground
 
 
     def serialize(self, write, attrs, attributeRenderer):
         attrs = attrs.wantOne(**{self.ground: self.color})
-        super(_ColorAttr, self).serialize(write, attrs, attributeRenderer)
-
+        _Attribute.serialize(self, write, attrs, attributeRenderer)
 
 
 class _ForegroundColorAttr(_ColorAttr):
     def __init__(self, color):
-        super(_ForegroundColorAttr, self).__init__(color, 'foreground')
+        _ColorAttr.__init__(self, color, 'foreground')
 
 
 
 class _BackgroundColorAttr(_ColorAttr):
     def __init__(self, color):
-        super(_BackgroundColorAttr, self).__init__(color, 'background')
+        _ColorAttr.__init__(self, color, 'background')
 
 
 
