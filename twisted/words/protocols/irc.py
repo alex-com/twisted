@@ -5,6 +5,10 @@
 """
 Internet Relay Chat protocol for client and server.
 
+
+Formatting IRC text
+===================
+
 Formatted (color, bold, etc.) text information is created by accessing the
 various attributes on the L{attributes} (see L{CharacterAttributes} for more
 information) module-level attribute. Formatted text information can then be
@@ -14,9 +18,6 @@ back into structured information with L{parseFormattedText}. Formatting can be
 removed altogether from raw bytes with L{stripFormatting}. See
 L{assembleFormattedText} for examples of constructing formatted text
 information.
-
-@var attributes: Singleton instance of L{CharacterAttributes}, used for
-    constructing formatted text information.
 
 Future Plans
 ============
@@ -35,6 +36,9 @@ Test coverage needs to be better.
 
 @var MAX_COMMAND_LENGTH: The maximum length of a command, as defined by RFC
     2812 section 2.3.
+
+@var attributes: Singleton instance of L{CharacterAttributes}, used for
+    constructing formatted text information.
 
 @author: Kevin Turner
 
