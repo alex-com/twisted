@@ -182,7 +182,7 @@ class MiscTests(unittest.TestCase):
         a single value.
         """
         self.assertEquals(
-            irc.foldr(operator.sub, 0, [1, 2, 3, 4]),
+            irc._foldr(operator.sub, 0, [1, 2, 3, 4]),
             -2)
         self.assertEquals(
             reduce(operator.sub, [1, 2, 3, 4], 0),
@@ -193,7 +193,7 @@ class MiscTests(unittest.TestCase):
             return l
 
         self.assertEquals(
-            irc.foldr(insertTop, [], [[1], [2], [3], [4]]),
+            irc._foldr(insertTop, [], [[1], [2], [3], [4]]),
             [[[[[], 4], 3], 2], 1])
 
         self.assertEquals(
