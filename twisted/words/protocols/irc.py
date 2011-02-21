@@ -2775,11 +2775,11 @@ class DccFileReceive(DccFileReceiveBasic):
 
 
 
-OFF = '\x0f'
-BOLD = '\x02'
-COLOR = '\x03'
-REVERSE_VIDEO = '\x16'
-UNDERLINE = '\x1f'
+_OFF = '\x0f'
+_BOLD = '\x02'
+_COLOR = '\x03'
+_REVERSE_VIDEO = '\x16'
+_UNDERLINE = '\x1f'
 
 # Mapping of IRC color names to their color values.
 _IRC_COLORS = dict(
@@ -2849,9 +2849,9 @@ class CharacterAttributes(insulttext.CharacterAttributes):
         insulttext._BackgroundColorAttr, _IRC_COLORS)
 
     attrs = {
-        'bold': BOLD,
-        'reverseVideo': REVERSE_VIDEO,
-        'underline': UNDERLINE}
+        'bold': _BOLD,
+        'reverseVideo': _REVERSE_VIDEO,
+        'underline': _UNDERLINE}
 
 
 
@@ -2885,23 +2885,23 @@ class CharacterAttribute(insulthelper.CharacterAttribute):
     def toVT102(self):
         attrs = []
         if self.bold:
-            attrs.append(BOLD)
+            attrs.append(_BOLD)
         if self.underline:
-            attrs.append(UNDERLINE)
+            attrs.append(_UNDERLINE)
         if self.reverseVideo:
-            attrs.append(REVERSE_VIDEO)
+            attrs.append(_REVERSE_VIDEO)
         if self.foreground is not None or self.background is not None:
             c = ''
             if self.foreground is not None:
                 c += '%02d' % (self.foreground,)
             if self.background is not None:
                 c += ',%02d' % (self.background,)
-            attrs.append(COLOR + c)
-        return OFF + ''.join(map(str, attrs))
+            attrs.append(_COLOR + c)
+        return _OFF + ''.join(map(str, attrs))
 
 
 
-def foldr(f, z, xs):
+def _foldr(f, z, xs):
     """
     Apply a function of two arguments cumulatively to the items of
     a sequence, from right to left, so as to reduce the sequence to
@@ -2946,11 +2946,11 @@ class _FormattingState(_CommandDispatcherMixin):
 
 
     _formatCodes = {
-        OFF: 'off',
-        BOLD: 'bold',
-        COLOR: 'color',
-        REVERSE_VIDEO: 'reverseVideo',
-        UNDERLINE: 'underline'}
+        _OFF: 'off',
+        _BOLD: 'bold',
+        _COLOR: 'color',
+        _REVERSE_VIDEO: 'reverseVideo',
+        _UNDERLINE: 'underline'}
 
 
     def __init__(self):
@@ -2997,7 +2997,7 @@ class _FormattingState(_CommandDispatcherMixin):
                 attrs.append(attributes.normal)
             attrs.append(self._buffer)
 
-            attr = foldr(operator.getitem, attrs.pop(), attrs)
+            attr = _foldr(operator.getitem, attrs.pop(), attrs)
             if self._result is None:
                 self._result = attr
             else:

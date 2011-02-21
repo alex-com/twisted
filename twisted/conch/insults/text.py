@@ -144,7 +144,7 @@ class _BackgroundColorAttr(_ColorAttr):
 
 
 
-TEXT_COLORS = {
+_TEXT_COLORS = {
     'black': helper.BLACK,
     'red': helper.RED,
     'green': helper.GREEN,
@@ -170,8 +170,8 @@ class _ColorAttribute(object):
 
 
 class CharacterAttributes(object):
-    fg = _ColorAttribute(_ForegroundColorAttr, TEXT_COLORS)
-    bg = _ColorAttribute(_BackgroundColorAttr, TEXT_COLORS)
+    fg = _ColorAttribute(_ForegroundColorAttr, _TEXT_COLORS)
+    bg = _ColorAttribute(_BackgroundColorAttr, _TEXT_COLORS)
 
     attrs = {
         'bold': insults.BOLD,
