@@ -229,32 +229,117 @@ class FormattedTextTests(unittest.TestCase):
                 text, formatted, expectedText, expectedFormatted))
 
 
-    def test_assemble(self):
+    def test_parseEmpty(self):
         """
-        Assembling structured information results in the correct control codes
-        appearing in the resulting string.
+        An empty string parses to a I{normal} attribute with no text.
         """
         self.assertParsesTo('', A.normal)
 
-        formatted = A.bold[A.underline['foo'],
-            A.normal['bar'],
-            A.fg.black[A.bg.blue[A.bold['baz']]]]
 
-        self.assertAssemblesTo(
-            irc.parseFormattedText(
-                irc.assembleFormattedText(formatted)),
-            formatted)
+    def test_assembleEmpty(self):
+        """
+        An attribute with no text assembles to the empty string. An attribute
+        whose text is the empty string assembles to two control codes: C{off}
+        and that of the attribute.
+        """
+        self.assertEquals(
+            irc.assembleFormattedText(A.normal),
+            '')
 
+        # Attempting to apply an attribute to the empty string should still
+        # produce two control codes.
+        self.assertEquals(
+            irc.assembleFormattedText(
+                A.bold['']),
+            '\x0f\x02')
+
+
+    def test_assembleNormal(self):
+        """
+        A I{normal} string assembles to a string prefixed with the I{off}
+        control code.
+        """
         self.assertEquals(
             irc.assembleFormattedText(
                 A.normal['hello']),
             '\x0fhello')
 
+
+    def test_assembleBold(self):
+        """
+        A I{bold} string assembles to a string prefixed with the I{off} and
+        I{bold} control codes.
+        """
         self.assertEquals(
             irc.assembleFormattedText(
                 A.bold['hello']),
             '\x0f\x02hello')
 
+
+    def test_assembleUnderline(self):
+        """
+        An I{underline} string assembles to a string prefixed with the I{off}
+        and I{underline} control codes.
+        """
+        self.assertEquals(
+            irc.assembleFormattedText(
+                A.underline['hello']),
+            '\x0f\x1fhello')
+
+
+    def test_assembleReverseVideo(self):
+        """
+        A I{reverse video} string assembles to a string prefixed with the I{off}
+        and I{reverse video} control codes.
+        """
+        self.assertEquals(
+            irc.assembleFormattedText(
+                A.reverseVideo['hello']),
+            '\x0f\x16hello')
+
+
+    def test_assembleForegroundColor(self):
+        """
+        A I{foreground color} string assembles to a string prefixed with the
+        I{off} and I{color} (followed by the relevant foreground color code)
+        control codes.
+        """
+        self.assertEquals(
+            irc.assembleFormattedText(
+                A.fg.blue['hello']),
+            '\x0f\x0302hello')
+
+
+    def test_assembleBackgroundColor(self):
+        """
+        A I{background color} string assembles to a string prefixed with the
+        I{off} and I{color} (followed by a I{,} to indicate the absence of a
+        foreground color, followed by the relevant background color code)
+        control codes.
+        """
+        self.assertEquals(
+            irc.assembleFormattedText(
+                A.bg.blue['hello']),
+            '\x0f\x03,02hello')
+
+
+    def test_assembleColor(self):
+        """
+        A I{foreground} and I{background} color string assembles to a string
+        prefixed with the I{off} and I{color} (followed by the relevant
+        foreground color, I{,} and the relevant background color code) control
+        codes.
+        """
+        self.assertEquals(
+            irc.assembleFormattedText(
+                A.bg.blue['hello']),
+            '\x0f\x03,02hello')
+
+
+    def test_assembleNested(self):
+        """
+        Nested attributes retain the attributes of their parents.
+        """
         self.assertEquals(
             irc.assembleFormattedText(
                 A.bold['hello', A.underline[' world']]),
@@ -266,13 +351,6 @@ class FormattedTextTests(unittest.TestCase):
                     A.fg.red[A.bg.green['hello'], ' world'],
                     A.reverseVideo[' yay']]),
             '\x0f\x0305,03hello\x0f\x0305 world\x0f\x16 yay')
-
-        # Attempting to apply an attribute to the empty string should still
-        # produce two control codes.
-        self.assertEquals(
-            irc.assembleFormattedText(
-                A.bold['']),
-            '\x0f\x02')
 
 
     def test_parseEmptyString(self):
