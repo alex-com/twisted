@@ -1,12 +1,12 @@
-# Copyright (c) 2001-20011 Twisted Matrix Laboratories.
+# Copyright (c) Twisted Matrix Laboratories.
 # See LICENSE for details.
-
 
 """
 Qt demo.
 
 Fetch a URL's contents and display it in a Webkit window.
 """
+
 
 import sys, urlparse
 
@@ -30,7 +30,7 @@ class TwistzillaClient(http.HTTPClient):
 
     def connectionMade(self):
         self.sendCommand('GET', self.urls[2])
-        self.sendHeader('Host', '%s:%d' % (self.urls[0], self.urls[1]) )
+        self.sendHeader('Host', '%s:%d' % (self.urls[0], self.urls[1]))
         self.sendHeader('User-Agent', 'Twistzilla')
         self.endHeaders()
 
@@ -39,15 +39,17 @@ class TwistzillaClient(http.HTTPClient):
 
 
 class TwistzillaWindow(QtGui.QMainWindow):
+    """
+    WebKit window that displays twistedmatrix.com.
+    """
     def __init__(self, *args):
         QtGui.QMainWindow.__init__(self, *args)
 
         self.centralwidget = QtGui.QWidget(self)
-
         vbox = QtGui.QVBoxLayout(self.centralwidget)
-
         hbox = QtGui.QHBoxLayout()
         label = QtGui.QLabel("Address: ")
+
         self.line  = QtGui.QLineEdit("http://www.twistedmatrix.com/")
         self.connect(self.line, QtCore.SIGNAL('returnPressed()'), self.fetchURL)
         hbox.addWidget(label)
@@ -79,7 +81,8 @@ class TwistzillaWindow(QtGui.QMainWindow):
             file = u[2]
 
         from twisted.internet import reactor
-        protocol.ClientCreator(reactor, TwistzillaClient, self.web, (host, port, file)).connectTCP(host, port)
+        protocol.ClientCreator(reactor, TwistzillaClient, self.web,
+            (host, port, file)).connectTCP(host, port)
 
     def closeEvent(self, event=None):
         from twisted.internet import reactor
