@@ -2881,8 +2881,7 @@ class CharacterAttribute(insulthelper.CharacterAttribute):
         self.background = background
 
 
-    # XXX: It's not really VT102.
-    def toVT102(self):
+    def toMIRCControlCodes(self):
         attrs = []
         if self.bold:
             attrs.append(_BOLD)
@@ -3171,7 +3170,8 @@ def assembleFormattedText(formatted):
 
     @since: 11.0
     """
-    return insulttext.flatten(formatted, CharacterAttribute())
+    return insulttext.flatten(
+        formatted, CharacterAttribute(), 'toMIRCControlCodes')
 
 
 

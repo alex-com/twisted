@@ -77,22 +77,23 @@ class _Attribute(object, FancyEqMixin):
         return self
 
 
-    def serialize(self, write, attrs=None):
+    def serialize(self, write, attrs=None, attributeRenderer='toVT102'):
         if attrs is None:
             attrs = helper.CharacterAttribute()
         for ch in self.children:
             if isinstance(ch, _Attribute):
-                ch.serialize(write, attrs.copy())
+                ch.serialize(write, attrs.copy(), attributeRenderer)
             else:
-                write(attrs.toVT102())
+                renderMeth = getattr(attrs, attributeRenderer)
+                write(renderMeth())
                 write(ch)
 
 
 
 class _NormalAttr(_Attribute):
-    def serialize(self, write, attrs):
+    def serialize(self, write, attrs, attributeRenderer):
         attrs.__init__()
-        super(_NormalAttr, self).serialize(write, attrs)
+        super(_NormalAttr, self).serialize(write, attrs, attributeRenderer)
 
 
 
@@ -111,9 +112,9 @@ class _OtherAttr(_Attribute):
         return result
 
 
-    def serialize(self, write, attrs):
+    def serialize(self, write, attrs, attributeRenderer):
         attrs = attrs.wantOne(**{self.attrname: self.attrvalue})
-        super(_OtherAttr, self).serialize(write, attrs)
+        super(_OtherAttr, self).serialize(write, attrs, attributeRenderer)
 
 
 
@@ -126,9 +127,9 @@ class _ColorAttr(_Attribute):
         self.ground = ground
 
 
-    def serialize(self, write, attrs):
+    def serialize(self, write, attrs, attributeRenderer):
         attrs = attrs.wantOne(**{self.ground: self.color})
-        super(_ColorAttr, self).serialize(write, attrs)
+        super(_ColorAttr, self).serialize(write, attrs, attributeRenderer)
 
 
 
@@ -189,7 +190,7 @@ class CharacterAttributes(object):
 
 
 
-def flatten(output, attrs):
+def flatten(output, attrs, attributeRenderer='toVT102'):
     """
     Serialize a sequence of characters with attribute information
 
@@ -214,10 +215,15 @@ def flatten(output, attrs):
     @param attrs: A L{twisted.conch.insults.helper.CharacterAttribute}
     instance
 
+    @type attributeRenderer: C{str}
+    @param attributeRenderer: Name of the method on L{attrs} that should be
+        called to render the attributes during serialization. Defaults to
+        C{'toVT102'}.
+
     @return: A VT102-friendly string
     """
     L = []
-    output.serialize(L.append, attrs)
+    output.serialize(L.append, attrs, attributeRenderer)
     return ''.join(L)
 
 attributes = CharacterAttributes()
