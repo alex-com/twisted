@@ -2812,13 +2812,13 @@ class CharacterAttributes(insulttext.CharacterAttributes):
         attributes.normal[attributes.bold['Some'], ' text']
 
     Non-color attributes can be accessed by attribute name, available
-    attributes are::
+    attributes are:
 
         - bold
         - reverseVideo
         - underline
 
-    Available colors are::
+    Available colors are:
 
         0. white
         1. black
@@ -2940,6 +2940,12 @@ class _FormattingState(_CommandDispatcherMixin):
     @type _attrs: C{set}
     @ivar _attrs: Current state of text attributes.
 
+    @type foreground: L{_ForegroundColorAttr}
+    @ivar foreground: Current foreground color attribute, or C{None}.
+
+    @type background: L{_BackgroundColorAttr}
+    @ivar background: Current background color attribute, or C{None}.
+
     @ivar _result: Current parse result.
     """
     prefix = 'state'
@@ -3034,7 +3040,7 @@ class _FormattingState(_CommandDispatcherMixin):
         Handle the foreground color state.
 
         Foreground colors can consist of up to two digits and may optionally
-        end in a C{,}. Any non-digit or non-comma characters are treated as
+        end in a I{,}. Any non-digit or non-comma characters are treated as
         invalid input and result in the state being reset to "text".
         """
         # Color codes may only be a maximum of two characters.
@@ -3067,7 +3073,7 @@ class _FormattingState(_CommandDispatcherMixin):
         Handle the background color state.
 
         Background colors can consist of up to two digits and must occur after
-        a foreground color and must be preceded by a C{,}. Any non-digit
+        a foreground color and must be preceded by a I{,}. Any non-digit
         character is treated as invalid input and results in the state being
         set to "text".
         """
