@@ -51,7 +51,8 @@ class ReactorBuilder:
                  "twisted.internet.kqreactor.KQueueReactor",
                  "twisted.internet.win32eventreactor.Win32Reactor",
                  "twisted.internet.iocpreactor.reactor.IOCPReactor",
-                 "twisted.internet.cfreactor.CFReactor"]
+                 "twisted.internet.cfreactor.CFReactor",
+                 "twisted.internet.qtreactor.QtReactor"]
 
     reactorFactory = None
     originalHandler = None
