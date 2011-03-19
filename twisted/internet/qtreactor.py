@@ -29,17 +29,14 @@ leaves your Qt application running.
 
 
 import sys
+import gc
 from zope.interface import implements
 from twisted.internet.interfaces import IReactorFDSet
 from twisted.python import log
 from twisted.internet import posixbase
 
-try:
-    from PySide.QtCore import QSocketNotifier, QObject, SIGNAL, QTimer, QCoreApplication
-    from PySide.QtCore import QEventLoop
-except ImportError:
-    from PyQt4.QtCore import QSocketNotifier, QObject, SIGNAL, QTimer, QCoreApplication
-    from PyQt4.QtCore import QEventLoop
+from PySide.QtCore import QSocketNotifier, QObject, SIGNAL, QTimer, QCoreApplication
+from PySide.QtCore import QEventLoop
 
 
 class TwistedSocketNotifier(QObject):
@@ -58,7 +55,7 @@ class TwistedSocketNotifier(QObject):
             self.fn = self.read
         else:
             self.fn = self.write
-        QObject.connect(self.notifier, SIGNAL("activated(int)"), self.fn)
+        self.connect(self.notifier, SIGNAL("activated(int)"), self.fn)
 
 
     def shutdown(self):
@@ -126,14 +123,12 @@ class QtReactor(posixbase.PosixReactorBase):
         self._timer = QTimer()
         self._timer.setSingleShot(True)
         QObject.connect(self._timer, SIGNAL("timeout()"), self.iterate)
-
-        if QCoreApplication.startingUp():
-            # Application Object has not been started yet
+        
+        self.qApp = QCoreApplication.instance()
+        self._ownApp=False
+        if self.qApp is None:
             self.qApp=QCoreApplication([])
             self._ownApp=True
-        else:
-            self.qApp = QCoreApplication.instance()
-            self._ownApp=False
         self._blockApp = None
         posixbase.PosixReactorBase.__init__(self)
 
@@ -259,9 +254,11 @@ class QtReactor(posixbase.PosixReactorBase):
         self.reactorInvocation()
 
 
-    def stop(self):
-        super(QtReactor, self).stop()
-        self.iterate(0)
+    def crash(self):
+        log.msg('crash')
+        super(QtReactor, self).crash()
+        if self._blockApp:
+            self._blockApp.quit()
 
 
     def run(self, installSignalHandlers=True):
