@@ -3,7 +3,7 @@
 
 
 
-import sys, os, string, shutil
+import sys, os, shutil
 
 from twisted.python import usage
 
@@ -61,7 +61,7 @@ def run():
                                             vars())
     long_description = config['long_description'] or 'Automatically created by tap2deb'
     twistd_option = type_dict[config['type']]
-    date = string.strip(os.popen('822-date').read())
+    date = os.popen('822-date').read().strip()
     directory = deb_file + '-' + version
     python_version = '%s.%s' % sys.version_info[:2]
 
