@@ -11,8 +11,6 @@ from twisted.spread import pb
 from twisted.internet import reactor
 from twisted import copyright
 
-import string
-
 #normalFont = Font("-adobe-courier-medium-r-normal-*-*-120-*-*-m-*-iso8859-1")
 #boldFont = Font("-adobe-courier-bold-r-normal-*-*-120-*-*-m-*-iso8859-1")
 #errorFont = Font("-adobe-courier-medium-o-normal-*-*-120-*-*-m-*-iso8859-1")
@@ -308,7 +306,7 @@ class GenericLogin(Toplevel):
     def doLogin(self):
         values={}
         for k in self.entries.keys():
-            values[string.lower(k)]=self.entries[k].get()
+            values[k.lower()]=self.entries[k].get()
         self.callback(values)
         self.destroy()
 
