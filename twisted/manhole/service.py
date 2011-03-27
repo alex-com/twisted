@@ -20,7 +20,6 @@ import explorer
 # system imports
 from cStringIO import StringIO
 
-import string
 import sys
 import traceback
 import types
@@ -32,7 +31,7 @@ class FakeStdIO:
         self.list = list
 
     def write(self, text):
-        log.msg("%s: %s" % (self.type, string.strip(str(text))))
+        log.msg("%s: %s" % (self.type, str(text).strip()))
         self.list.append((self.type, text))
 
     def flush(self):
@@ -61,7 +60,7 @@ class FakeStdIO:
                 else:
                     messages = map(lambda l: l[1],
                                    inlist[block_begin:i])
-                    message = string.join(messages, '')
+                    message = ''.join(messages)
                     outlist.append((last_type, message))
                 last_type = mtype
                 block_begin = i

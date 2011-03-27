@@ -15,7 +15,7 @@ L{inspect} module available in Python 2.1.
 """
 
 # System Imports
-import inspect, string, sys, types
+import inspect, sys, types
 import UserDict
 
 # Twisted Imports
@@ -210,7 +210,7 @@ class ExplorerInstance(Explorer):
             # TODO: Make screening of private attributes configurable.
             if i[0] == '_':
                 continue
-            mIdentifier = string.join([identifier, i], ".")
+            mIdentifier = ".".join([identifier, i])
             member = getattr(instance, i)
             mType = type(member)
 
@@ -249,7 +249,7 @@ class ExplorerClass(Explorer):
             if (i[0] == '_') and (i != '__init__'):
                 continue
 
-            mIdentifier = string.join([identifier, i], ".")
+            mIdentifier = ".".join([identifier, i])
             member = getattr(theClass, i)
             mType = type(member)
 
@@ -496,7 +496,7 @@ class Signature(pb.Copyable):
                 a = name
             arglist.append(a)
 
-        return string.join(arglist,", ")
+        return ", ".join(arglist)
 
 
 
