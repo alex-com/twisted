@@ -8,7 +8,7 @@
 Miscellany of text-munging functions.
 """
 
-import string, types
+import types
 
 from twisted.python import deprecate, versions
 
@@ -48,10 +48,10 @@ def stringyString(object, indentation=''):
 
         for element in object:
             element = stringyString(element, indentation + ' ')
-            sl.append(string.rstrip(element) + ',')
+            sl.append(element.rstrip() + ',')
     else:
         sl[:] = map(lambda s, i=indentation: i+s,
-                    string.split(str(object),'\n'))
+                    str(object).split('\n'))
 
     if not sl:
         sl.append(indentation)
@@ -60,7 +60,7 @@ def stringyString(object, indentation=''):
         sl[0] = indentation + braces[0] + sl[0][len(indentation) + 1:]
         sl[-1] = sl[-1] + braces[-1]
 
-    s = string.join(sl, "\n")
+    s = "\n".join(sl)
 
     if isMultiline(s) and not endsInNewline(s):
         s = s + '\n'
@@ -69,7 +69,7 @@ def stringyString(object, indentation=''):
 
 def isMultiline(s):
     """Returns True if this string has a newline in it."""
-    return (string.find(s, '\n') != -1)
+    return (s.find('\n') != -1)
 
 def endsInNewline(s):
     """Returns True if this string ends in a newline."""
@@ -98,13 +98,13 @@ def docstringLStrip(docstring):
     if not docstring:
         return docstring
 
-    docstring = string.replace(docstring, '\t', ' ' * 8)
-    lines = string.split(docstring,'\n')
+    docstring = docstring.replace('\t', ' ' * 8)
+    lines = docstring.split('\n')
 
     leading = 0
     for l in xrange(1,len(lines)):
         line = lines[l]
-        if string.strip(line):
+        if line.strip():
             while 1:
                 if line[leading] == ' ':
                     leading = leading + 1
@@ -117,7 +117,7 @@ def docstringLStrip(docstring):
     for l in xrange(1,len(lines)):
         outlines.append(lines[l][leading:])
 
-    return string.join(outlines, '\n')
+    return '\n'.join(outlines)
 
 def greedyWrap(inString, width=80):
     """Given a string and a column width, return a list of lines.
@@ -132,11 +132,11 @@ def greedyWrap(inString, width=80):
 
     #eww, evil hacks to allow paragraphs delimited by two \ns :(
     if inString.find('\n\n') >= 0:
-        paragraphs = string.split(inString, '\n\n')
+        paragraphs = inString.split('\n\n')
         for para in paragraphs:
             outLines.extend(greedyWrap(para) + [''])
         return outLines
-    inWords = string.split(inString)
+    inWords = inString.split()
 
     column = 0
     ptr_line = 0
@@ -152,13 +152,13 @@ def greedyWrap(inString, width=80):
                 # We've gone too far, stop the line one word back.
                 ptr_line = ptr_line - 1
             (l, inWords) = (inWords[0:ptr_line], inWords[ptr_line:])
-            outLines.append(string.join(l,' '))
+            outLines.append(' '.join(l))
 
             ptr_line = 0
             column = 0
         elif not (len(inWords) > ptr_line):
             # Clean up the last bit.
-            outLines.append(string.join(inWords, ' '))
+            outLines.append(' '.join(inWords))
             del inWords[:]
         else:
             # Space

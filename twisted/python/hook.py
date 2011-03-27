@@ -35,9 +35,6 @@ which they are added.
 
 """
 
-# System Imports
-import string
-
 ### Public Interface
 
 class HookError(Exception):
@@ -99,7 +96,7 @@ _ORIG = '__hook_orig_%s_%s_%s__'
 
 def _XXX(k,n,s):
     "string manipulation garbage"
-    x = s % (string.replace(k.__module__,'.','_'), k.__name__, n)
+    x = s % (k.__module__.replace('.','_'), k.__name__, n)
     return x
 
 def PRE(k,n):

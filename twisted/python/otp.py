@@ -25,7 +25,6 @@ library<http://labix.org/python-otp>} instead.
 """
 
 import warnings
-import string
 import random
 
 warnings.warn(
@@ -142,7 +141,7 @@ class OTPAuthenticator:
     def generateOTP(self, seed, passwd, sequence):
         """Return a 64 bit OTP based on inputs
         Run through makeReadable to get a 6 word pass-phrase"""
-        seed = string.lower(seed)
+        seed = seed.lower()
         otp = self.hashUpdate(seed + passwd)
         for a in xrange(sequence):
             otp = self.hashUpdate(otp)
@@ -164,7 +163,7 @@ class OTPAuthenticator:
         for i in xrange(4,-1, -1):
             list.append(dict[(digest >> (i * 11 + 9)) & 0x7FF])
         list.append(dict[(digest << 2) & 0x7FC | (parity & 0x03)])
-        return string.join(list)
+        return " ".join(list)
 
     def challenge(self, seed, sequence):
         """Return a challenge in the format otp-<hash> <sequence> <seed>"""
@@ -174,9 +173,9 @@ class OTPAuthenticator:
         """Decode the phrase, and return a 64bit OTP
         I will raise Unauthorized if the parity is wrong
         TODO: Add support for hex (MUST) and the '2nd scheme'(SHOULD)"""
-        words = string.split(phrase)
+        words = " ".split(phrase)
         for i in xrange(len(words)):
-            words[i] = string.upper(words[i])
+            words[i] = words[i].upper()
         b = 0L
         for i in xrange(0,5):
             b = b | ((long(dict.index(words[i])) << ((4-i)*11L+9L)))
