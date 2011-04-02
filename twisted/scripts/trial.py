@@ -89,10 +89,16 @@ def isTestFile(filename):
             and os.path.splitext(basename)[1] == ('.py'))
 
 
+
 def _zshReporterAction():
     return "(%s)" % (" ".join([p.longOpt for p in plugin.getPlugins(itrial.IReporter)]),)
 
-class Options(usage.Options, app.ReactorSelectionMixin):
+
+
+class _BasicOptions(object):
+    """
+    Basic options shared between trial and distrial.
+    """
     synopsis = """%s [options] [[file|package|module|TestCase|testmethod]...]
     """ % (os.path.basename(sys.argv[0]),)
 
@@ -100,40 +106,31 @@ class Options(usage.Options, app.ReactorSelectionMixin):
                 "from modules, packages and files listed on the command line.")
 
     optFlags = [["help", "h"],
-                ["rterrors", "e", "realtime errors, print out tracebacks as "
-                 "soon as they occur"],
-                ["debug", "b", "Run tests in the Python debugger. Will load "
-                 "'.pdbrc' from current directory if it exists."],
-                ["debug-stacktraces", "B", "Report Deferred creation and "
-                 "callback stack traces"],
-                ["nopm", None, "don't automatically jump into debugger for "
-                 "postmorteming of exceptions"],
-                ["dry-run", 'n', "do everything but run the tests"],
-                ["force-gc", None, "Have Trial run gc.collect() before and "
-                 "after each test case."],
-                ["profile", None, "Run tests under the Python profiler"],
-                ["unclean-warnings", None,
-                 "Turn dirty reactor errors into warnings"],
-                ["until-failure", "u", "Repeat test until it fails"],
                 ["no-recurse", "N", "Don't recurse into packages"],
                 ['help-reporters', None,
-                 "Help on available output plugins (reporters)"]
+                 "Help on available output plugins (reporters)"],
+                ["rterrors", "e", "realtime errors, print out tracebacks as "
+                 "soon as they occur"],
+                ["unclean-warnings", None,
+                 "Turn dirty reactor errors into warnings"],
+                ["force-gc", None, "Have Trial run gc.collect() before and "
+                 "after each test case."],
                 ]
 
     optParameters = [
-        ["logfile", "l", "test.log", "log file name"],
         ["random", "z", None,
          "Run tests in random order using the specified seed"],
         ['temp-directory', None, '_trial_temp',
          'Path to use as working directory for tests.'],
         ['reporter', None, 'verbose',
          'The reporter to use for this test run.  See --help-reporters for '
-         'more info.']]
+         'more info.']
+        ]
 
-    zsh_actions = {"tbformat":"(plain emacs cgitb)",
-                   "reporter":_zshReporterAction}
-    zsh_actionDescr = {"logfile":"log file name",
-                       "random":"random seed"}
+    zsh_actions = {"reporter": _zshReporterAction}
+
+    zsh_actionDescr = {"logfile": "log file name",
+                       "random": "random seed"}
     zsh_extras = ["*:file|module|package|TestCase|testMethod:_files -g '*.py'"]
 
     fallbackReporter = reporter.TreeReporter
@@ -168,7 +165,7 @@ class Options(usage.Options, app.ReactorSelectionMixin):
 
     def opt_testmodule(self, filename):
         """
-        Filename to grep for test cases (-*- test-case-name)
+        Filename to grep for test cases (-*- test-case-name).
         """
         # If the filename passed to this parameter looks like a test module
         # we just add that to the test suite.
@@ -213,6 +210,7 @@ class Options(usage.Options, app.ReactorSelectionMixin):
         """
         Disable the garbage collector
         """
+        self["disablegc"] = True
         gc.disable()
 
 
@@ -253,6 +251,8 @@ class Options(usage.Options, app.ReactorSelectionMixin):
         except (TypeError, ValueError):
             raise usage.UsageError(
                 "argument to recursionlimit must be an integer")
+        else:
+            self["recursionlimit"] = int(arg)
 
 
     def opt_random(self, option):
@@ -296,15 +296,44 @@ class Options(usage.Options, app.ReactorSelectionMixin):
                                "--reporter. See --help-reporters for "
                                "more info.")
 
-
     def postOptions(self):
         # Only load reporters now, as opposed to any earlier, to avoid letting
         # application-defined plugins muck up reactor selecting by importing
         # t.i.reactor and causing the default to be installed.
         self['reporter'] = self._loadReporterByName(self['reporter'])
 
+
+
+class Options(_BasicOptions, usage.Options, app.ReactorSelectionMixin):
+
+    optFlags = [
+                ["debug", "b", "Run tests in the Python debugger. Will load "
+                 "'.pdbrc' from current directory if it exists."],
+                ["debug-stacktraces", "B", "Report Deferred creation and "
+                 "callback stack traces"],
+                ["nopm", None, "don't automatically jump into debugger for "
+                 "postmorteming of exceptions"],
+                ["dry-run", 'n', "do everything but run the tests"],
+                ["profile", None, "Run tests under the Python profiler"],
+                ["until-failure", "u", "Repeat test until it fails"],
+                ]
+
+    optParameters = [
+        ["logfile", "l", "test.log", "log file name"]
+        ]
+
+    zsh_actions = {"tbformat": "(plain emacs cgitb)",
+                   "reporter": _zshReporterAction}
+
+    fallbackReporter = reporter.TreeReporter
+    extra = None
+    tracer = None
+
+    def postOptions(self):
+        _BasicOptions.postOptions(self)
         if 'tbformat' not in self:
             self['tbformat'] = 'default'
+
         if self['nopm']:
             if not self['debug']:
                 raise usage.UsageError("you must specify --debug when using "
