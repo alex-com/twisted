@@ -1,6 +1,6 @@
 # -*- test-case-name: twisted.trial.dist.test.test_slavetrial -*-
 #
-# Copyright (c) 2001-2007 Twisted Matrix Laboratories.
+# Copyright (c) Twisted Matrix Laboratories.
 # See LICENSE for details.
 
 """

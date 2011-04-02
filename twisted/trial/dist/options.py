@@ -1,6 +1,6 @@
 # -*- test-case-name: twisted.trial.dist.test.test_options -*-
 #
-# Copyright (c) 2007 Twisted Matrix Laboratories.
+# Copyright (c) Twisted Matrix Laboratories.
 # See LICENSE for details.
 
 from twisted.python.usage import Options, UsageError
