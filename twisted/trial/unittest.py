@@ -1355,7 +1355,7 @@ def suiteVisit(suite, visitor):
     @return: None
     """
     warnings.warn("Test visitors deprecated in Twisted 8.0",
-                  category=DeprecationWarning, stacklevel=2)
+                  category=DeprecationWarning)
     for case in suite._tests:
         visit = getattr(case, 'visit', None)
         if visit is not None:
