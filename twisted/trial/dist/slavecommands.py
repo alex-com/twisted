@@ -5,7 +5,7 @@
 Commands for telling a slave to load tests, run tests or quit.
 """
 
-from twisted.protocols.amp import Command, ListOf, String, Boolean
+from twisted.protocols.amp import Command, String, Boolean
 
 
 
@@ -29,7 +29,7 @@ class ChDir(Command):
 
 class Quit(Command):
     """
-    Close the slave process/
+    Close the slave process.
     """
     arguments = []
     response = [('success', Boolean())]

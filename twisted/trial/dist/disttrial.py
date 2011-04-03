@@ -1,10 +1,12 @@
 # -*- test-case-name: twisted.trial.dist.test.test_disttrial -*-
-#
 # Copyright (c) Twisted Matrix Laboratories.
 # See LICENSE for details.
 
 """
-disttrial master runner.
+This module containts the disttrial runner, the disttrial class responsible for
+coordinating all of disttrial's behavior at the highest level.  It also contains
+a L{run} function to provide a simple interface to that class for the command
+line tool.
 """
 
 import sys, os, random
