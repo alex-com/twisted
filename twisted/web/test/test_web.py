@@ -6,6 +6,7 @@ Tests for various parts of L{twisted.web}.
 """
 
 from cStringIO import StringIO
+import zlib
 
 from zope.interface import implements
 from zope.interface.verify import verifyObject
@@ -657,6 +658,58 @@ class RequestTests(unittest.TestCase):
         self.assertEqual(request.prePathURL(), 'http://example.com/foo%2Fbar')
 
 
+    def test_gzipEncoding(self):
+        """
+        If the client request passes a I{Accept-Encoding} header which mentions
+        gzip, L{server.Request} automatically compresses the data.
+        """
+
+        class StaticResource(resource.Resource):
+
+            def render_GET(self, request):
+                request.setHeader("content-length", 9)
+                return "Some data"
+
+        channel = DummyChannel()
+        channel.site.resource.putChild('foo', StaticResource())
+        request = server.Request(channel, False)
+        request.gotLength(0)
+        request.requestHeaders.setRawHeaders("Accept-Encoding",
+                                             ["gzip,deflate"])
+        request.requestReceived('GET', '/foo', 'HTTP/1.0')
+        data = channel.transport.written.getvalue()
+        self.assertNotIn("Content-Length", data)
+        self.assertIn("Content-Encoding: gzip\r\n", data)
+        body = data[data.find("\r\n\r\n") + 4:]
+        self.assertEquals("Some data",
+                          zlib.decompress(body, 16 + zlib.MAX_WBITS))
+
+
+    def test_unknownEncoding(self):
+        """
+        If gzip is not mentioned in the I{Accept-Encoding} header,
+        L{server.Request} doesn't try to compress the data.
+        """
+
+        class StaticResource(resource.Resource):
+
+            def render_GET(self, request):
+                return "Some data"
+
+        channel = DummyChannel()
+        channel.site.resource.putChild('foo', StaticResource())
+        request = server.Request(channel, False)
+        request.gotLength(0)
+        request.requestHeaders.setRawHeaders("Accept-Encoding",
+                                             ["supergzip,deflate"])
+        request.requestReceived('GET', '/foo', 'HTTP/1.0')
+        data = channel.transport.written.getvalue()
+        self.assertIn("Content-Length", data)
+        self.assertNotIn("Content-Encoding: gzip\r\n", data)
+        body = data[data.find("\r\n\r\n") + 4:]
+        self.assertEquals("Some data", body)
+
+
 
 class RootResource(resource.Resource):
     isLeaf=0
@@ -836,7 +889,7 @@ class AllowedMethodsTest(unittest.TestCase):
         res = GettableResource()
         allowedMethods = resource._computeAllowedMethods(res)
         self.assertEquals(set(allowedMethods),
-                          set(['GET', 'HEAD', 'fred_render_ethel'])) 
+                          set(['GET', 'HEAD', 'fred_render_ethel']))
 
 
     def test_notAllowed(self):
