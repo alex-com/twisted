@@ -61,7 +61,6 @@ class Request(pb.Copyable, http.Request, components.Componentized):
     appRootURL = None
     __pychecker__ = 'unusednames=issuer'
     _inFakeHead = False
-    _zlibCompressor = None
 
     def __init__(self, *args, **kw):
         http.Request.__init__(self, *args, **kw)
@@ -121,16 +120,6 @@ class Request(pb.Copyable, http.Request, components.Componentized):
         self.setHeader('date', http.datetimeToString())
         self.setHeader('content-type', "text/html")
 
-        acceptHeaders = self.requestHeaders.getRawHeaders("accept-encoding")
-        if acceptHeaders is not None and len(acceptHeaders) == 1:
-            supported = acceptHeaders[0].split(",")
-            if "gzip" in supported:
-                self.setHeader('content-encoding', 'gzip')
-                self._zlibCompressor = zlib.compressobj(
-                    9, zlib.DEFLATED, 16 + zlib.MAX_WBITS)
-        else:
-            self._zlibCompressor = None
-
         # Resource Identification
         self.prepath = []
         self.postpath = map(unquote, string.split(self.path[1:], '/'))
@@ -148,25 +137,7 @@ class Request(pb.Copyable, http.Request, components.Componentized):
         @param data: A string to write to the response.
         """
         if not self._inFakeHead:
-            if self._zlibCompressor is not None:
-                if not self.startedWriting:
-                    # Remove the content-length header, we can't honor it
-                    # because we compress on the fly.
-                    self.responseHeaders.removeHeader('content-length')
-                data = self._zlibCompressor.compress(data)
             http.Request.write(self, data)
-
-
-    def finish(self):
-        """
-        Finish the request, flushing any data from the zlib buffer if we're
-        uzing a compressed request.
-        """
-        if self._zlibCompressor is not None:
-            remain = self._zlibCompressor.flush()
-            if remain:
-                http.Request.write(self, remain)
-        http.Request.finish(self)
 
 
     def render(self, resrc):
@@ -371,6 +342,62 @@ class Request(pb.Copyable, http.Request, components.Componentized):
         Get a previously-remembered URL.
         """
         return self.appRootURL
+
+
+
+class GzipRequest(Request):
+    """
+    A request which supports gzip encoding.
+    """
+
+    _zlibCompressor = None
+
+    def process(self):
+        """
+        Check the headers if the client accepts gzip encoding, and encodes the
+        request if so.
+        """
+        acceptHeaders = self.requestHeaders.getRawHeaders(
+            'accept-encoding', [])
+        supported = ','.join(acceptHeaders).split(',')
+        if 'gzip' in supported:
+            encoding = self.responseHeaders.getRawHeaders('content-encoding')
+            if encoding:
+                encoding = '%s,gzip' % ','.join(encoding)
+            else:
+                encoding = 'gzip'
+
+            self.responseHeaders.setRawHeaders('content-encoding', [encoding])
+            self._zlibCompressor = zlib.compressobj(
+                9, zlib.DEFLATED, 16 + zlib.MAX_WBITS)
+        Request.process(self)
+
+
+    def write(self, data):
+        """
+        Write to the request, automatically compressing data on the fly.
+        """
+        if not self._inFakeHead:
+            if self._zlibCompressor is not None:
+                if not self.startedWriting:
+                    # Remove the content-length header, we can't honor it
+                    # because we compress on the fly.
+                    self.responseHeaders.removeHeader('content-length')
+                data = self._zlibCompressor.compress(data)
+            Request.write(self, data)
+
+
+    def finish(self):
+        """
+        Finish the request, flushing any data from the zlib buffer if we're
+        uzing a compressed request.
+        """
+        if self._zlibCompressor is not None:
+            remain = self._zlibCompressor.flush()
+            if remain:
+                Request.write(self, remain)
+        Request.finish(self)
+
 
 
 class _RemoteProducerWrapper:

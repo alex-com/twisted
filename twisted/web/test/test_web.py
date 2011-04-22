@@ -658,26 +658,36 @@ class RequestTests(unittest.TestCase):
         self.assertEqual(request.prePathURL(), 'http://example.com/foo%2Fbar')
 
 
-    def test_gzipEncoding(self):
+
+class StaticResource(resource.Resource):
+    """
+    A simple static resource for testing gzip requests.
+    """
+
+    def render_GET(self, request):
+        request.setHeader("content-length", 9)
+        return "Some data"
+
+
+
+class GzipRequestTests(unittest.TestCase):
+
+    def setUp(self):
+        self.channel = DummyChannel()
+        self.channel.site.resource.putChild('foo', StaticResource())
+
+
+    def test_encoding(self):
         """
         If the client request passes a I{Accept-Encoding} header which mentions
-        gzip, L{server.Request} automatically compresses the data.
+        gzip, L{server.GzipRequest} automatically compresses the data.
         """
-
-        class StaticResource(resource.Resource):
-
-            def render_GET(self, request):
-                request.setHeader("content-length", 9)
-                return "Some data"
-
-        channel = DummyChannel()
-        channel.site.resource.putChild('foo', StaticResource())
-        request = server.Request(channel, False)
+        request = server.GzipRequest(self.channel, False)
         request.gotLength(0)
         request.requestHeaders.setRawHeaders("Accept-Encoding",
                                              ["gzip,deflate"])
         request.requestReceived('GET', '/foo', 'HTTP/1.0')
-        data = channel.transport.written.getvalue()
+        data = self.channel.transport.written.getvalue()
         self.assertNotIn("Content-Length", data)
         self.assertIn("Content-Encoding: gzip\r\n", data)
         body = data[data.find("\r\n\r\n") + 4:]
@@ -685,29 +695,79 @@ class RequestTests(unittest.TestCase):
                           zlib.decompress(body, 16 + zlib.MAX_WBITS))
 
 
-    def test_unknownEncoding(self):
+    def test_nonEncoding(self):
         """
-        If gzip is not mentioned in the I{Accept-Encoding} header,
-        L{server.Request} doesn't try to compress the data.
+        L{server.GzipRequest} doesn't encode the request body if the
+        I{Accept-Encoding} header doesn't mention gzip support
         """
-
-        class StaticResource(resource.Resource):
-
-            def render_GET(self, request):
-                return "Some data"
-
-        channel = DummyChannel()
-        channel.site.resource.putChild('foo', StaticResource())
-        request = server.Request(channel, False)
+        request = server.GzipRequest(self.channel, False)
         request.gotLength(0)
         request.requestHeaders.setRawHeaders("Accept-Encoding",
-                                             ["supergzip,deflate"])
+                                             ["foo,bar"])
         request.requestReceived('GET', '/foo', 'HTTP/1.0')
-        data = channel.transport.written.getvalue()
+        data = self.channel.transport.written.getvalue()
         self.assertIn("Content-Length", data)
         self.assertNotIn("Content-Encoding: gzip\r\n", data)
         body = data[data.find("\r\n\r\n") + 4:]
         self.assertEquals("Some data", body)
+
+
+    def test_multipleAccept(self):
+        """
+        If there are multiple I{Accept-Encoding} header, L{server.GzipRequest}
+        reads them properly to detect if gzip is supported.
+        """
+        request = server.GzipRequest(self.channel, False)
+        request.gotLength(0)
+        request.requestHeaders.setRawHeaders("Accept-Encoding",
+                                             ["deflate", "gzip"])
+        request.requestReceived('GET', '/foo', 'HTTP/1.0')
+        data = self.channel.transport.written.getvalue()
+        self.assertNotIn("Content-Length", data)
+        self.assertIn("Content-Encoding: gzip\r\n", data)
+        body = data[data.find("\r\n\r\n") + 4:]
+        self.assertEquals("Some data",
+                          zlib.decompress(body, 16 + zlib.MAX_WBITS))
+
+
+    def test_alreadyEncoded(self):
+        """
+        If the content is already encoded and the I{Content-Encoding} header is
+        set, L{server.GzipRequest} properly appends gzip to it.
+        """
+        request = server.GzipRequest(self.channel, False)
+        request.gotLength(0)
+        request.requestHeaders.setRawHeaders("Accept-Encoding",
+                                             ["deflate", "gzip"])
+        request.responseHeaders.setRawHeaders("Content-Encoding",
+                                             ["deflate"])
+        request.requestReceived('GET', '/foo', 'HTTP/1.0')
+        data = self.channel.transport.written.getvalue()
+        self.assertNotIn("Content-Length", data)
+        self.assertIn("Content-Encoding: deflate,gzip\r\n", data)
+        body = data[data.find("\r\n\r\n") + 4:]
+        self.assertEquals("Some data",
+                          zlib.decompress(body, 16 + zlib.MAX_WBITS))
+
+
+    def test_multipleEncodingLines(self):
+        """
+        If there are several I{Content-Encoding} headers, L{server.GzipRequest}
+        normalizes it and appends gzip to the field value.
+        """
+        request = server.GzipRequest(self.channel, False)
+        request.gotLength(0)
+        request.requestHeaders.setRawHeaders("Accept-Encoding",
+                                             ["deflate", "gzip"])
+        request.responseHeaders.setRawHeaders("Content-Encoding",
+                                             ["foo", "bar"])
+        request.requestReceived('GET', '/foo', 'HTTP/1.0')
+        data = self.channel.transport.written.getvalue()
+        self.assertNotIn("Content-Length", data)
+        self.assertIn("Content-Encoding: foo,bar,gzip\r\n", data)
+        body = data[data.find("\r\n\r\n") + 4:]
+        self.assertEquals("Some data",
+                          zlib.decompress(body, 16 + zlib.MAX_WBITS))
 
 
 
