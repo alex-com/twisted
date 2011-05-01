@@ -348,9 +348,16 @@ class Request(pb.Copyable, http.Request, components.Componentized):
 class GzipRequest(Request):
     """
     A request which supports gzip encoding.
+
+    @ivar _zlibCompressor: The zlib compressor instance used to compress the
+        stream.
+
+    @cvar compressLevel: The compression level used by the compressor, default
+        to 9 (highest).
     """
 
     _zlibCompressor = None
+    compressLevel = 9
 
     def process(self):
         """
@@ -369,7 +376,7 @@ class GzipRequest(Request):
 
             self.responseHeaders.setRawHeaders('content-encoding', [encoding])
             self._zlibCompressor = zlib.compressobj(
-                9, zlib.DEFLATED, 16 + zlib.MAX_WBITS)
+                self.compressLevel, zlib.DEFLATED, 16 + zlib.MAX_WBITS)
         Request.process(self)
 
 
@@ -394,6 +401,7 @@ class GzipRequest(Request):
         """
         if self._zlibCompressor is not None:
             remain = self._zlibCompressor.flush()
+            self._zlibCompressor = None
             if remain:
                 Request.write(self, remain)
         Request.finish(self)
