@@ -16,7 +16,7 @@ from twisted.internet.test.reactormixins import ReactorBuilder
 from twisted.internet.error import DNSLookupError
 from twisted.internet.interfaces import (
     IResolverSimple, IConnector, IReactorFDSet)
-from twisted.internet.address import IPv4Address
+from twisted.internet.address import IPv4Address, IPv6Address
 from twisted.internet.defer import Deferred, DeferredList, succeed, fail, maybeDeferred
 from twisted.internet.endpoints import TCP4ServerEndpoint, TCP4ClientEndpoint
 from twisted.internet.protocol import ServerFactory, ClientFactory, Protocol
@@ -36,7 +36,16 @@ try:
 except ImportError:
     ClientContextFactory = None
 
-def findFreePort(interface='127.0.0.1', type=socket.SOCK_STREAM):
+try:
+    socket.socket(socket.AF_INET6, socket.SOCK_STREAM).close()
+except socket.error, e:
+    ipv6Skip = str(e)
+else:
+    ipv6Skip = None
+
+
+def findFreePort(interface='127.0.0.1', family=socket.AF_INET,
+                 type=socket.SOCK_STREAM):
     """
     Ask the platform to allocate a free port on the specified interface,
     then release the socket and return the address which was allocated.
@@ -49,7 +58,6 @@ def findFreePort(interface='127.0.0.1', type=socket.SOCK_STREAM):
     @return: A two-tuple of address and port, like that returned by
         L{socket.getsockname}.
     """
-    family = socket.AF_INET
     probe = socket.socket(family, type)
     try:
         probe.bind((interface, 0))
@@ -631,6 +639,24 @@ class TCPPortTestsBuilder(ReactorBuilder, ObjectModelIntegrationMixin,
         self.assertIsInstance(address, IPv4Address)
 
 
+    def test_portGetHostOnIPv6(self):
+        """
+        When listening on an IPv6 address, L{IListeningPort.getHost} returns
+        an L{IPv6Address} with C{host} and C{port} attributes reflecting the
+        address the port is bound to.
+        """
+        reactor = self.buildReactor()
+        host, portNumber = findFreePort(
+            family=socket.AF_INET6, interface='::1')[:2]
+        port = reactor.listenTCP(portNumber, ServerFactory(), interface=host)
+        address = port.getHost()
+        self.assertIsInstance(address, IPv6Address)
+        self.assertEqual('::1', address.host)
+        self.assertEqual(portNumber, address.port)
+    if ipv6Skip:
+        test_portGetHostOnIPv6.skip = ipv6Skip
+
+
     def _buildProtocolAddressTest(self, client, interface):
         """
         Connect C{client} to a server listening on C{interface} started with
@@ -680,6 +706,21 @@ class TCPPortTestsBuilder(ReactorBuilder, ObjectModelIntegrationMixin,
         observedAddress = self._buildProtocolAddressTest(client, interface)
         self.assertEqual(
             IPv4Address('TCP', *client.getsockname()), observedAddress)
+
+
+    def test_buildProtocolIPv6Address(self):
+        """
+        When a connection is accepted over IPv4, an L{IPv4Address} is passed
+        to the factory's C{buildProtocol} method giving the peer's address.
+        """
+        interface = '::1'
+        client = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        self.addCleanup(client.close)
+        observedAddress = self._buildProtocolAddressTest(client, interface)
+        self.assertEqual(
+            IPv6Address('TCP', *client.getsockname()[:2]), observedAddress)
+    if ipv6Skip:
+        test_buildProtocolIPv6Address.skip = ipv6Skip
 
 
     def _serverGetConnectionAddressTest(self, client, interface, which):
@@ -735,6 +776,23 @@ class TCPPortTestsBuilder(ReactorBuilder, ObjectModelIntegrationMixin,
             IPv4Address('TCP', *client.getpeername()), hostAddress)
 
 
+    def test_serverGetHostOnIPv6(self):
+        """
+        When a connection is accepted over IPv6, the server
+        L{ITransport.getHost} method returns an L{IPv6Address} giving the
+        address on which the server accepted the connection.
+        """
+        interface = '::1'
+        client = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        self.addCleanup(client.close)
+        hostAddress = self._serverGetConnectionAddressTest(
+            client, interface, 'getHost')
+        self.assertEqual(
+            IPv6Address('TCP', *client.getpeername()[:2]), hostAddress)
+    if ipv6Skip:
+        test_serverGetHostOnIPv6.skip = ipv6Skip
+
+
     def test_serverGetPeerOnIPv4(self):
         """
         When a connection is accepted over IPv4, the server
@@ -748,6 +806,23 @@ class TCPPortTestsBuilder(ReactorBuilder, ObjectModelIntegrationMixin,
             client, interface, 'getPeer')
         self.assertEqual(
             IPv4Address('TCP', *client.getsockname()), peerAddress)
+
+
+    def test_serverGetPeerOnIPv6(self):
+        """
+        When a connection is accepted over IPv6, the server
+        L{ITransport.getPeer} method returns an L{IPv6Address} giving the
+        address on the remote end of the connection.
+        """
+        interface = '::1'
+        client = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        self.addCleanup(client.close)
+        peerAddress = self._serverGetConnectionAddressTest(
+            client, interface, 'getPeer')
+        self.assertEqual(
+            IPv6Address('TCP', *client.getsockname()[:2]), peerAddress)
+    if ipv6Skip:
+        test_serverGetPeerOnIPv6.skip = ipv6Skip
 
 
 
@@ -815,7 +890,7 @@ class TCPConnectionTestsBuilder(ReactorBuilder):
             protos[0].transport.write('x' * (2 * 4096) + 'y' * (2 * 4096))
             return (sf.stop.addCallback(cleanup, protos, port)
                            .addCallback(lambda ign: reactor.stop()))
-        
+
         def cleanup(data, protos, port):
             """
             Make sure IOCPReactor didn't start several WSARecv operations

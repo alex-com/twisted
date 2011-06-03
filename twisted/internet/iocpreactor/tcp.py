@@ -10,7 +10,7 @@ import socket, operator, errno, struct
 from zope.interface import implements, classImplements
 
 from twisted.internet import interfaces, error, address, main, defer
-from twisted.internet.abstract import isIPAddress
+from twisted.internet.abstract import isIPAddress, isIPv6Address
 from twisted.internet.tcp import _SocketCloser, Connector as TCPConnector
 from twisted.python import log, failure, reflect, util
 
@@ -401,7 +401,7 @@ class Port(_SocketCloser):
     disconnecting = False
     addressFamily = socket.AF_INET
     socketType = socket.SOCK_STREAM
-
+    _addressType = address.IPv4Address
     sessionno = 0
 
     # Actual port number being listened on, only set to a non-None
@@ -415,6 +415,9 @@ class Port(_SocketCloser):
         self.backlog = backlog
         self.interface = interface
         self.reactor = reactor
+        if isIPv6Address(interface):
+            self.addressFamily = socket.AF_INET6
+            self._addressType = address.IPv6Address
 
 
     def __repr__(self):
@@ -524,7 +527,8 @@ class Port(_SocketCloser):
 
         This indicates the server's address.
         """
-        return address.IPv4Address('TCP', *self.socket.getsockname())
+        host, port = self.socket.getsockname()[:2]
+        return self._addressType('TCP', host, port)
 
 
     def cbAccept(self, rc, bytes, evt):
@@ -551,15 +555,15 @@ class Port(_SocketCloser):
             assert family == self.addressFamily
 
             protocol = self.factory.buildProtocol(
-                address._ServerFactoryIPv4Address('TCP', rAddr[0], rAddr[1]))
+                self._addressType('TCP', rAddr[0], rAddr[1]))
             if protocol is None:
                 evt.newskt.close()
             else:
                 s = self.sessionno
                 self.sessionno = s+1
                 transport = Server(evt.newskt, protocol,
-                        address.IPv4Address('TCP', rAddr[0], rAddr[1]),
-                        address.IPv4Address('TCP', lAddr[0], lAddr[1]),
+                        self._addressType('TCP', rAddr[0], rAddr[1]),
+                        self._addressType('TCP', lAddr[0], lAddr[1]),
                         s, self.reactor)
                 protocol.makeConnection(transport)
             return True

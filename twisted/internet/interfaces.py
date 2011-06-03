@@ -1510,12 +1510,12 @@ class ITCPTransport(ITransport):
 
     def getHost():
         """
-        Returns L{IPv4Address}.
+        Returns L{IPv4Address} or L{IPv6Address}.
         """
 
     def getPeer():
         """
-        Returns L{IPv4Address}.
+        Returns L{IPv4Address} or L{IPv6Address}.
         """
 
 
