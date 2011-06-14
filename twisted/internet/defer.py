@@ -682,7 +682,7 @@ class FirstError(Exception):
         return 'FirstError[#%d, %s]' % (self.index, self.subFailure)
 
 
-    def __cmp__(self, other):
+    def __eq__(self, other):
         """
         Comparison between L{FirstError} and other L{FirstError} instances
         is defined as the comparison of the index and sub-failure of each
@@ -692,10 +692,21 @@ class FirstError(Exception):
         @since: 8.2
         """
         if isinstance(other, FirstError):
-            return cmp(
-                (self.index, self.subFailure),
-                (other.index, other.subFailure))
-        return -1
+            return ((self.index, self.subFailure) ==
+                    (other.index, other.subFailure))
+        return False
+
+
+    def __ne__(self, other):
+        """
+        Comparison between L{FirstError} and other L{FirstError} instances
+        is defined as the comparison of the index and sub-failure of each
+        instance.  L{FirstError} instances don't compare equal to anything
+        that isn't a L{FirstError} instance.
+
+        @since: 8.2
+        """
+        return not self.__eq__(other)
 
 
 

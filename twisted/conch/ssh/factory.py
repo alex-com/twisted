@@ -124,7 +124,7 @@ class SSHFactory(protocol.Factory):
         @rtype:     C{tuple}
         """
         primesKeys = self.primes.keys()
-        primesKeys.sort(lambda x, y: cmp(abs(x - bits), abs(y - bits)))
+        primesKeys.sort(key=lambda x: abs(x - bits))
         realBits = primesKeys[0]
         return random.choice(self.primes[realBits])
 
