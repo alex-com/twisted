@@ -575,7 +575,11 @@ class Port(base.BasePort, _SocketCloser):
         """
         try:
             skt = self.createInternetSocket()
-            skt.bind((self.interface, self.port))
+            if self.addressFamily == socket.AF_INET6:
+                addr = socket.getaddrinfo(self.interface, self.port)[0][4]
+            else:
+                addr = (self.interface, self.port)
+            skt.bind(addr)
         except socket.error, le:
             raise CannotListenError, (self.interface, self.port, le)
 

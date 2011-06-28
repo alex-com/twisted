@@ -9,6 +9,11 @@ __metaclass__ = type
 
 import socket, errno
 
+try:
+    import netifaces
+except ImportError:
+    netifaces = None
+
 from zope.interface import implements
 from zope.interface.verify import verifyObject
 
@@ -44,6 +49,26 @@ else:
     ipv6Skip = None
 
 
+
+def getLinkLocalIPv6Address():
+    """
+    Find and return a configured link local IPv6 address including a scope
+    identifier using the % separation syntax.  If the system has no link local
+    IPv6 addresses, raise L{SkipTest} instead.
+
+    @raise SkipTest: if no link local address can be found or if the
+        C{netifaces} module is not available.
+
+    @return: a C{str} giving the address
+    """
+    for iface in netifaces.interfaces():
+        for address in netifaces.ifaddresses(iface).get(socket.AF_INET6, []):
+            if '%' in address['addr']:
+                return address['addr']
+    raise SkipTest("Link local IPv6 address unavailable")
+
+
+
 def findFreePort(interface='127.0.0.1', family=socket.AF_INET,
                  type=socket.SOCK_STREAM):
     """
@@ -64,6 +89,15 @@ def findFreePort(interface='127.0.0.1', family=socket.AF_INET,
         return probe.getsockname()
     finally:
         probe.close()
+
+
+
+def connect(client, (host, port)):
+    if '%' in host:
+        address = socket.getaddrinfo(host, port)[0][4]
+    else:
+        address = (host, port)
+    client.connect(address)
 
 
 
@@ -657,6 +691,23 @@ class TCPPortTestsBuilder(ReactorBuilder, ObjectModelIntegrationMixin,
         test_portGetHostOnIPv6.skip = ipv6Skip
 
 
+    def test_portGetHostOnIPv6ScopeID(self):
+        """
+        When a link-local IPv6 address including a scope identifier is passed as
+        the C{interface} argument to L{IReactorTCP.listenTCP}, the resulting
+        L{IListeningPort} reports its address as an L{IPv6Address} with a host
+        value that includes the scope identifier.
+        """
+        linkLocal = getLinkLocalIPv6Address()
+        reactor = self.buildReactor()
+        port = reactor.listenTCP(0, ServerFactory(), interface=linkLocal)
+        address = port.getHost()
+        self.assertIsInstance(address, IPv6Address)
+        self.assertEqual(linkLocal, address.host)
+    if ipv6Skip:
+        test_portGetHostOnIPv6ScopeID.skip = ipv6Skip
+
+
     def _buildProtocolAddressTest(self, client, interface):
         """
         Connect C{client} to a server listening on C{interface} started with
@@ -686,7 +737,7 @@ class TCPPortTestsBuilder(ReactorBuilder, ObjectModelIntegrationMixin,
         port = reactor.listenTCP(0, factory, interface=interface)
         client.setblocking(False)
         try:
-            client.connect((port.getHost().host, port.getHost().port))
+            connect(client, (port.getHost().host, port.getHost().port))
         except socket.error, (errnum, message):
             self.assertIn(errnum, (errno.EINPROGRESS, errno.EWOULDBLOCK))
 
@@ -710,8 +761,9 @@ class TCPPortTestsBuilder(ReactorBuilder, ObjectModelIntegrationMixin,
 
     def test_buildProtocolIPv6Address(self):
         """
-        When a connection is accepted over IPv4, an L{IPv4Address} is passed
-        to the factory's C{buildProtocol} method giving the peer's address.
+        When a connection is accepted to an IPv6 address, an L{IPv6Address} is
+        passed to the factory's C{buildProtocol} method giving the peer's
+        address.
         """
         interface = '::1'
         client = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
@@ -721,6 +773,22 @@ class TCPPortTestsBuilder(ReactorBuilder, ObjectModelIntegrationMixin,
             IPv6Address('TCP', *client.getsockname()[:2]), observedAddress)
     if ipv6Skip:
         test_buildProtocolIPv6Address.skip = ipv6Skip
+
+
+    def test_buildProtocolIPv6AddressScopeID(self):
+        """
+        When a connection is accepted to a link-local IPv6 address, an
+        L{IPv6Address} is passed to the factory's C{buildProtocol} method giving
+        the peer's address, including a scope identifier.
+        """
+        interface = getLinkLocalIPv6Address()
+        client = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        self.addCleanup(client.close)
+        observedAddress = self._buildProtocolAddressTest(client, interface)
+        self.assertEqual(
+            IPv6Address('TCP', *client.getsockname()[:2]), observedAddress)
+    if ipv6Skip:
+        test_buildProtocolIPv6AddressScopeID.skip = ipv6Skip
 
 
     def _serverGetConnectionAddressTest(self, client, interface, which):
@@ -754,7 +822,7 @@ class TCPPortTestsBuilder(ReactorBuilder, ObjectModelIntegrationMixin,
         port = reactor.listenTCP(0, factory, interface=interface)
         client.setblocking(False)
         try:
-            client.connect((port.getHost().host, port.getHost().port))
+            connect(client, (port.getHost().host, port.getHost().port))
         except socket.error, (errnum, message):
             self.assertIn(errnum, (errno.EINPROGRESS, errno.EWOULDBLOCK))
         self.runReactor(reactor)
@@ -793,6 +861,24 @@ class TCPPortTestsBuilder(ReactorBuilder, ObjectModelIntegrationMixin,
         test_serverGetHostOnIPv6.skip = ipv6Skip
 
 
+    def test_serverGetHostOnIPv6ScopeID(self):
+        """
+        When a connection is accepted over IPv6, the server
+        L{ITransport.getHost} method returns an L{IPv6Address} giving the
+        address on which the server accepted the connection, including the scope
+        identifier.
+        """
+        interface = getLinkLocalIPv6Address()
+        client = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        self.addCleanup(client.close)
+        hostAddress = self._serverGetConnectionAddressTest(
+            client, interface, 'getHost')
+        self.assertEqual(
+            IPv6Address('TCP', *client.getpeername()[:2]), hostAddress)
+    if ipv6Skip:
+        test_serverGetHostOnIPv6ScopeID.skip = ipv6Skip
+
+
     def test_serverGetPeerOnIPv4(self):
         """
         When a connection is accepted over IPv4, the server
@@ -823,6 +909,24 @@ class TCPPortTestsBuilder(ReactorBuilder, ObjectModelIntegrationMixin,
             IPv6Address('TCP', *client.getsockname()[:2]), peerAddress)
     if ipv6Skip:
         test_serverGetPeerOnIPv6.skip = ipv6Skip
+
+
+    def test_serverGetPeerOnIPv6ScopeID(self):
+        """
+        When a connection is accepted over IPv6, the server
+        L{ITransport.getPeer} method returns an L{IPv6Address} giving the
+        address on the remote end of the connection, including the scope
+        identifier.
+        """
+        interface = getLinkLocalIPv6Address()
+        client = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        self.addCleanup(client.close)
+        peerAddress = self._serverGetConnectionAddressTest(
+            client, interface, 'getPeer')
+        self.assertEqual(
+            IPv6Address('TCP', *client.getsockname()[:2]), peerAddress)
+    if ipv6Skip:
+        test_serverGetPeerOnIPv6ScopeID.skip = ipv6Skip
 
 
 
