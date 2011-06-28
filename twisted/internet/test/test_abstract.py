@@ -34,3 +34,23 @@ class IPv6AddressTests(TestCase):
         C{"::1"} is the IPv6 loopback address literal.
         """
         self.assertTrue(isIPv6Address("::1"))
+
+
+    def test_scopeID(self):
+        """
+        An otherwise valid IPv6 address literal may also include a C{"%"}
+        followed by an arbitrary scope identifier.
+        """
+        self.assertTrue(isIPv6Address("fe80::1%eth0"))
+        self.assertTrue(isIPv6Address("fe80::2%1"))
+        self.assertTrue(isIPv6Address("fe80::3%en2"))
+
+
+    def test_invalidWithScopeID(self):
+        """
+        An otherwise invalid IPv6 address literal is still invalid with a
+        trailing scope identifier.
+        """
+        self.assertFalse(isIPv6Address("%eth0"))
+        self.assertFalse(isIPv6Address(":%eth0"))
+        self.assertFalse(isIPv6Address("hello%eth0"))

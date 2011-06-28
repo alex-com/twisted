@@ -453,6 +453,8 @@ def isIPv6Address(addr):
         otherwise.
     @rtype: C{bool}
     """
+    if '%' in addr:
+        addr = addr.split('%', 1)[0]
     if not addr:
         return False
     try:
