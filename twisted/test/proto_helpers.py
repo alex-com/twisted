@@ -19,22 +19,30 @@ from twisted.internet import protocol, error
 
 
 
-class StringSocket(object):
+class StringUDPSocket(object):
     """
-    A fake socket object, which returns a fixed sequence of strings and/or
+    A fake UDP socket object, which returns a fixed sequence of strings and/or
     socket errors.  Useful for testing.
-    
+
     @param retvals: The data to return.
     @type retvals: A C{list} containing either strings or C{socket.error}s.
     """
+
     def __init__(self, retvals):
         self.retvals = retvals
+
+
     def recvfrom(self, size):
+        """
+        Return (or raise) the next value from C{self.retvals}.
+        """
         ret = self.retvals.pop(0)
         if isinstance(ret, socket.error):
             raise ret
         return ret, None
-        
+
+
+
 
 class AccumulatingProtocol(protocol.Protocol):
     """

@@ -6,16 +6,11 @@
 Tests for implementations of L{IReactorUDP} and L{IReactorMulticast}.
 """
 
-import socket
-
 from twisted.trial import unittest, util
-from twisted.test.proto_helpers import StringSocket
 
 from twisted.internet.defer import Deferred, gatherResults, maybeDeferred
 from twisted.internet import protocol, reactor, error, defer, interfaces
-from twisted.internet.udp import Port
 from twisted.python import runtime
-from twisted.python.runtime import platformType
 
 
 
@@ -412,53 +407,6 @@ class UDPTestCase(unittest.TestCase):
         d.addCallback(stoppedListening)
         return d
 
-
-    def test_rawSocketReadNormal(self):
-        """
-        Test raw socket reads with some good data followed by a socket 
-        error which is "known" (i.e. in the errno module).
-        """
-
-        if platformType == 'win32':
-            from errno import WSAEWOULDBLOCK as EWOULDBLOCK
-        else:
-            from errno import EWOULDBLOCK
-
-        port = Port(None, protocol.DatagramProtocol())
-
-        # Normal result, no errors
-        port.socket = StringSocket(["result", "123", socket.error(EWOULDBLOCK)])
-        port.doRead()
-
-
-    def test_rawSocketReadImmediateError(self):
-        """
-        Test raw socket reads with an immediate connection refusal.
-        """
-
-        if platformType == 'win32':
-            from errno import WSAECONNREFUSED as ECONNREFUSED
-        else:
-            from errno import ECONNREFUSED
-
-        port = Port(None, protocol.DatagramProtocol())
-
-        # Try an immediate "connection refused"
-        port.socket = StringSocket([socket.error(ECONNREFUSED)])
-        port.doRead()
-
-
-    def test_rawSocketReadUnknownError(self):
-        """
-        Test raw socket reads with an unknown socket error (i.e. one not 
-        in the errno module).
-        """
-
-        port = Port(None, protocol.DatagramProtocol())
-
-        # Some good data, followed by an unknown error
-        port.socket = StringSocket(["good", socket.error(1337)])
-        self.assertRaises(socket.error, port.doRead)
 
 
 class ReactorShutdownInteraction(unittest.TestCase):
