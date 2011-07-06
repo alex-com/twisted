@@ -9,11 +9,6 @@ __metaclass__ = type
 
 import socket, errno
 
-try:
-    import netifaces
-except ImportError:
-    netifaces = None
-
 from zope.interface import implements
 from zope.interface.verify import verifyObject
 
@@ -50,7 +45,7 @@ else:
 
 
 
-def getLinkLocalIPv6Address():
+def getLinkLocalIPv6Addresses():
     """
     Find and return a configured link local IPv6 address including a scope
     identifier using the % separation syntax.  If the system has no link local
@@ -61,10 +56,25 @@ def getLinkLocalIPv6Address():
 
     @return: a C{str} giving the address
     """
+    retList = []
     for iface in netifaces.interfaces():
         for address in netifaces.ifaddresses(iface).get(socket.AF_INET6, []):
             if '%' in address['addr']:
-                return address['addr']
+                retList.append(address['addr'])
+    return retList
+
+
+try:
+    import netifaces
+except ImportError:
+    from twisted.python.win32_linklocal import (
+        win32GetLinkLocalIPv6Addresses as getLinkLocalIPv6Addresses)
+
+
+def getLinkLocalIPv6Address():
+    addresses = getLinkLocalIPv6Addresses()
+    if addresses:
+        return addresses[0]
     raise SkipTest("Link local IPv6 address unavailable")
 
 
