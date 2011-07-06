@@ -435,7 +435,11 @@ class Port(_SocketCloser):
             skt = self.reactor.createSocket(self.addressFamily,
                                             self.socketType)
             # TODO: resolve self.interface if necessary
-            skt.bind((self.interface, self.port))
+            if self.addressFamily == socket.AF_INET6:
+                addr = socket.getaddrinfo(self.interface, self.port)[0][4]
+            else:
+                addr = (self.interface, self.port)
+            skt.bind(addr)
         except socket.error, le:
             raise error.CannotListenError, (self.interface, self.port, le)
 
