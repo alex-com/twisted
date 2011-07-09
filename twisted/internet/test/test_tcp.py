@@ -12,6 +12,8 @@ import socket, errno
 from zope.interface import implements
 from zope.interface.verify import verifyObject
 
+from twisted.python.runtime import platform
+
 from twisted.internet.test.reactormixins import ReactorBuilder
 from twisted.internet.error import DNSLookupError
 from twisted.internet.interfaces import (
@@ -63,11 +65,12 @@ def getLinkLocalIPv6Addresses():
     return retList
 
 
-try:
-    from twisted.internet.test._getifaddrs import _interfaces
-except ImportError:
-    getLinkLocalIPv6Addresses = lambda: []
-except WindowsError:
+if not platform.isWindows():
+    try:
+        from twisted.internet.test._getifaddrs import _interfaces
+    except ImportError:
+        getLinkLocalIPv6Addresses = lambda: []
+else:
     from twisted.internet.test._addresslist import (
         win32GetLinkLocalIPv6Addresses as getLinkLocalIPv6Addresses)
 
