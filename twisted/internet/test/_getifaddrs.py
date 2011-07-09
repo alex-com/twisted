@@ -10,7 +10,7 @@ families = dict((v, k) for (k, v) in vars(socket).iteritems() if k.startswith("A
 try:
     libc = CDLL("libc.so.6")
 except OSError:
-    libc = CDLL("libc.dlsym")
+    libc = CDLL("libc.dylib")
 
 class in_addr(Structure):
     _fields_ = [
