@@ -7,7 +7,10 @@ from ctypes import (
 
 families = dict((v, k) for (k, v) in vars(socket).iteritems() if k.startswith("AF_"))
 
-libc = CDLL("libc.so.6")
+try:
+    libc = CDLL("libc.so.6")
+except OSError:
+    libc = CDLL("libc.dlsym")
 
 class in_addr(Structure):
     _fields_ = [
