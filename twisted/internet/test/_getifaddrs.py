@@ -2,10 +2,8 @@ import socket
 
 from socket import AF_INET, AF_INET6, inet_ntop
 from ctypes import (
-    CDLL, POINTER, Structure, c_char, c_char_p, c_short, c_ushort, c_int,
-    c_uint, c_uint32, c_uint64, c_void_p, c_ubyte, pointer, cast)
-
-families = dict((v, k) for (k, v) in vars(socket).iteritems() if k.startswith("AF_"))
+    CDLL, POINTER, Structure, c_char_p, c_ushort, c_int,
+    c_uint32, c_void_p, c_ubyte, pointer, cast)
 
 try:
     libc = CDLL("libc.so.6")
@@ -61,7 +59,6 @@ getifaddrs.restype = c_int
 
 freeifaddrs = libc.freeifaddrs
 freeifaddrs.argtypes = [ifaddrs_p]
-freeifaddrs.restype = c_int
 
 def _interfaces():
     ifaddrs = ifaddrs_p()
@@ -81,19 +78,12 @@ def _interfaces():
 
                 if addr:
                     packed = ''.join(map(chr, addr[0].sin_addr.in_addr[:]))
-                    results.append((ifaddrs[0].ifa_name, family, inet_ntop(family, packed)))
-            # for k, _ in ifaddrs[0].ifa_addr._fields_:
-            #     print k, getattr(ifaddrs[0].ifa_addr, k)
-            #     in_addr = ifaddrs[0].ifa_addr.sin_addr.in_addr
-            # print (
-            #     in_addr >> 24, '.',
-            #     in_addr >> 16 & 0xff, '.',
-            #     in_addr >> 8 & 0xff, '.',
-            #     in_addr & 0xff)
+                    results.append((
+                            ifaddrs[0].ifa_name,
+                            family,
+                            inet_ntop(family, packed)))
 
             ifaddrs = ifaddrs[0].ifa_next
     finally:
         freeifaddrs(ifaddrs)
     return results
-
-print _interfaces()
