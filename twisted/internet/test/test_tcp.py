@@ -65,7 +65,7 @@ def getLinkLocalIPv6Addresses():
 
 try:
     from twisted.internet.test._getifaddrs import _interfaces
-except ImportError:
+except WindowsError:
     from twisted.internet.test._addresslist import (
         win32GetLinkLocalIPv6Addresses as getLinkLocalIPv6Addresses)
 
