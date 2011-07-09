@@ -57,15 +57,14 @@ def getLinkLocalIPv6Addresses():
     @return: a C{str} giving the address
     """
     retList = []
-    for iface in netifaces.interfaces():
-        for address in netifaces.ifaddresses(iface).get(socket.AF_INET6, []):
-            if '%' in address['addr']:
-                retList.append(address['addr'])
+    for (interface, family, address) in _interfaces():
+        if family == socket.AF_INET6 and address.startswith('fe80:'):
+            retList.append('%s%%%s' % (address, interface))
     return retList
 
 
 try:
-    import netifaces
+    from twisted.internet.test._getifaddrs import _interfaces
 except ImportError:
     from twisted.python.win32_linklocal import (
         win32GetLinkLocalIPv6Addresses as getLinkLocalIPv6Addresses)
