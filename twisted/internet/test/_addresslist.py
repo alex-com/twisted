@@ -1,5 +1,7 @@
 from socket import socket, AF_INET6, SOCK_STREAM
-from ctypes import WinDLL, byref, create_string_buffer, c_int, c_void_p, get_last_error, POINTER, Structure, addressof, cast, string_at
+from ctypes import (
+    WinDLL, byref, create_string_buffer, c_int, c_void_p,
+    POINTER, Structure, cast, string_at)
 
 SIO_ADDRESS_LIST_QUERY = 0x48000016
 WSAEFAULT = 10014
@@ -20,14 +22,26 @@ def win32GetLinkLocalIPv6Addresses():
     WSAAddressToString = ws2_32.WSAAddressToStringA
 
     s = socket(AF_INET6, SOCK_STREAM)
-    buf = create_string_buffer(4096)
+    size = 4096
     retBytes = c_int()
-    ret = WSAIoctl(s.fileno(), SIO_ADDRESS_LIST_QUERY, 0, 0, buf, 4096, byref(retBytes), 0, 0)
-    if ret and get_last_error() == WSAEFAULT: # not enough space
-        buf = create_string_buffer(retBytes.value)
-        ret = WSAIoctl(s.fileno(), SIO_ADDRESS_LIST_QUERY, 0, 0, buf, retBytes.value, byref(retBytes), 0, 0)
+    for i in range(2):
+        buf = create_string_buffer(size)
+        ret = WSAIoctl(
+            s.fileno(),
+            SIO_ADDRESS_LIST_QUERY, 0, 0, buf, size, byref(retBytes), 0, 0)
+
+        # WSAIoctl might fail with WSAEFAULT, which means there was not enough
+        # space in the buffer we have it.  There's no way to check the errno
+        # until Python 2.6, so we don't even try. :/ Maybe if retBytes is still
+        # 0 another error happened, though.
+        if ret and retBytes.value:
+            size = retBytes.value
+        else:
+            break
+
+    # If it failed, then we'll just have to give up.  Still no way to see why.
     if ret:
-        raise WindowsError(get_last_error())
+        raise RuntimeError("WSAIoctl failure")
 
     addrList = cast(buf, POINTER(make_SAL(0)))
     addrCount = addrList[0].iAddressCount
@@ -38,11 +52,9 @@ def win32GetLinkLocalIPv6Addresses():
     retList = []
     for i in range(addrList[0].iAddressCount):
         retBytes.value = 1024
-        if WSAAddressToString(addrList[0].Address[i].lpSockaddr, addrList[0].Address[i].iSockaddrLength, 0, buf2, byref(retBytes)):
-            raise WindowsError(get_last_error())
+        addr = addrList[0].Address[i]
+        if WSAAddressToString(
+            addr.lpSockaddr, addr.iSockaddrLength, 0, buf2, byref(retBytes)):
+            raise RuntimeError("WSAAddressToString failure")
         retList.append(string_at(buf2))
-    return retList
-
-if __name__ == '__main__':
-    print win32GetLinkLocalIPv6Addresses()
-
+    return [addr for addr in retList if '%' in addr]
