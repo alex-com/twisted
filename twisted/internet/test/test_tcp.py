@@ -22,7 +22,6 @@ from twisted.internet.address import IPv4Address, IPv6Address
 from twisted.internet.defer import Deferred, DeferredList, succeed, fail, maybeDeferred
 from twisted.internet.endpoints import TCP4ServerEndpoint, TCP4ClientEndpoint
 from twisted.internet.protocol import ServerFactory, ClientFactory, Protocol
-from twisted.python.runtime import platform
 from twisted.python.failure import Failure
 from twisted.python import log
 from twisted.trial.unittest import SkipTest, TestCase
@@ -67,11 +66,11 @@ def getLinkLocalIPv6Addresses():
 
 if not platform.isWindows():
     try:
-        from twisted.internet.test._getifaddrs import _interfaces
+        from twisted.internet.test._posixifaces import _interfaces
     except ImportError:
         getLinkLocalIPv6Addresses = lambda: []
 else:
-    from twisted.internet.test._addresslist import (
+    from twisted.internet.test._win32ifaces import (
         win32GetLinkLocalIPv6Addresses as getLinkLocalIPv6Addresses)
 
 
