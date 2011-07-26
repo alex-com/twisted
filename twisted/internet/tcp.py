@@ -485,7 +485,8 @@ class Server(_TLSServerMixin, Connection):
 
         This indicates the server's address.
         """
-        return self._addressType('TCP', *self.socket.getsockname()[:2])
+        host, port = self.socket.getsockname()[:2]
+        return self._addressType('TCP', host, port)
 
 
     def getPeer(self):
