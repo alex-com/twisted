@@ -11,15 +11,16 @@ from socket import AF_INET, AF_INET6, inet_ntop
 from ctypes import (
     CDLL, POINTER, Structure, c_char_p, c_ushort, c_int,
     c_uint32, c_uint8, c_void_p, c_ubyte, pointer, cast)
+from ctypes.util import find_library
+
+libc = CDLL(find_library("c"))
 
 if sys.platform == 'darwin':
-    libc = CDLL("libc.dylib")
     _sockaddrCommon = [
         ("sin_len", c_uint8),
         ("sin_family", c_uint8),
         ]
 else:
-    libc = CDLL("libc.so.6")
     _sockaddrCommon = [
         ("sin_family", c_ushort),
         ]
