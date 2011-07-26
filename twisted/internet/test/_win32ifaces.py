@@ -1,3 +1,10 @@
+# Copyright (c) Twisted Matrix Laboratories.
+# See LICENSE for details.
+
+"""
+Windows implementation of local network interface enumeration.
+"""
+
 from socket import socket, AF_INET6, SOCK_STREAM
 from ctypes import (
     WinDLL, byref, create_string_buffer, c_int, c_void_p,
@@ -17,6 +24,11 @@ def make_SAL(ln):
     return SOCKET_ADDRESS_LIST
 
 def win32GetLinkLocalIPv6Addresses():
+    """
+    Return a list of strings in colon-hex format representing all the link local
+    IPv6 addresses available on the system, as reported by
+    I{WSAIoctl}/C{SIO_ADDRESS_LIST_QUERY}.
+    """
     ws2_32 = WinDLL('ws2_32', use_last_error = True)
     WSAIoctl = ws2_32.WSAIoctl
     WSAAddressToString = ws2_32.WSAAddressToStringA

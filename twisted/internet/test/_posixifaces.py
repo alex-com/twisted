@@ -1,3 +1,10 @@
+# Copyright (c) Twisted Matrix Laboratories.
+# See LICENSE for details.
+
+"""
+POSIX implementation of local network interface enumeration.
+"""
+
 import sys, socket
 
 from socket import AF_INET, AF_INET6, inet_ntop
@@ -5,10 +12,17 @@ from ctypes import (
     CDLL, POINTER, Structure, c_char_p, c_ushort, c_int,
     c_uint32, c_uint8, c_void_p, c_ubyte, pointer, cast)
 
-try:
-    libc = CDLL("libc.so.6")
-except OSError:
+if sys.platform == 'darwin':
     libc = CDLL("libc.dylib")
+    _sockaddrCommon = [
+        ("sin_len", c_uint8),
+        ("sin_family", c_uint8),
+        ]
+else:
+    libc = CDLL("libc.so.6")
+    _sockaddrCommon = [
+        ("sin_family", c_ushort),
+        ]
 
 class in_addr(Structure):
     _fields_ = [
@@ -20,30 +34,20 @@ class in6_addr(Structure):
         ("in_addr", c_ubyte * 16),
         ]
 
-if sys.platform == 'darwin':
-    _common = [
-        ("sin_len", c_uint8),
-        ("sin_family", c_uint8),
-        ]
-else:
-    _common = [
-        ("sin_family", c_ushort),
-        ]
-
 class sockaddr(Structure):
-    _fields_ = _common + [
+    _fields_ = _sockaddrCommon + [
         ("sin_port", c_ushort),
         ]
 
 
 class sockaddr_in(Structure):
-    _fields_ = _common + [
+    _fields_ = _sockaddrCommon + [
         ("sin_port", c_ushort),
         ("sin_addr", in_addr),
         ]
 
 class sockaddr_in6(Structure):
-    _fields_ = _common + [
+    _fields_ = _sockaddrCommon + [
         ("sin_port", c_ushort),
         ("sin_flowinfo", c_uint32),
         ("sin_addr", in6_addr),
@@ -69,6 +73,10 @@ freeifaddrs = libc.freeifaddrs
 freeifaddrs.argtypes = [ifaddrs_p]
 
 def _interfaces():
+    """
+    Call C{getifaddrs(3)} and return a list of tuples of interface name, address
+    family, and human-readable address representing its results.
+    """
     ifaddrs = ifaddrs_p()
     if getifaddrs(pointer(ifaddrs)) < 0:
         raise OSError()
@@ -95,3 +103,15 @@ def _interfaces():
     finally:
         freeifaddrs(ifaddrs)
     return results
+
+
+def posixGetLinkLocalIPv6Addresses():
+    """
+    Return a list of strings in colon-hex format representing all the link local
+    IPv6 addresses available on the system, as reported by I{getifaddrs(3)}.
+    """
+    retList = []
+    for (interface, family, address) in _interfaces():
+        if family == socket.AF_INET6 and address.startswith('fe80:'):
+            retList.append('%s%%%s' % (address, interface))
+    return retList

@@ -46,7 +46,19 @@ else:
 
 
 
-def getLinkLocalIPv6Addresses():
+if platform.isWindows():
+    from twisted.internet.test import _win32ifaces
+    getLinkLocalIPv6Addresses = _win32ifaces.win32GetLinkLocalIPv6Addresses
+else:
+    try:
+        from twisted.internet.test import _posixifaces
+    except ImportError:
+        getLinkLocalIPv6Addresses = lambda: []
+    else:
+        getLinkLocalIPv6Addresses = _posixifaces.posixGetLinkLocalIPv6Addresses
+
+
+def getLinkLocalIPv6Address():
     """
     Find and return a configured link local IPv6 address including a scope
     identifier using the % separation syntax.  If the system has no link local
@@ -57,24 +69,6 @@ def getLinkLocalIPv6Addresses():
 
     @return: a C{str} giving the address
     """
-    retList = []
-    for (interface, family, address) in _interfaces():
-        if family == socket.AF_INET6 and address.startswith('fe80:'):
-            retList.append('%s%%%s' % (address, interface))
-    return retList
-
-
-if not platform.isWindows():
-    try:
-        from twisted.internet.test._posixifaces import _interfaces
-    except ImportError:
-        getLinkLocalIPv6Addresses = lambda: []
-else:
-    from twisted.internet.test._win32ifaces import (
-        win32GetLinkLocalIPv6Addresses as getLinkLocalIPv6Addresses)
-
-
-def getLinkLocalIPv6Address():
     addresses = getLinkLocalIPv6Addresses()
     if addresses:
         return addresses[0]
