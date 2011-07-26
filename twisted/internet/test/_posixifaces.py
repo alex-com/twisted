@@ -1,9 +1,9 @@
-import socket
+import sys, socket
 
 from socket import AF_INET, AF_INET6, inet_ntop
 from ctypes import (
     CDLL, POINTER, Structure, c_char_p, c_ushort, c_int,
-    c_uint32, c_void_p, c_ubyte, pointer, cast)
+    c_uint32, c_uint8, c_void_p, c_ubyte, pointer, cast)
 
 try:
     libc = CDLL("libc.so.6")
@@ -20,11 +20,20 @@ class in6_addr(Structure):
         ("in_addr", c_ubyte * 16),
         ]
 
-class sockaddr(Structure):
-    _fields_ = [
-        ("sin_family", c_ushort),
-        ("sin_port", c_ushort),
-        ]
+if sys.platform == 'darwin':
+    class sockaddr(Structure):
+        _fields_ = [
+            ("sin_len", c_uint8),
+            ("sin_family", c_uint8),
+            ("sin_port", c_ushort),
+            ]
+else:
+    class sockaddr(Structure):
+        _fields_ = [
+            ("sin_family", c_ushort),
+            ("sin_port", c_ushort),
+            ]
+
 
 class sockaddr_in(Structure):
     _fields_ = [
