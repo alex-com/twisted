@@ -21,30 +21,29 @@ class in6_addr(Structure):
         ]
 
 if sys.platform == 'darwin':
-    class sockaddr(Structure):
-        _fields_ = [
-            ("sin_len", c_uint8),
-            ("sin_family", c_uint8),
-            ("sin_port", c_ushort),
-            ]
+    _common = [
+        ("sin_len", c_uint8),
+        ("sin_family", c_uint8),
+        ]
 else:
-    class sockaddr(Structure):
-        _fields_ = [
-            ("sin_family", c_ushort),
-            ("sin_port", c_ushort),
-            ]
+    _common = [
+        ("sin_family", c_ushort),
+        ]
+
+class sockaddr(Structure):
+    _fields_ = _common + [
+        ("sin_port", c_ushort),
+        ]
 
 
 class sockaddr_in(Structure):
-    _fields_ = [
-        ("sin_family", c_ushort),
+    _fields_ = _common + [
         ("sin_port", c_ushort),
         ("sin_addr", in_addr),
         ]
 
 class sockaddr_in6(Structure):
-    _fields_ = [
-        ("sin_family", c_ushort),
+    _fields_ = _common + [
         ("sin_port", c_ushort),
         ("sin_flowinfo", c_uint32),
         ("sin_addr", in6_addr),
