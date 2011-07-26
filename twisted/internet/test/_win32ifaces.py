@@ -29,7 +29,7 @@ def win32GetLinkLocalIPv6Addresses():
     IPv6 addresses available on the system, as reported by
     I{WSAIoctl}/C{SIO_ADDRESS_LIST_QUERY}.
     """
-    ws2_32 = WinDLL('ws2_32', use_last_error = True)
+    ws2_32 = WinDLL('ws2_32')
     WSAIoctl = ws2_32.WSAIoctl
     WSAAddressToString = ws2_32.WSAAddressToStringA
 
