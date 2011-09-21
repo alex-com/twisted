@@ -150,6 +150,16 @@ class SequenceTests(TestCase):
     Tests for L{twisted.python.symbolic.sequence}, a factory for named constants
     with mostly sequential integer values.
     """
+    def test_representation(self):
+        """
+        The string representation of the object created using L{sequence}
+        includes the name it was created with, given by the attribute of
+        L{sequence} used, and all of the names passed in.
+        """
+        self.assertEqual(
+            "<FX: OK EOF NO_SUCH_FILE FILE_ALREADY_EXISTS>", repr(FX))
+
+
     def test_values(self):
         """
         The names in a sequence are assigned sequential values starting at C{0}.
@@ -228,18 +238,12 @@ class SequenceTests(TestCase):
         self.assertIdentical(FX[11], FX.FILE_ALREADY_EXISTS)
 
 
-FXF = bitvector.FXF(u"READ", u"WRITE", u"APPEND", start=1)
-assert FXF.READ == 1
-assert FXF.WRITE == 2
-assert FXF.APPEND == 4
+FXF = bitvector.FXF(u"READ", u"WRITE", u"APPEND")
 
-assert FXF[1] is FXF.READ
 assert FXF[1 | 2] is (FXF.READ | FXF.WRITE)
 assert 8 not in FXF
 assert 9 not in FXF
 
-assert list(FXF) == [FXF.READ, FXF.WRITE, FXF.APPEND]
-assert len(FXF) == 3
 assert ~FXF.READ is (FXF.WRITE | FXF.APPEND)
 assert (FXF.READ | FXF.WRITE) & (FXF.WRITE | FXF.APPEND) is FXF.WRITE
 assert (FXF.READ | FXF.WRITE) ^ (FXF.WRITE | FXF.APPEND) is (FXF.READ | FXF.APPEND)
@@ -248,6 +252,85 @@ assert repr(FXF.READ) == "<FXF: READ>"
 assert repr(FXF.READ | FXF.WRITE) == "<FXF: READ, WRITE>"
 
 assert (FXF.READ | FXF.WRITE) == 1 | 2
+
+class BitvectorTests(TestCase):
+    """
+    Tests for L{twisted.python.symbolic.bitvector}, a factory for
+    constants which can be composed into an integer, with each bit
+    corresponding to one of the constants.
+    """
+    def test_representation(self):
+        """
+        The string representation of the object created using
+        L{bitvector} includes the name it was created with, given by
+        the attribute of L{bitvector} used, and all of the names
+        passed in.
+        """
+        self.assertEqual("<FXF: READ WRITE APPEND>", repr(FXF))
+
+
+    def test_values(self):
+        """
+        The names in a bitvector are assigned sequential powers of two starting
+        at C{1}.
+        """
+        self.assertEqual(1, FXF.READ)
+        self.assertEqual(2, FXF.WRITE)
+        self.assertEqual(4, FXF.APPEND)
+
+
+    def test_iteration(self):
+        """
+        Iteration over the object returned by L{bitvector} produces each of its
+        attribute values, in the order given to L{bitvector}.
+        """
+        self.assertEqual([FXF.READ, FXF.WRITE, FXF.APPEND], list(FXF))
+
+
+    def test_length(self):
+        """
+        The length of an object created with L{bitvector} is equal to the number
+        of names it has.
+        """
+        self.assertEqual(3, len(FXF))
+
+
+    def test
+
+
+    def test_or(self):
+        """
+        Two bitvector constants can be combined using C{|}, producing a new
+        constant representing the disjunction of the inputs.
+        """
+        self.assertEqual(3, FXF.READ | FXF.WRITE)
+        self.assertEqual(5, FXF.READ | FXF.APPEND)
+        self.assertEqual(6, FXF.WRITE | FXF.APPEND)
+        self.assertEqual(7, FXF.READ | FXF.WRITE | FXF.APPEND)
+
+
+    def test_lookupByValue(self):
+        """
+        Indexing a bitvector object by the value of one of its constants result
+        in that constant.
+        """
+        self.assertIdentical(FXF[1], FXF.READ)
+        self.assertIdentical(FXF[2], FXF.WRITE)
+        self.assertIdentical(FXF[4], FXF.APPEND)
+
+
+    def test_lookupCombination(self):
+        """
+        Indexing a bitvector object by a value corresponding to the combination
+        of two or more of its constants results in
+        """
+        self.assertIdentical(FXF[3], FXF.READ | FXF.WRITE)
+        self.assertIdentical(FXF[5], FXF.READ | FXF.APPEND)
+        self.assertIdentical(FXF[6], FXF.WRITE | FXF.WRITE)
+        self.assertIdentical(FXF[7], FXF.READ | FXF.WRITE | FXF.WRITE)
+
+
+
 
 
 RPL = sequence.RPL(
