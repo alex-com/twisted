@@ -43,7 +43,7 @@ class _NameTests(TestCase):
         container the instances belongs to as well as the instance's name.
         """
         name = _Name(_Container(u"foo"), u"bar")
-        self.assertEqual(repr(name), "<foo: bar>")
+        self.assertEqual(repr(name), "<foo=bar>")
 
 
     def test_equality(self):
