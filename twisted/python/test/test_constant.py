@@ -5,8 +5,8 @@ Unit tests for L{twisted.python.constant}.
 
 from twisted.trial.unittest import TestCase
 
-from twisted.python.constant import (
-    _Container, _Name, names, bitvector, sequence)
+from twisted.python.constants import (
+    _Container, _NamedConstant, names, bitvector, sequence)
 
 
 class _ContainerTests(TestCase):
@@ -24,56 +24,56 @@ class _ContainerTests(TestCase):
 
 
 
-class _NameTests(TestCase):
+class _NamedConstantTests(TestCase):
     """
-    Tests for the L{twisted.python.symbolic._Name} helper class which is used to
+    Tests for the L{twisted.python.symbolic._NamedConstant} helper class which is used to
     represent individual values.
     """
     def test_name(self):
         """
-        L{_Name.name} refers to the value passed to the L{_Name} initializer.
+        L{_NamedConstant.name} refers to the value passed to the L{_NamedConstant} initializer.
         """
-        name = _Name(_Container(u"foo"), u"bar")
+        name = _NamedConstant(_Container(u"foo"), u"bar")
         self.assertEqual(name.name, u"bar")
 
 
     def test_representation(self):
         """
-        The string representation of an instance of L{_Name} includes the
+        The string representation of an instance of L{_NamedConstant} includes the
         container the instances belongs to as well as the instance's name.
         """
-        name = _Name(_Container(u"foo"), u"bar")
+        name = _NamedConstant(_Container(u"foo"), u"bar")
         self.assertEqual(repr(name), "<foo=bar>")
 
 
     def test_equality(self):
         """
-        A L{_Name} instance compares equal to itself.
+        A L{_NamedConstant} instance compares equal to itself.
         """
-        name = _Name(_Container(u"foo"), u"bar")
+        name = _NamedConstant(_Container(u"foo"), u"bar")
         self.assertTrue(name == name)
         self.assertFalse(name != name)
 
 
     def test_nonequality(self):
         """
-        Two different L{_Name} instances do not compare equal to each other.
+        Two different L{_NamedConstant} instances do not compare equal to each other.
         """
-        first = _Name(_Container(u"foo"), u"bar")
-        second = _Name(_Container(u"foo"), u"bar")
+        first = _NamedConstant(_Container(u"foo"), u"bar")
+        second = _NamedConstant(_Container(u"foo"), u"bar")
         self.assertFalse(first == second)
         self.assertTrue(first != second)
 
 
     def test_hash(self):
         """
-        Two different L{_Name} instances with different names have different
+        Two different L{_NamedConstant} instances with different names have different
         hashes, as do instances in different containers.
         """
-        first = _Name(_Container(u"foo"), u"bar")
-        second = _Name(_Container(u"foo"), u"baz")
+        first = _NamedConstant(_Container(u"foo"), u"bar")
+        second = _NamedConstant(_Container(u"foo"), u"baz")
         self.assertNotEqual(hash(first), hash(second))
-        third = _Name(_Container(u"foo"), u"bar")
+        third = _NamedConstant(_Container(u"foo"), u"bar")
         self.assertNotEqual(hash(first), hash(third))
 
 
@@ -102,8 +102,10 @@ class NamesTests(TestCase):
         Each name passed to L{names} is available as an attribute on the
         returned object.
         """
-        self.assertIsInstance(METHOD.GET, _Name)
-        self.assertEqual(u"GET", METHOD.GET.name)
+        self.assertTrue(hasattr(METHOD, "GET"))
+        self.assertTrue(hasattr(METHOD, "PUT"))
+        self.assertTrue(hasattr(METHOD, "POST"))
+        self.assertTrue(hasattr(METHOD, "DELETE"))
 
 
     def test_withoutOtherAttributes(self):
@@ -111,7 +113,32 @@ class NamesTests(TestCase):
         Names not passed to L{names} are not available as attributes on the
         returned object.
         """
-        self.assertRaises(AttributeError, getattr, METHOD, 'foo')
+        self.assertFalse(hasattr(METHOD, "foo"))
+
+
+    def test_nameRepresentation(self):
+        """
+        The string representation of the object representing one of the named
+        constants includes the name of the collection it is part of as well as
+        its own name.
+        """
+        self.assertEqual("<METHOD=GET>", repr(METHOD.GET))
+
+
+    def test_name(self):
+        """
+        The C{name} attribute of one of the named constants gives that
+        constant's name.
+        """
+        self.assertEqual(u"GET", METHOD.GET.name)
+
+
+    def test_attributeIdentity(self):
+        """
+        Repeated access of an attribute of an object created using L{names}
+        results in the same object.
+        """
+        self.assertIdentical(METHOD.GET, METHOD.GET)
 
 
     def test_iteration(self):
@@ -122,6 +149,14 @@ class NamesTests(TestCase):
         self.assertEqual(
             [METHOD.GET, METHOD.PUT, METHOD.POST, METHOD.DELETE],
             list(METHOD))
+
+
+    def test_length(self):
+        """
+        The length of an object created with L{names} is equal to the number of
+        names it has.
+        """
+        self.assertEqual(4, len(METHOD))
 
 
     def test_containsSymbolicNames(self):
@@ -164,9 +199,9 @@ class SequenceTests(TestCase):
         """
         The names in a sequence are assigned sequential values starting at C{0}.
         """
-        self.assertEqual(0, FX.OK)
-        self.assertEqual(1, FX.EOF)
-        self.assertEqual(2, FX.NO_SUCH_FILE)
+        self.assertEqual(0, FX.OK.asInt())
+        self.assertEqual(1, FX.EOF.asInt())
+        self.assertEqual(2, FX.NO_SUCH_FILE.asInt())
 
 
     def test_overriddenValue(self):
@@ -174,7 +209,7 @@ class SequenceTests(TestCase):
         A name in a sequence may have a value explicitly assigned to it by
         passing that name as a keyword argument with a value.
         """
-        self.assertEqual(11, FX.FILE_ALREADY_EXISTS)
+        self.assertEqual(11, FX.FILE_ALREADY_EXISTS.asInt())
 
 
     def test_overriddenStart(self):
@@ -182,9 +217,9 @@ class SequenceTests(TestCase):
         The starting value for a sequence can be specified by passing a value
         for the C{start} keyword argument.
         """
-        self.assertEqual(1, FILEXFER_TYPE.REGULAR)
-        self.assertEqual(2, FILEXFER_TYPE.DIRECTORY)
-        self.assertEqual(3, FILEXFER_TYPE.SYMLINK)
+        self.assertEqual(1, FILEXFER_TYPE.REGULAR.asInt())
+        self.assertEqual(2, FILEXFER_TYPE.DIRECTORY.asInt())
+        self.assertEqual(3, FILEXFER_TYPE.SYMLINK.asInt())
 
 
     def test_iteration(self):
@@ -195,6 +230,14 @@ class SequenceTests(TestCase):
         self.assertEqual(
             [FX.OK, FX.EOF, FX.NO_SUCH_FILE, FX.FILE_ALREADY_EXISTS],
             list(FX))
+
+
+    def test_length(self):
+        """
+        The length of an object created with L{sequence} is equal to the number
+        of names it has.
+        """
+        self.assertEqual(4, len(FX))
 
 
     def test_ordering(self):
@@ -232,18 +275,13 @@ class SequenceTests(TestCase):
         Indexing a sequence object by the value of one of its constants results
         in that constant.
         """
-        self.assertIdentical(FX[0], FX.OK)
-        self.assertIdentical(FX[1], FX.EOF)
-        self.assertIdentical(FX[2], FX.NO_SUCH_FILE)
-        self.assertIdentical(FX[11], FX.FILE_ALREADY_EXISTS)
+        self.assertIdentical(FX.lookupByValue(0), FX.OK)
+        self.assertIdentical(FX.lookupByValue(1), FX.EOF)
+        self.assertIdentical(FX.lookupByValue(2), FX.NO_SUCH_FILE)
+        self.assertIdentical(FX.lookupByValue(11), FX.FILE_ALREADY_EXISTS)
 
 
 FXF = bitvector.FXF(u"READ", u"WRITE", u"APPEND")
-
-
-assert ~FXF.READ is (FXF.WRITE | FXF.APPEND)
-assert (FXF.READ | FXF.WRITE) & (FXF.WRITE | FXF.APPEND) is FXF.WRITE
-assert (FXF.READ | FXF.WRITE) ^ (FXF.WRITE | FXF.APPEND) is (FXF.READ | FXF.APPEND)
 
 
 class BitvectorTests(TestCase):
@@ -267,9 +305,9 @@ class BitvectorTests(TestCase):
         The names in a bitvector are assigned sequential powers of two starting
         at C{1}.
         """
-        self.assertEqual(1, FXF.READ)
-        self.assertEqual(2, FXF.WRITE)
-        self.assertEqual(4, FXF.APPEND)
+        self.assertEqual(1, FXF.READ.asInt())
+        self.assertEqual(2, FXF.WRITE.asInt())
+        self.assertEqual(4, FXF.APPEND.asInt())
 
 
     def test_iteration(self):
@@ -293,10 +331,10 @@ class BitvectorTests(TestCase):
         Two bitvector constants can be combined using C{|}, producing a new
         constant representing the disjunction of the inputs.
         """
-        self.assertEqual(3, FXF.READ | FXF.WRITE)
-        self.assertEqual(5, FXF.READ | FXF.APPEND)
-        self.assertEqual(6, FXF.WRITE | FXF.APPEND)
-        self.assertEqual(7, FXF.READ | FXF.WRITE | FXF.APPEND)
+        self.assertEqual(3, (FXF.READ | FXF.WRITE).asInt())
+        self.assertEqual(5, (FXF.READ | FXF.APPEND).asInt())
+        self.assertEqual(6, (FXF.WRITE | FXF.APPEND).asInt())
+        self.assertEqual(7, (FXF.READ | FXF.WRITE | FXF.APPEND).asInt())
 
 
     def test_combinedRepresentation(self):
@@ -304,7 +342,7 @@ class BitvectorTests(TestCase):
         The object resulting from the combination of two bitvector constants
         using C{|} has a string representation reflecting both of the inputs.
         """
-        self.assertEqual("<FXF=READ|WRITE>", FXF.READ | FXF.WRITE)
+        self.assertEqual("<FXF=READ|WRITE>", repr(FXF.READ | FXF.WRITE))
 
 
     def test_negation(self):
@@ -320,11 +358,12 @@ class BitvectorTests(TestCase):
         Two bitvector constants can be combined using C{&}, producing a new
         constant representing the conjunction of the inputs.
         """
-        self.assertEqual(1, FXF.READ & (FXF.READ | FXF.WRITE))
-        self.assertEqual(2, FXF.WRITE & (FXF.READ | FXF.WRITE))
+        self.assertEqual(1, (FXF.READ & (FXF.READ | FXF.WRITE)).asInt())
+        self.assertEqual(2, (FXF.WRITE & (FXF.READ | FXF.WRITE)).asInt())
         self.assertEqual(
-            3, (FXF.READ | FXF.READ) & (FXF.READ | FXF.WRITE | FXF.APPEND))
-        self.assertEqual(0, FXF.READ & FXF.WRITE) # XXX GLUGH
+            3,
+            ((FXF.READ | FXF.READ) & (FXF.READ | FXF.WRITE | FXF.APPEND)).asInt())
+        self.assertEqual(0, (FXF.READ & FXF.WRITE).asInt()) # XXX GLUGH
 
 
     def test_xor(self):
@@ -370,9 +409,9 @@ class BitvectorTests(TestCase):
         Indexing a bitvector object by the value of one of its constants result
         in that constant.
         """
-        self.assertIdentical(FXF[1], FXF.READ)
-        self.assertIdentical(FXF[2], FXF.WRITE)
-        self.assertIdentical(FXF[4], FXF.APPEND)
+        self.assertIdentical(FXF.lookupByValue(1), FXF.READ)
+        self.assertIdentical(FXF.lookupByValue(2), FXF.WRITE)
+        self.assertIdentical(FXF.lookupByValue(4), FXF.APPEND)
 
 
     def test_lookupCombination(self):
@@ -380,7 +419,16 @@ class BitvectorTests(TestCase):
         Indexing a bitvector object by a value corresponding to the combination
         of two or more of its constants results in
         """
-        self.assertIdentical(FXF[1 | 2], FXF.READ | FXF.WRITE)
-        self.assertIdentical(FXF[1 | 4], FXF.READ | FXF.APPEND)
-        self.assertIdentical(FXF[2 | 4], FXF.WRITE | FXF.APPEND)
-        self.assertIdentical(FXF[1 | 2 | 4], FXF.READ | FXF.WRITE | FXF.WRITE)
+        self.assertIdentical(FXF.lookupByValue(1 | 2), FXF.READ | FXF.WRITE)
+        self.assertIdentical(FXF.lookupByValue(1 | 4), FXF.READ | FXF.APPEND)
+        self.assertIdentical(FXF.lookupByValue(2 | 4), FXF.WRITE | FXF.APPEND)
+        self.assertIdentical(
+            FXF.lookupByValue(1 | 2 | 4), FXF.READ | FXF.WRITE | FXF.WRITE)
+
+
+    def test_valueIteration(self):
+        """
+        After combining two values using C{|}, the resulting object can be
+        iterated over, resulting in the inputs.
+        """
+        self.assertEqual(list(FXF.READ | FXF.WRITE), [FXF.READ, FXF.WRITE])
