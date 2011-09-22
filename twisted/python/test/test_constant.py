@@ -384,15 +384,3 @@ class BitvectorTests(TestCase):
         self.assertIdentical(FXF[1 | 4], FXF.READ | FXF.APPEND)
         self.assertIdentical(FXF[2 | 4], FXF.WRITE | FXF.APPEND)
         self.assertIdentical(FXF[1 | 2 | 4], FXF.READ | FXF.WRITE | FXF.WRITE)
-
-
-
-
-
-RPL = sequence.RPL(
-    WELCOME="001", YOURHOST="002", CREATED="003", MYINFO="004", ISUPPORT="005")
-assert RPL.WELCOME.name.encode("ascii") == "WELCOME"
-assert RPL.WELCOME < RPL.YOURHOST < RPL.CREATED < RPL.MYINFO < RPL.ISUPPORT
-assert RPL["001"] is RPL.WELCOME
-assert list(RPL) == [
-    RPL.WELCOME, RPL.YOURHOST, RPL.CREATED, RPL.MYINFO, RPL.ISUPPORT]
