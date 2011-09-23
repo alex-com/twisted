@@ -362,7 +362,7 @@ class BitvectorTests(TestCase):
         self.assertEqual(2, (FXF.WRITE & (FXF.READ | FXF.WRITE)).asInt())
         self.assertEqual(
             3,
-            ((FXF.READ | FXF.READ) & (FXF.READ | FXF.WRITE | FXF.APPEND)).asInt())
+            ((FXF.READ | FXF.WRITE) & (FXF.READ | FXF.WRITE | FXF.APPEND)).asInt())
         self.assertEqual(0, (FXF.READ & FXF.WRITE).asInt()) # XXX GLUGH
 
 
@@ -423,7 +423,7 @@ class BitvectorTests(TestCase):
         self.assertIdentical(FXF.lookupByValue(1 | 4), FXF.READ | FXF.APPEND)
         self.assertIdentical(FXF.lookupByValue(2 | 4), FXF.WRITE | FXF.APPEND)
         self.assertIdentical(
-            FXF.lookupByValue(1 | 2 | 4), FXF.READ | FXF.WRITE | FXF.WRITE)
+            FXF.lookupByValue(1 | 2 | 4), FXF.READ | FXF.WRITE | FXF.APPEND)
 
 
     def test_valueIteration(self):
