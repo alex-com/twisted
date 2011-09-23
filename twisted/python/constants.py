@@ -124,7 +124,8 @@ class _BitvectorConstant(_IntegerConstant):
 
 
     def __or__(self, other):
-        # TODO What if it isn't a _BitvectorConstant
+        if not isinstance(other, _BitvectorConstant):
+            return NotImplemented
         value = self.value | other.value
         if value not in self.container._valueToConstant:
             self.container._valueToConstant[value] = _BitvectorConstant(
@@ -133,7 +134,8 @@ class _BitvectorConstant(_IntegerConstant):
 
 
     def __and__(self, other):
-        # TODO What if it isn't a _BitvectorConstant
+        if not isinstance(other, _BitvectorConstant):
+            return NotImplemented
         value = self.value & other.value
         if value not in self.container._valueToConstant:
             self.container._valueToConstant[value] = _BitvectorConstant(
@@ -142,7 +144,8 @@ class _BitvectorConstant(_IntegerConstant):
 
 
     def __xor__(self, other):
-        # TODO What if it isn't a _BitvectorConstant
+        if not isinstance(other, _BitvectorConstant):
+            return NotImplemented
         value = self.value ^ other.value
         if value not in self.container._valueToConstant:
             self.container._valueToConstant[value] = _BitvectorConstant(

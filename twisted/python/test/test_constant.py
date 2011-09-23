@@ -449,6 +449,16 @@ class BitvectorTests(TestCase):
             7, (self.FXF.READ | self.FXF.WRITE | self.FXF.APPEND).asInt())
 
 
+    def test_onlyBitvectorConstantOr(self):
+        """
+        A bitvector constant can only be combined using C{|} with another
+        bitvector constant.
+        """
+        self.assertRaises(TypeError, lambda: self.FXF.READ | "hello")
+        self.assertRaises(TypeError, lambda: self.FXF.READ | [])
+        self.assertRaises(TypeError, lambda: self.FXF.READ | 10)
+
+
     def test_combinedRepresentation(self):
         """
         The object resulting from the combination of two bitvector constants
@@ -483,6 +493,16 @@ class BitvectorTests(TestCase):
         self.assertEqual(0, (self.FXF.READ & self.FXF.WRITE).asInt())
 
 
+    def test_onlyBitvectorConstantAnd(self):
+        """
+        A bitvector constant can only be combined using C{&} with another
+        bitvector constant.
+        """
+        self.assertRaises(TypeError, lambda: self.FXF.READ & "hello")
+        self.assertRaises(TypeError, lambda: self.FXF.READ & [])
+        self.assertRaises(TypeError, lambda: self.FXF.READ & 10)
+
+
     def test_xor(self):
         """
         The result of an exclusive or operation on two L{bitvector} constants is
@@ -497,6 +517,16 @@ class BitvectorTests(TestCase):
             (self.FXF.READ | self.FXF.APPEND))
         self.assertIdentical(
             self.FXF.READ ^ self.FXF.READ, self.FXF.WRITE ^ self.FXF.WRITE)
+
+
+    def test_onlyBitvectorConstantXor(self):
+        """
+        A bitvector constant can only be combined using C{^} with another
+        bitvector constant.
+        """
+        self.assertRaises(TypeError, lambda: self.FXF.READ ^ "hello")
+        self.assertRaises(TypeError, lambda: self.FXF.READ ^ [])
+        self.assertRaises(TypeError, lambda: self.FXF.READ ^ 10)
 
 
     def test_containsBits(self):
