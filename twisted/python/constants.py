@@ -137,7 +137,12 @@ class _BitvectorConstant(_IntegerConstant):
 
 
     def __invert__(self):
-        return self.container.lookupByValue(~self.value)
+        result = self ^ self
+        desired = ~self.value
+        for other in self.container:
+            if other.value & desired:
+                result = result | other
+        return result
 
 
     def __repr__(self):
@@ -166,15 +171,22 @@ class _BitvectorContainer(_Container):
         return result
 
 
+    def __contains__(self, value):
+        return self.lookupByValue(value) is not None
+
+
     def lookupByValue(self, value):
         result = None
         for name in self._enumerants:
             possible = getattr(self, name)
             if possible.value & value:
+                value &= ~possible.value
                 if result is None:
                     result = possible
                 else:
                     result = result | possible
+        if value:
+            return None
         return result
 
 
