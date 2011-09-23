@@ -437,6 +437,7 @@ class BitvectorTests(TestCase):
         self.assertIdentical(self.FXF.lookupByValue(4), self.FXF.APPEND)
         self.assertIdentical(self.FXF.lookupByValue(64), self.FXF.TEXT)
 
+
     def test_lookupCombination(self):
         """
         Indexing a bitvector object by a value corresponding to the combination
