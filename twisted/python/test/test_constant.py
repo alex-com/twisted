@@ -376,7 +376,7 @@ class BitvectorTests(TestCase):
         self.assertIdentical(
             (FXF.READ | FXF.WRITE) ^ (FXF.WRITE | FXF.APPEND),
             (FXF.READ | FXF.APPEND))
-        self.assertIdentical(FXF.READ ^ FXF.READ, 0) # XXX OOPS API FAIL
+        self.assertIdentical(FXF.READ ^ FXF.READ, FXF.WRITE ^ FXF.WRITE)
 
 
     def test_containsBits(self):
