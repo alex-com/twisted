@@ -6,7 +6,7 @@ Unit tests for L{twisted.python.constant}.
 from twisted.trial.unittest import TestCase
 
 from twisted.python.constants import (
-    _Container, _NamedConstant, names, bitvector, sequence)
+    _Container, _NamedConstant, names, values, bitvector, sequence)
 
 
 class _ContainerTests(TestCase):
@@ -39,8 +39,8 @@ class _NamedConstantTests(TestCase):
 
     def test_representation(self):
         """
-        The string representation of an instance of L{_NamedConstant} includes the
-        container the instances belongs to as well as the instance's name.
+        The string representation of an instance of L{_NamedConstant} includes
+        the container the instances belongs to as well as the instance's name.
         """
         name = _NamedConstant(_Container(u"foo"), u"bar")
         self.assertEqual(repr(name), "<foo=bar>")
@@ -78,17 +78,22 @@ class _NamedConstantTests(TestCase):
 
 
 
-
-
-
 class NamesTests(TestCase):
     """
     Tests for L{twisted.python.symbolic.names}, a factory for named constants.
     """
     def setUp(self):
-        # Some constants, as one might use with an HTTP API, to use in tests for the
-        # names factory.
+        # Some constants, as one might use with an HTTP API, to use in tests for
+        # the names factory.
         self.METHOD = names.METHOD(u"GET", u"PUT", u"POST", u"DELETE")
+
+
+    def test_rejectValues(self):
+        """
+        Constants constructed using L{names} may not have associated values.
+        """
+        # HTTP should be created with values instead, it won't work with names.
+        self.assertRaises(TypeError, names.HTTP, OK=200)
 
 
     def test_representation(self):
@@ -178,6 +183,81 @@ class NamesTests(TestCase):
 
 
 
+class ValuesTests(TestCase):
+    """
+    Tests for L{twisted.python.symbolic.values}, a factory for named constants
+    associated with arbitrary values.
+    """
+    def setUp(self):
+        self.RPL = values.RPL(WELCOME="001", YOURHOST="002", CREATED="003")
+
+
+    def test_representation(self):
+        """
+        The string representation of the object created using L{values} includes
+        the name it was created with, given by the attribute of L{values} used,
+        and all of the names passed in.
+        """
+        self.assertEqual("<RPL: WELCOME YOURHOST CREATED>", repr(self.RPL))
+
+
+    def test_values(self):
+        """
+        Each constant attribute of an object created using L{values} has a
+        C{value} attribute set to the value associated with that constant in the
+        initializer.
+        """
+        self.assertEqual(self.RPL.WELCOME.value, "001")
+        self.assertEqual(self.RPL.YOURHOST.value, "002")
+        self.assertEqual(self.RPL.CREATED.value, "003")
+
+
+    def test_iteration(self):
+        """
+        Iteration over the object returned by L{values} produces each of its
+        attribute values.
+        """
+        self.assertEqual(
+            set([self.RPL.WELCOME, self.RPL.YOURHOST, self.RPL.CREATED]),
+            set(self.RPL))
+
+
+    def test_length(self):
+        """
+        The length of an object created with L{values} is equal to the number
+        of names it has.
+        """
+        self.assertEqual(3, len(self.RPL))
+
+
+    def test_containsSymbolicNames(self):
+        """
+        The object returned by L{values} contains the names passed in.
+        """
+        self.assertIn(u"WELCOME", self.RPL)
+        self.assertIn(u"YOURHOST", self.RPL)
+        self.assertIn(u"CREATED", self.RPL)
+
+
+    def test_withoutOtherContents(self):
+        """
+        Names not passed to L{values} are not contained by the returned object.
+        """
+        self.assertNotIn(u"foo", self.RPL)
+        self.assertNotIn("001", self.RPL)
+
+
+    def test_lookupByValue(self):
+        """
+        The C{lookupByValue} method of a L{values} object can be used to find a
+        constant by its value.
+        """
+        self.assertIdentical(self.RPL.lookupByValue("001"), self.RPL.WELCOME)
+        self.assertIdentical(self.RPL.lookupByValue("002"), self.RPL.YOURHOST)
+        self.assertIdentical(self.RPL.lookupByValue("003"), self.RPL.CREATED)
+
+
+
 class SequenceTests(TestCase):
     """
     Tests for L{twisted.python.symbolic.sequence}, a factory for named constants
@@ -186,10 +266,8 @@ class SequenceTests(TestCase):
     def setUp(self):
         self.FILEXFER_TYPE = sequence.FILEXFER_TYPE(
             u"REGULAR", u"DIRECTORY", u"SYMLINK", start=1)
-
         self.FX = sequence.FX(
             u"OK", u"EOF", u"NO_SUCH_FILE", FILE_ALREADY_EXISTS=11)
-
 
 
     def test_representation(self):
@@ -271,7 +349,7 @@ class SequenceTests(TestCase):
 
     def test_withoutOtherContents(self):
         """
-        Names not passed to L{names} are not contained by the returned object.
+        Names not passed to L{sequence} are not contained by the returned object.
         """
         self.assertNotIn(u"bar", self.FX)
         self.assertNotIn(u"start", self.FILEXFER_TYPE)
@@ -279,13 +357,14 @@ class SequenceTests(TestCase):
 
     def test_lookupByValue(self):
         """
-        Indexing a sequence object by the value of one of its constants results
-        in that constant.
+        The C{lookupByValue} method of a L{sequence} object can be used to find
+        a constant by its value.
         """
         self.assertIdentical(self.FX.lookupByValue(0), self.FX.OK)
         self.assertIdentical(self.FX.lookupByValue(1), self.FX.EOF)
         self.assertIdentical(self.FX.lookupByValue(2), self.FX.NO_SUCH_FILE)
-        self.assertIdentical(self.FX.lookupByValue(11), self.FX.FILE_ALREADY_EXISTS)
+        self.assertIdentical(
+            self.FX.lookupByValue(11), self.FX.FILE_ALREADY_EXISTS)
 
 
 

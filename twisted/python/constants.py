@@ -27,12 +27,14 @@ class _NamedConstant(object):
 
 
 
-class _IntegerConstant(_NamedConstant):
+class _ValueConstant(_NamedConstant):
     def __init__(self, container, name, value):
         _NamedConstant.__init__(self, container, name)
         self.value = value
 
 
+
+class _IntegerConstant(_ValueConstant):
     def asInt(self):
         return self.value
 
@@ -51,7 +53,8 @@ class _Container(object):
             setattr(self, enumerant, self._constantFactory(enumerant))
         for (enumerant, value) in keyword.iteritems():
             setattr(self, enumerant, self._constantFactory(enumerant, value))
-        self._enumerants = positional + tuple(keyword)
+        self._enumerants = positional + tuple(
+            sorted(keyword, key=keyword.__getitem__))
 
 
     def __repr__(self):
@@ -76,7 +79,8 @@ _unspecified = object()
 
 class _NamesContainer(_Container):
     def _constantFactory(self, name, value=_unspecified):
-        assert value is _unspecified # TODO test
+        if value is not _unspecified:
+            raise TypeError("Cannot construct names with values")
         return _NamedConstant(self, name)
 
 
@@ -99,6 +103,12 @@ class _SequenceContainer(_Container):
 
     def lookupByValue(self, value):
         return self._valueToConstant[value]
+
+
+
+class _ValuesContainer(_SequenceContainer):
+    def _constantFactory(self, name, value):
+        return _SequenceContainer._constantFactory(self, name, value)
 
 
 
@@ -201,5 +211,6 @@ class _ContainerFactory(object):
 
 
 names = _ContainerFactory(_NamesContainer)
+values = _ContainerFactory(_ValuesContainer)
 sequence = _ContainerFactory(_SequenceContainer)
 bitvector = _ContainerFactory(_BitvectorContainer)
