@@ -363,7 +363,7 @@ class BitvectorTests(TestCase):
         self.assertEqual(
             3,
             ((FXF.READ | FXF.WRITE) & (FXF.READ | FXF.WRITE | FXF.APPEND)).asInt())
-        self.assertEqual(0, (FXF.READ & FXF.WRITE).asInt()) # XXX GLUGH
+        self.assertEqual(0, (FXF.READ & FXF.WRITE).asInt())
 
 
     def test_xor(self):
