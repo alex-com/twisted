@@ -96,8 +96,12 @@ class _SequenceContainer(_Container):
         if value is _unspecified:
             value = self._counter
             self._counter += 1
+        if value in self._valueToConstant:
+            raise ValueError(
+                "Duplicate value %r assigned to %s, already assigned to %s" % (
+                    value, name, self._valueToConstant[value].name))
         result = _IntegerConstant(self, name, value)
-        self._valueToConstant[value] = result # TODO test collision
+        self._valueToConstant[value] = result
         return result
 
 

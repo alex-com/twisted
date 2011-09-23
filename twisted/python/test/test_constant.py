@@ -192,6 +192,15 @@ class ValuesTests(TestCase):
         self.RPL = values.RPL(WELCOME="001", YOURHOST="002", CREATED="003")
 
 
+    def test_duplicateValue(self):
+        """
+        Constants constructed using L{values} may not have duplicate (re-used)
+        values.
+        """
+        # Thanks for the example, IRC.
+        self.assertRaises(ValueError, values.IRC, BOUNCE="010", ISUPPORT="010")
+
+
     def test_representation(self):
         """
         The string representation of the object created using L{values} includes
