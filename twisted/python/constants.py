@@ -136,7 +136,7 @@ class _BitvectorConstant(_IntegerConstant):
         return self.container._valueToConstant[value]
 
 
-    def __neg__(self):
+    def __invert__(self):
         return self.container.lookupByValue(~self.value)
 
 
