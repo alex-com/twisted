@@ -180,6 +180,10 @@ class _BitvectorContainer(_Container):
         if value is _unspecified:
             value = 1 << self._counter
             self._counter += 1
+        if value in self._valueToConstant:
+            raise ValueError(
+                "Duplicate value %r assigned to %s, already assigned to %s" % (
+                    value, name, self._valueToConstant[value].name))
         result = _BitvectorConstant(self, name, value)
         self._valueToConstant[value] = result
         return result

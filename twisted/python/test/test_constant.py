@@ -387,6 +387,17 @@ class BitvectorTests(TestCase):
         self.FXF = bitvector.FXF(u"READ", u"WRITE", u"APPEND", TEXT=0x40)
 
 
+    def test_duplicateValue(self):
+        """
+        Constants constructed using L{bitvector} may not have duplicate
+        (re-used) values.
+        """
+        # Oops, a typo, or something.
+        self.assertRaises(ValueError, bitvector.FXF, READ=0x1, WRITE=0x1)
+        # Also avoid collisions with implicitly assigned values
+        self.assertRaises(ValueError, bitvector.FXF, u"READ", WRITE=0x1)
+
+
     def test_representation(self):
         """
         The string representation of the object created using
