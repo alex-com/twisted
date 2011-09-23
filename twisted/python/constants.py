@@ -176,15 +176,15 @@ class _BitvectorContainer(_Container):
 
 
     def lookupByValue(self, value):
-        result = None
+        if value == 0:
+            return None
+        anything = self._valueToConstant[1]
+        result = anything ^ anything
         for name in self._enumerants:
             possible = getattr(self, name)
             if possible.value & value:
                 value &= ~possible.value
-                if result is None:
-                    result = possible
-                else:
-                    result = result | possible
+                result = result | possible
         if value:
             return None
         return result
