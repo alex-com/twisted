@@ -296,7 +296,7 @@ class BitvectorTests(TestCase):
     corresponding to one of the constants.
     """
     def setUp(self):
-        self.FXF = bitvector.FXF(u"READ", u"WRITE", u"APPEND")
+        self.FXF = bitvector.FXF(u"READ", u"WRITE", u"APPEND", TEXT=0x40)
 
 
     def test_representation(self):
@@ -306,7 +306,7 @@ class BitvectorTests(TestCase):
         the attribute of L{bitvector} used, and all of the names
         passed in.
         """
-        self.assertEqual("<FXF: READ WRITE APPEND>", repr(self.FXF))
+        self.assertEqual("<FXF: READ WRITE APPEND TEXT>", repr(self.FXF))
 
 
     def test_values(self):
@@ -317,6 +317,7 @@ class BitvectorTests(TestCase):
         self.assertEqual(1, self.FXF.READ.asInt())
         self.assertEqual(2, self.FXF.WRITE.asInt())
         self.assertEqual(4, self.FXF.APPEND.asInt())
+        self.assertEqual(64, self.FXF.TEXT.asInt())
 
 
     def test_iteration(self):
@@ -324,7 +325,9 @@ class BitvectorTests(TestCase):
         Iteration over the object returned by L{bitvector} produces each of its
         attribute values, in the order given to L{bitvector}.
         """
-        self.assertEqual([self.FXF.READ, self.FXF.WRITE, self.FXF.APPEND], list(self.FXF))
+        self.assertEqual(
+            [self.FXF.READ, self.FXF.WRITE, self.FXF.APPEND, self.FXF.TEXT],
+            list(self.FXF))
 
 
     def test_length(self):
@@ -332,7 +335,7 @@ class BitvectorTests(TestCase):
         The length of an object created with L{bitvector} is equal to the number
         of names it has.
         """
-        self.assertEqual(3, len(self.FXF))
+        self.assertEqual(4, len(self.FXF))
 
 
     def test_or(self):
@@ -343,7 +346,8 @@ class BitvectorTests(TestCase):
         self.assertEqual(3, (self.FXF.READ | self.FXF.WRITE).asInt())
         self.assertEqual(5, (self.FXF.READ | self.FXF.APPEND).asInt())
         self.assertEqual(6, (self.FXF.WRITE | self.FXF.APPEND).asInt())
-        self.assertEqual(7, (self.FXF.READ | self.FXF.WRITE | self.FXF.APPEND).asInt())
+        self.assertEqual(
+            7, (self.FXF.READ | self.FXF.WRITE | self.FXF.APPEND).asInt())
 
 
     def test_combinedRepresentation(self):
@@ -351,7 +355,8 @@ class BitvectorTests(TestCase):
         The object resulting from the combination of two bitvector constants
         using C{|} has a string representation reflecting both of the inputs.
         """
-        self.assertEqual("<FXF=READ|WRITE>", repr(self.FXF.READ | self.FXF.WRITE))
+        self.assertEqual(
+            "<FXF=READ|WRITE>", repr(self.FXF.READ | self.FXF.WRITE))
 
 
     def test_negation(self):
@@ -359,7 +364,8 @@ class BitvectorTests(TestCase):
         The negation of one of the constants created by L{bitvector} is the
         disjunction of all the other constants in that L{bitvector}.
         """
-        self.assertIdentical(~self.FXF.READ, self.FXF.WRITE | self.FXF.APPEND)
+        self.assertIdentical(
+            ~self.FXF.READ, self.FXF.WRITE | self.FXF.APPEND | self.FXF.TEXT)
 
 
     def test_and(self):
@@ -367,11 +373,14 @@ class BitvectorTests(TestCase):
         Two bitvector constants can be combined using C{&}, producing a new
         constant representing the conjunction of the inputs.
         """
-        self.assertEqual(1, (self.FXF.READ & (self.FXF.READ | self.FXF.WRITE)).asInt())
-        self.assertEqual(2, (self.FXF.WRITE & (self.FXF.READ | self.FXF.WRITE)).asInt())
+        self.assertEqual(
+            1, (self.FXF.READ & (self.FXF.READ | self.FXF.WRITE)).asInt())
+        self.assertEqual(
+            2, (self.FXF.WRITE & (self.FXF.READ | self.FXF.WRITE)).asInt())
         self.assertEqual(
             3,
-            ((self.FXF.READ | self.FXF.WRITE) & (self.FXF.READ | self.FXF.WRITE | self.FXF.APPEND)).asInt())
+            ((self.FXF.READ | self.FXF.WRITE)
+             & (self.FXF.READ | self.FXF.WRITE | self.FXF.APPEND)).asInt())
         self.assertEqual(0, (self.FXF.READ & self.FXF.WRITE).asInt())
 
 
@@ -381,11 +390,14 @@ class BitvectorTests(TestCase):
         a constant with exactly the bits set which were in one or the other but
         not both inputs.
         """
-        self.assertIdentical(self.FXF.READ ^ (self.FXF.READ | self.FXF.WRITE), self.FXF.WRITE)
         self.assertIdentical(
-            (self.FXF.READ | self.FXF.WRITE) ^ (self.FXF.WRITE | self.FXF.APPEND),
+            self.FXF.READ ^ (self.FXF.READ | self.FXF.WRITE), self.FXF.WRITE)
+        self.assertIdentical(
+            (self.FXF.READ | self.FXF.WRITE)
+            ^ (self.FXF.WRITE | self.FXF.APPEND),
             (self.FXF.READ | self.FXF.APPEND))
-        self.assertIdentical(self.FXF.READ ^ self.FXF.READ, self.FXF.WRITE ^ self.FXF.WRITE)
+        self.assertIdentical(
+            self.FXF.READ ^ self.FXF.READ, self.FXF.WRITE ^ self.FXF.WRITE)
 
 
     def test_containsBits(self):
@@ -401,6 +413,8 @@ class BitvectorTests(TestCase):
         self.assertIn(1 | 4, self.FXF)
         self.assertIn(2 | 4, self.FXF)
         self.assertIn(1 | 2 | 4, self.FXF)
+        self.assertIn(64, self.FXF)
+        self.assertIn(1 | 64, self.FXF)
 
 
     def test_withoutOtherContents(self):
@@ -421,18 +435,25 @@ class BitvectorTests(TestCase):
         self.assertIdentical(self.FXF.lookupByValue(1), self.FXF.READ)
         self.assertIdentical(self.FXF.lookupByValue(2), self.FXF.WRITE)
         self.assertIdentical(self.FXF.lookupByValue(4), self.FXF.APPEND)
-
+        self.assertIdentical(self.FXF.lookupByValue(64), self.FXF.TEXT)
 
     def test_lookupCombination(self):
         """
         Indexing a bitvector object by a value corresponding to the combination
         of two or more of its constants results in
         """
-        self.assertIdentical(self.FXF.lookupByValue(1 | 2), self.FXF.READ | self.FXF.WRITE)
-        self.assertIdentical(self.FXF.lookupByValue(1 | 4), self.FXF.READ | self.FXF.APPEND)
-        self.assertIdentical(self.FXF.lookupByValue(2 | 4), self.FXF.WRITE | self.FXF.APPEND)
         self.assertIdentical(
-            self.FXF.lookupByValue(1 | 2 | 4), self.FXF.READ | self.FXF.WRITE | self.FXF.APPEND)
+            self.FXF.lookupByValue(1 | 2), self.FXF.READ | self.FXF.WRITE)
+        self.assertIdentical(
+            self.FXF.lookupByValue(1 | 4), self.FXF.READ | self.FXF.APPEND)
+        self.assertIdentical(
+            self.FXF.lookupByValue(2 | 4), self.FXF.WRITE | self.FXF.APPEND)
+        self.assertIdentical(
+            self.FXF.lookupByValue(1 | 2 | 4),
+            self.FXF.READ | self.FXF.WRITE | self.FXF.APPEND)
+        self.assertIdentical(
+            self.FXF.lookupByValue(1 | 64),
+            self.FXF.READ | self.FXF.TEXT)
 
 
     def test_valueIteration(self):
@@ -440,4 +461,6 @@ class BitvectorTests(TestCase):
         After combining two values using C{|}, the resulting object can be
         iterated over, resulting in the inputs.
         """
-        self.assertEqual(list(self.FXF.READ | self.FXF.WRITE), [self.FXF.READ, self.FXF.WRITE])
+        self.assertEqual(
+            list(self.FXF.READ | self.FXF.WRITE),
+            [self.FXF.READ, self.FXF.WRITE])
