@@ -529,31 +529,22 @@ class BitvectorTests(TestCase):
         self.assertRaises(TypeError, lambda: self.FXF.READ ^ 10)
 
 
-    def test_containsBits(self):
+    def test_containsSymbolicNames(self):
         """
-        The object returned by L{bitvector} contains the integer values of the
-        constants it defines and the integer values of combinations of the
-        constants it defines.
+        The object returned by L{bitvector} contains the names passed in.
         """
-        self.assertIn(1, self.FXF)
-        self.assertIn(2, self.FXF)
-        self.assertIn(1 | 2, self.FXF)
-        self.assertIn(4, self.FXF)
-        self.assertIn(1 | 4, self.FXF)
-        self.assertIn(2 | 4, self.FXF)
-        self.assertIn(1 | 2 | 4, self.FXF)
-        self.assertIn(64, self.FXF)
-        self.assertIn(1 | 64, self.FXF)
+        self.assertIn(u"READ", self.FXF)
+        self.assertIn(u"WRITE", self.FXF)
+        self.assertIn(u"APPEND", self.FXF)
+        self.assertIn(u"TEXT", self.FXF)
 
 
     def test_withoutOtherContents(self):
         """
-        The object returned by L{bitvector} does not contain other integer
-        values.
+        The object returned by L{bitvector} does not contain other names.
         """
-        self.assertNotIn(0, self.FXF)
-        self.assertNotIn(8, self.FXF)
-        self.assertNotIn(9, self.FXF)
+        self.assertNotIn(u"foo", self.FXF)
+        self.assertNotIn(1, self.FXF)
 
 
     def test_lookupByValue(self):
@@ -561,6 +552,7 @@ class BitvectorTests(TestCase):
         Indexing a bitvector object by the value of one of its constants result
         in that constant.
         """
+        self.assertIdentical(self.FXF.lookupByValue(0), None)
         self.assertIdentical(self.FXF.lookupByValue(1), self.FXF.READ)
         self.assertIdentical(self.FXF.lookupByValue(2), self.FXF.WRITE)
         self.assertIdentical(self.FXF.lookupByValue(4), self.FXF.APPEND)
@@ -584,6 +576,7 @@ class BitvectorTests(TestCase):
         self.assertIdentical(
             self.FXF.lookupByValue(1 | 64),
             self.FXF.READ | self.FXF.TEXT)
+        self.assertIdentical(self.FXF.lookupByValue(1 | 8), None)
 
 
     def test_valueIteration(self):
