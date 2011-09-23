@@ -34,12 +34,6 @@ class _ValueConstant(_NamedConstant):
 
 
 
-class _IntegerConstant(_ValueConstant):
-    def asInt(self):
-        return self.value
-
-
-
 class _Container(object):
     """
     A L{_Container} represents a collection of constants which are conceptually
@@ -100,7 +94,7 @@ class _SequenceContainer(_Container):
             raise ValueError(
                 "Duplicate value %r assigned to %s, already assigned to %s" % (
                     value, name, self._valueToConstant[value].name))
-        result = _IntegerConstant(self, name, value)
+        result = _ValueConstant(self, name, value)
         self._valueToConstant[value] = result
         return result
 
@@ -116,9 +110,9 @@ class _ValuesContainer(_SequenceContainer):
 
 
 
-class _BitvectorConstant(_IntegerConstant):
+class _BitvectorConstant(_ValueConstant):
     def __init__(self, container, name, value):
-        _IntegerConstant.__init__(self, container, name, value)
+        _ValueConstant.__init__(self, container, name, value)
         if not isinstance(self.name, set):
             self.name = set([name])
 

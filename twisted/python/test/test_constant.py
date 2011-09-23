@@ -293,9 +293,9 @@ class SequenceTests(TestCase):
         """
         The names in a sequence are assigned sequential values starting at C{0}.
         """
-        self.assertEqual(0, self.FX.OK.asInt())
-        self.assertEqual(1, self.FX.EOF.asInt())
-        self.assertEqual(2, self.FX.NO_SUCH_FILE.asInt())
+        self.assertEqual(0, self.FX.OK.value)
+        self.assertEqual(1, self.FX.EOF.value)
+        self.assertEqual(2, self.FX.NO_SUCH_FILE.value)
 
 
     def test_overriddenValue(self):
@@ -303,7 +303,7 @@ class SequenceTests(TestCase):
         A name in a sequence may have a value explicitly assigned to it by
         passing that name as a keyword argument with a value.
         """
-        self.assertEqual(11, self.FX.FILE_ALREADY_EXISTS.asInt())
+        self.assertEqual(11, self.FX.FILE_ALREADY_EXISTS.value)
 
 
     def test_overriddenStart(self):
@@ -311,9 +311,9 @@ class SequenceTests(TestCase):
         The starting value for a sequence can be specified by passing a value
         for the C{start} keyword argument.
         """
-        self.assertEqual(1, self.FILEXFER_TYPE.REGULAR.asInt())
-        self.assertEqual(2, self.FILEXFER_TYPE.DIRECTORY.asInt())
-        self.assertEqual(3, self.FILEXFER_TYPE.SYMLINK.asInt())
+        self.assertEqual(1, self.FILEXFER_TYPE.REGULAR.value)
+        self.assertEqual(2, self.FILEXFER_TYPE.DIRECTORY.value)
+        self.assertEqual(3, self.FILEXFER_TYPE.SYMLINK.value)
 
 
     def test_iteration(self):
@@ -413,10 +413,10 @@ class BitvectorTests(TestCase):
         The names in a bitvector are assigned sequential powers of two starting
         at C{1}.
         """
-        self.assertEqual(1, self.FXF.READ.asInt())
-        self.assertEqual(2, self.FXF.WRITE.asInt())
-        self.assertEqual(4, self.FXF.APPEND.asInt())
-        self.assertEqual(64, self.FXF.TEXT.asInt())
+        self.assertEqual(1, self.FXF.READ.value)
+        self.assertEqual(2, self.FXF.WRITE.value)
+        self.assertEqual(4, self.FXF.APPEND.value)
+        self.assertEqual(64, self.FXF.TEXT.value)
 
 
     def test_iteration(self):
@@ -442,11 +442,11 @@ class BitvectorTests(TestCase):
         Two bitvector constants can be combined using C{|}, producing a new
         constant representing the disjunction of the inputs.
         """
-        self.assertEqual(3, (self.FXF.READ | self.FXF.WRITE).asInt())
-        self.assertEqual(5, (self.FXF.READ | self.FXF.APPEND).asInt())
-        self.assertEqual(6, (self.FXF.WRITE | self.FXF.APPEND).asInt())
+        self.assertEqual(3, (self.FXF.READ | self.FXF.WRITE).value)
+        self.assertEqual(5, (self.FXF.READ | self.FXF.APPEND).value)
+        self.assertEqual(6, (self.FXF.WRITE | self.FXF.APPEND).value)
         self.assertEqual(
-            7, (self.FXF.READ | self.FXF.WRITE | self.FXF.APPEND).asInt())
+            7, (self.FXF.READ | self.FXF.WRITE | self.FXF.APPEND).value)
 
 
     def test_onlyBitvectorConstantOr(self):
@@ -483,14 +483,14 @@ class BitvectorTests(TestCase):
         constant representing the conjunction of the inputs.
         """
         self.assertEqual(
-            1, (self.FXF.READ & (self.FXF.READ | self.FXF.WRITE)).asInt())
+            1, (self.FXF.READ & (self.FXF.READ | self.FXF.WRITE)).value)
         self.assertEqual(
-            2, (self.FXF.WRITE & (self.FXF.READ | self.FXF.WRITE)).asInt())
+            2, (self.FXF.WRITE & (self.FXF.READ | self.FXF.WRITE)).value)
         self.assertEqual(
             3,
             ((self.FXF.READ | self.FXF.WRITE)
-             & (self.FXF.READ | self.FXF.WRITE | self.FXF.APPEND)).asInt())
-        self.assertEqual(0, (self.FXF.READ & self.FXF.WRITE).asInt())
+             & (self.FXF.READ | self.FXF.WRITE | self.FXF.APPEND)).value)
+        self.assertEqual(0, (self.FXF.READ & self.FXF.WRITE).value)
 
 
     def test_onlyBitvectorConstantAnd(self):
