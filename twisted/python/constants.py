@@ -111,14 +111,33 @@ class _BitvectorConstant(_IntegerConstant):
 
     def __or__(self, other):
         # TODO What if it isn't a _BitvectorConstant
-        return _BitvectorConstant(
-            self.container, self.name | other.name, self.value | other.value)
+        value = self.value | other.value
+        if value not in self.container._valueToConstant:
+            self.container._valueToConstant[value] = _BitvectorConstant(
+                self.container, self.name | other.name, value)
+        return self.container._valueToConstant[value]
+
+
+    def __and__(self, other):
+        # TODO What if it isn't a _BitvectorConstant
+        value = self.value & other.value
+        if value not in self.container._valueToConstant:
+            self.container._valueToConstant[value] = _BitvectorConstant(
+                self.container, self.name & other.name, value)
+        return self.container._valueToConstant[value]
 
 
     def __xor__(self, other):
         # TODO What if it isn't a _BitvectorConstant
-        return _BitvectorConstant(
-            self.container, self.name | other.name, self.value ^ other.value)
+        value = self.value ^ other.value
+        if value not in self.container._valueToConstant:
+            self.container._valueToConstant[value] = _BitvectorConstant(
+                self.container, self.name ^ other.name, value)
+        return self.container._valueToConstant[value]
+
+
+    def __neg__(self):
+        return self.container.lookupByValue(~self.value)
 
 
     def __repr__(self):
@@ -131,17 +150,32 @@ class _BitvectorConstant(_IntegerConstant):
 
 
 class _BitvectorContainer(_Container):
-    _counter = 0
+
+    def __init__(self, name, positional, keyword):
+        self._counter = 0
+        self._valueToConstant = {}
+        _Container.__init__(self, name, positional, keyword)
+
 
     def _constantFactory(self, name, value=_unspecified):
         if value is _unspecified:
             value = 1 << self._counter
             self._counter += 1
-        return _BitvectorConstant(self, name, value)
+        result = _BitvectorConstant(self, name, value)
+        self._valueToConstant[value] = result
+        return result
 
 
     def lookupByValue(self, value):
-        return _BitvectorConstant(self, None, value)
+        result = None
+        for name in self._enumerants:
+            possible = getattr(self, name)
+            if possible.value & value:
+                if result is None:
+                    result = possible
+                else:
+                    result = result | possible
+        return result
 
 
 
