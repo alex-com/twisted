@@ -800,34 +800,69 @@ class _AgentMixin(object):
     @ivar persistent: Set to C{True} when you use HTTP persistent connecton.
     @type persistent: C{bool}
 
-    @ivar maxConnections: Max number of HTTP connections per a server.  The
-        default value is 1.  This is effective only when the
-        C{self.persistent} is C{True}.
-        RFC 2616 says "A single-user client SHOULD NOT maintain more than 2
-        connections with any server or proxy."
-    @type maxConnections: C{int}
+    @ivar maxPersistentConnsPerHost: Max number of persistent cache HTTP
+        connections per host.  The default value is 2, as per RFC 2616.
+    @type maxPersistentConnsPerHost: C{int}
 
-    @ivar _semaphores: A dictioinary mapping a tuple (scheme, host, port)
-        to an instance of L{DeferredSemaphore}.  It is used to limit the
-        number of connections to a server when C{self.persistent==True}.
+    @ivar _semaphores: A dictiinary mapping a tuple (scheme, host, port) to
+        an instance of L{DeferredSemaphore}.  It is used to limit the number
+        of cached persistent connections to a server when
+        C{self.persistent==True}.
 
-    @ivar _protocolCache: A dictioinary mapping a tuple (scheme, host, port)
+    @ivar _protocolCache: A dictiinary mapping a tuple (scheme, host, port)
         to a list of instances of L{HTTP11ClientProtocol}.  It is used to
         cache the connections to the servers when C{self.persistent==True}.
 
+    XXX needs to unregister lost connections from persistent cache and decrement semaphore?
+
+    XXX semaphore stuff is probably doing wrong restrictions.
+    
     @since: 11.1
     """
-    maxConnections = 1
-    persistent = False
 
 
-    def __init__(self, persistent=False):
+    def __init__(self, persistent=False, maxPersistentConnsPerHost=2):
         self.persistent = persistent
+        self.maxPersistentConnsPerHost = maxPersistentConnsPerHost
         self._semaphores = {}
         self._protocolCache = {}
 
 
-    def _connectAndRequest2(self, method, scheme, host, port, path, headers, bodyProducer, requestPath):
+    def _connectAndRequest(self, method, uri, headers, bodyProducer,
+                           requestPath=None):
+        """
+        Internal helper to make the request, restricting number of parallel
+        connects. C{_unrestrictedConnectAndRequest} does the actual work.
+
+        @param requestPath: If specified, the path to use for the request
+            instead of the path extracted from C{uri}.
+        """
+        scheme, host, port, path = _parse(uri)
+        if requestPath is None:
+            requestPath = path
+        if headers is None:
+            headers = Headers()
+        if not headers.hasHeader('host'):
+            headers = headers.copy()
+            headers.addRawHeader(
+                'host', self._computeHostValue(scheme, host, port))
+
+        if self.persistent:
+            sem = self._semaphores.get((scheme, host, port))
+            if sem is None:
+                sem = defer.DeferredSemaphore(self.maxPersistentConnsPerHost)
+                self._semaphores[scheme, host, port] = sem
+            return sem.run(self._unrestrictedConnectAndRequest,
+                           method, scheme, host, port, headers,
+                           bodyProducer, requestPath)
+        else:
+            return self._unrestrictedConnectAndRequest(
+                method, scheme, host, port, headers, bodyProducer,
+                requestPath)
+
+
+    def _unrestrictedConnectAndRequest(self, method, scheme, host, port,
+                            headers, bodyProducer, requestPath):
         """
         Issue a new request.
 
@@ -845,8 +880,6 @@ class _AgentMixin(object):
 
         @param port: An C{int} giving the port number the connection will be on.
 
-        @param path: A C{str} giving the path portion of the request URL.
-
         @param headers: The request headers to send.  If no I{Host} header is
             included, one will be added based on the request URI.
         @type headers: L{Headers}
@@ -855,6 +888,9 @@ class _AgentMixin(object):
             if the request body is to be empty, L{None}.
         @type bodyProducer: L{IBodyProducer} provider
 
+        @param requestPath: A C{str} giving the path portion that will be sent
+            in the request.
+        
         @return: A L{Deferred} which fires with the result of the request (a
             L{Response} instance), or fails if there is a problem setting up a
             connection over which to issue the request.  It may also fail with
@@ -911,42 +947,15 @@ class _AgentMixin(object):
     def closeCachedConnections(self):
         """
         Close all the cached persistent connections.
+
+        XXX should return Deferred of when all connections are gone.
         """
-        for protos in self._protocolCache.itervalues():
-            for p in protos:
-                p.transport.loseConnection()
+        cached = self._protocolCache.values()
         self._protocolCache = {}
-
-
-    def _connectAndRequest(self, method, uri, headers, bodyProducer,
-                           requestPath=None):
-        """
-        Internal helper to make the request, restricting number of parallel
-        connects.
-
-        @param requestPath: If specified, the path to use for the request
-            instead of the path extracted from C{uri}.
-        """
-        scheme, host, port, path = _parse(uri)
-        if requestPath is None:
-            requestPath = path
-        if headers is None:
-            headers = Headers()
-        if not headers.hasHeader('host'):
-            headers = headers.copy()
-            headers.addRawHeader(
-                'host', self._computeHostValue(scheme, host, port))
-
-        if self.persistent:
-            sem = self._semaphores.get((scheme, host, port))
-            if sem is None:
-                sem = defer.DeferredSemaphore(self.maxConnections)
-                self._semaphores[scheme, host, port] = sem
-            return sem.run(self._connectAndRequest2, method, scheme, host, port, path,
-                           headers, bodyProducer, requestPath)
-        else:
-            return self._connectAndRequest2(method, scheme, host, port, path,
-                                            headers, bodyProducer, requestPath)
+        for protos in cached:
+            for p in protos:
+                # Might want to use abortConnection when #78 is merged:
+                p.transport.loseConnection()
 
 
     def _computeHostValue(self, scheme, host, port):

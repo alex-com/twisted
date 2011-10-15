@@ -470,7 +470,6 @@ class WebClientTestCase(unittest.TestCase):
         return d
 
 
-
     def test_getPageNotQuiteHEAD(self):
         """
         If the request method is a different casing of I{HEAD} (ie, not all
@@ -816,7 +815,7 @@ class WebClientTestCase(unittest.TestCase):
         return d
 
 
-    @defer.deferredGenerator
+    @defer.inlineCallbacks
     def test_agentPersistentConnection(self):
         """
         L{client.Agent} uses HTTP 1.1 persistent connection
@@ -828,71 +827,66 @@ class WebClientTestCase(unittest.TestCase):
         # the first request will be redirected
         url = self.getURL('redirect')
         connKey = client._parse(url)[:3]
-        wfd = defer.waitForDeferred(self.agent.request('GET', url))
-        yield wfd
-        response = wfd.getResult()
+        response = yield self.agent.request('GET', url)
         self.assertEquals(response.code, 302)
         location = response.headers.getRawHeaders('location')
         self.assertTrue(location is not None)
         self.assertEquals(len(location), 1)
         location = location[0]
+        self.assertEquals(location, "/file")
+    
         # flush body data
-        wfd =  defer.waitForDeferred(getBody(response))
-        yield wfd
-        wfd.getResult()
+        yield getBody(response)
         protos = self.agent._protocolCache.get(connKey)
         self.assertTrue(protos is not None)
-        # the connection still remains
+        # the connection still remains:
         self.assertEquals(len(protos), 1)
         p1 = protos[0]
-        # the second request
-        url = self.getURL(location)
+
+        # the second request with the same scheme, host, port
+        url = self.getURL(location[1:]) # getURL assumes no / prefix
         connKey2 = client._parse(url)[:3]
-        # request to the same scheme, host, port
         self.assertEquals(connKey, connKey2)
-        wfd = defer.waitForDeferred(self.agent.request('GET', url))
-        yield wfd
-        response = wfd.getResult()
+        response = yield self.agent.request('GET', url)
         self.assertEquals(response.code, 200)
-        wfd =  defer.waitForDeferred(getBody(response))
-        yield wfd
-        body = wfd.getResult()
+        body = yield getBody(response)
         self.assertEquals(body, "0123456789")
         protos = self.agent._protocolCache.get(connKey)
         self.assertTrue(protos is not None)
         self.assertEquals(len(protos), 1)
         p2 = protos[0]
+        
         # the same connection is used by two requests
         self.assertTrue(p1 is p2)
 
+        # Clean up:
+        yield self.agent.closeCachedConnections()
+        
 
-
-    @defer.deferredGenerator
+    @defer.inlineCallbacks
     def test_agentPersistentConnectionReconnect(self):
         """
         Maybe timeout has been exeeded before the agent re-use the
-        cached connection. In this case, the agent automartically
+        cached connection. In this case, the agent automatically
         reconnects onece.
-
         """
         self.agent = client.Agent(reactor, persistent=True)
+
         # the first request will be redirected
         url = self.getURL('redirect')
         connKey = client._parse(url)[:3]
-        wfd = defer.waitForDeferred(self.agent.request('GET', url))
-        yield wfd
-        response = wfd.getResult()
+        response = yield self.agent.request('GET', url)
         self.assertEquals(response.code, 302)
         location = response.headers.getRawHeaders('location')
         self.assertTrue(location is not None)
         self.assertEquals(len(location), 1)
         location = location[0]
+
         # flush body data
-        wfd =  defer.waitForDeferred(getBody(response))
-        yield wfd
-        wfd.getResult()
+        yield getBody(response)
         protos = self.agent._protocolCache.get(connKey)
         self.assertTrue(protos is not None)
+
         # the connection still remains
         self.assertEquals(len(protos), 1)
         connections = self.wrapper.protocols.keys()
@@ -902,18 +896,15 @@ class WebClientTestCase(unittest.TestCase):
         proto.transport.loseConnection()
         p1 = protos[0]
         # the second request
-        url = self.getURL(location)
+        url = self.getURL(location[1:]) # getURL assumes no / at start
         connKey2 = client._parse(url)[:3]
+
         # request to the same scheme, host, port
         # this will open a new connection
         self.assertEquals(connKey, connKey2)
-        wfd = defer.waitForDeferred(self.agent.request('GET', url))
-        yield wfd
-        response = wfd.getResult()
+        response = yield self.agent.request('GET', url)
         self.assertEquals(response.code, 200)
-        wfd =  defer.waitForDeferred(getBody(response))
-        yield wfd
-        body = wfd.getResult()
+        body = yield getBody(response)
         self.assertEquals(body, "0123456789")
         protos = self.agent._protocolCache.get(connKey)
         self.assertTrue(protos is not None)
@@ -921,6 +912,9 @@ class WebClientTestCase(unittest.TestCase):
         p2 = protos[0]
         # two connections are not the same
         self.assertTrue(p1 is not p2)
+
+        # clean up
+        yield agent.closeCachedConnections()
 
 
     def test_agentMultipleConnections(self):
@@ -993,6 +987,8 @@ class WebClientSSLTestCase(WebClientTestCase):
         reactor.connectSSL(host, port, factory, ssl.ClientContextFactory())
         # The base class defines _cbFactoryInfo correctly for this
         return factory.deferred.addCallback(self._cbFactoryInfo, factory)
+
+
 
 class WebClientRedirectBetweenSSLandPlainText(unittest.TestCase):
     def getHTTPS(self, path):
