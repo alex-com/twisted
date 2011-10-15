@@ -628,7 +628,9 @@ def downloadPage(url, file, contextFactory=None, *args, **kwargs):
 from twisted.internet.protocol import ClientCreator
 from twisted.web.error import SchemeNotSupported
 from twisted.web._newclient import ResponseDone, Request, HTTP11ClientProtocol
-from twisted.web._newclient import Response, ResponseFailed
+from twisted.web._newclient import ResponseDone, ResponseFailed, Request, \
+    Response, HTTP11ClientProtocol
+from twisted.internet.error import ConnectionDone
 
 try:
     from twisted.internet.ssl import ClientContextFactory
@@ -795,13 +797,132 @@ class _AgentMixin(object):
     """
     Base class offering facilities for L{Agent}-type classes.
 
+    @ivar persistent: Set to C{True} when you use HTTP persistent connecton.
+    @type persistent: C{bool}
+
+    @ivar maxConnections: Max number of HTTP connections per a server.  The
+        default value is 1.  This is effective only when the
+        C{self.persistent} is C{True}.
+        RFC 2616 says "A single-user client SHOULD NOT maintain more than 2
+        connections with any server or proxy."
+    @type maxConnections: C{int}
+
+    @ivar _semaphores: A dictioinary mapping a tuple (scheme, host, port)
+        to an instance of L{DeferredSemaphore}.  It is used to limit the
+        number of connections to a server when C{self.persistent==True}.
+
+    @ivar _protocolCache: A dictioinary mapping a tuple (scheme, host, port)
+        to a list of instances of L{HTTP11ClientProtocol}.  It is used to
+        cache the connections to the servers when C{self.persistent==True}.
+
     @since: 11.1
     """
+    maxConnections = 1
+    persistent = False
+
+
+    def __init__(self, persistent=False):
+        self.persistent = persistent
+        self._semaphores = {}
+        self._protocolCache = {}
+
+
+    def _connectAndRequest2(self, method, scheme, host, port, path, headers, bodyProducer, requestPath):
+        """
+        Issue a new request.
+
+        This will be called by _connectAndRequest, users should not call it.
+
+        @param method: The request method to send.
+        @type method: C{str}
+
+        @param scheme: A string like C{'http'} or C{'https'} (the only two
+            supported values) to use to determine how to establish the
+            connection.
+
+        @param host: A C{str} giving the hostname which will be connected to in
+            order to issue a request.
+
+        @param port: An C{int} giving the port number the connection will be on.
+
+        @param path: A C{str} giving the path portion of the request URL.
+
+        @param headers: The request headers to send.  If no I{Host} header is
+            included, one will be added based on the request URI.
+        @type headers: L{Headers}
+
+        @param bodyProducer: An object which will produce the request body or,
+            if the request body is to be empty, L{None}.
+        @type bodyProducer: L{IBodyProducer} provider
+
+        @return: A L{Deferred} which fires with the result of the request (a
+            L{Response} instance), or fails if there is a problem setting up a
+            connection over which to issue the request.  It may also fail with
+            L{SchemeNotSupported} if the scheme of the given URI is not
+            supported.
+        @rtype: L{Deferred}
+        """
+        protos = self._protocolCache.setdefault((scheme, host, port), [])
+        maybeDisconnected = False
+        while protos:
+            # connection exists
+            p = protos.pop(0)
+            if p.state == 'QUIESCENT':
+                d = defer.succeed(p)
+                maybeDisconnected = True
+                break
+        else:
+            # new connection
+            d = self._connect(scheme, host, port)
+        req = Request(method, requestPath, headers, bodyProducer,
+                      persistent=self.persistent)
+
+        def saveProtocol(response, proto):
+            if self.persistent:
+                protos.append(proto)
+            return response
+
+        def cbConnected(proto):
+            def ebRequest(f):
+                # Previous connection is unavailable.
+                if f.check(ResponseFailed):
+                    for reason in f.value.reasons:
+                        if (isinstance(reason, failure.Failure) and 
+                            isinstance(reason.value, ConnectionDone)):
+                            # Maybe timeout has been exeeded before I send
+                            # the request. So I retry again.
+                            def retry(proto):
+                                d = proto.request(req)
+                                d.addCallback(saveProtocol, proto)
+                                return d
+                            d = self._connect(scheme, host, port)
+                            d.addCallback(retry)
+                            return d
+                return f
+            d = proto.request(req)
+            d.addCallback(saveProtocol, proto)
+            if maybeDisconnected:
+                d.addErrback(ebRequest)
+            return d
+        d.addCallback(cbConnected)
+        return d
+
+
+    def closeCachedConnections(self):
+        """
+        Close all the cached persistent connections.
+        """
+        for protos in self._protocolCache.itervalues():
+            for p in protos:
+                p.transport.loseConnection()
+        self._protocolCache = {}
+
 
     def _connectAndRequest(self, method, uri, headers, bodyProducer,
                            requestPath=None):
         """
-        Internal helper to make the request.
+        Internal helper to make the request, restricting number of parallel
+        connects.
 
         @param requestPath: If specified, the path to use for the request
             instead of the path extracted from C{uri}.
@@ -809,18 +930,23 @@ class _AgentMixin(object):
         scheme, host, port, path = _parse(uri)
         if requestPath is None:
             requestPath = path
-        d = self._connect(scheme, host, port)
         if headers is None:
             headers = Headers()
         if not headers.hasHeader('host'):
             headers = headers.copy()
             headers.addRawHeader(
                 'host', self._computeHostValue(scheme, host, port))
-        def cbConnected(proto):
-            return proto.request(
-                Request(method, requestPath, headers, bodyProducer))
-        d.addCallback(cbConnected)
-        return d
+
+        if self.persistent:
+            sem = self._semaphores.get((scheme, host, port))
+            if sem is None:
+                sem = defer.DeferredSemaphore(self.maxConnections)
+                self._semaphores[scheme, host, port] = sem
+            return sem.run(self._connectAndRequest2, method, scheme, host, port, path,
+                           headers, bodyProducer, requestPath)
+        else:
+            return self._connectAndRequest2(method, scheme, host, port, path,
+                                            headers, bodyProducer, requestPath)
 
 
     def _computeHostValue(self, scheme, host, port):
@@ -837,8 +963,8 @@ class _AgentMixin(object):
 class Agent(_AgentMixin):
     """
     L{Agent} is a very basic HTTP client.  It supports I{HTTP} and I{HTTPS}
-    scheme URIs (but performs no certificate checking by default).  It does not
-    support persistent connections.
+    scheme URIs (but performs no certificate checking by default).  It also
+    supports persistent connections.
 
     @ivar _reactor: The L{IReactorTCP} and L{IReactorSSL} implementation which
         will be used to set up connections over which to issue requests.
@@ -856,8 +982,11 @@ class Agent(_AgentMixin):
     """
     _protocol = HTTP11ClientProtocol
 
+
     def __init__(self, reactor, contextFactory=WebClientContextFactory(),
-                 connectTimeout=None, bindAddress=None):
+                 connectTimeout=None, bindAddress=None,
+                 persistent=False):
+        _AgentMixin.__init__(self, persistent)
         self._reactor = reactor
         self._contextFactory = contextFactory
         self._connectTimeout = connectTimeout
@@ -969,7 +1098,8 @@ class ProxyAgent(_AgentMixin):
 
     _factory = _HTTP11ClientFactory
 
-    def __init__(self, endpoint):
+    def __init__(self, endpoint, persistent=False):
+        _AgentMixin.__init__(self, persistent)
         self._proxyEndpoint = endpoint
 
 

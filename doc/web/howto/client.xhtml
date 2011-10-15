@@ -401,6 +401,119 @@ if __name__ == "__main__":
       Storing cookies with CookieAgent
     </a>
 
+
+    <h3>HTTP Persistent Connection</h3>
+
+    <p>
+      HTTP persistent connection is the idea of using the same TCP
+      connection to send and receive multiple HTTP requests/responses. This
+      reduces latency and TCP connection establishment overhead.
+    </p>
+
+    <p>
+      The constructor of <code class="API">twisted.web.client.Agent</code>
+      takes optional parameter <code class="API"
+      base="twisted.web.client.Agent">persisntent</code> which enables
+      persistent connection.  If the persistent is True, the agent does not
+      close connection when the request is done, and holds it in its cache to
+      re-use.
+    </p>
+
+    <p>
+      Here's an example which sends requests over persistent connection:
+    </p>
+
+    <pre class="python">
+from twisted.internet import reactor
+from twisted.internet.defer import Deferred, DeferredList
+from twisted.internet.protocol import Protocol
+from twisted.web.client import Agent
+
+class IgnoreBody(Protocol):
+    def __init__(self, deferred):
+        self.deferred = deferred
+
+    def dataReceived(self, bytes):
+        pass
+
+    def connectionLost(self, reason):
+        self.deferred.callback(None)
+
+
+def cbRequest(response):
+    print 'Response code:', response.code
+    finished = Deferred()
+    response.deliverBody(IgnoreBody(finished))
+    return finished
+
+agent = Agent(reactor, persistent=True)
+
+def requestGet(url):
+    d = agent.request('GET', url)
+    d.addCallback(cbRequest)
+    return d
+
+# three different requests to the same host        
+d1 = requestGet('http://example.com/foo')
+d2 = requestGet('http://example.com/bar')
+d3 = requestGet('http://example.com/baz')
+
+def cbShutdown(ignored):
+    reactor.stop()
+
+dl = DeferredList([d1, d2, d3])
+dl.addCallback(cbShutdown)
+reactor.run()
+    </pre>
+
+    <p>
+      Here, the three requests are to the same host. The first request
+      opens a new connection to the host, and the agent places the other
+      two requests on its queue. When the first request is done, the agent
+      gets the next request from its queue, and sends it over the previous
+      connection, and so on.
+    </p>
+
+    <h3>Multiple Connections to the Same Server</h3>
+
+    <p>
+      The constructor of <code class="API">twisted.web.client.Agent</code>
+      has an attribute called <code class="API"
+      base="twisted.web.client.Agent">maxConnections</code> which limits the
+      number of maximum connections to the same server. The default value is 1.
+      This is effective only when the <code class="API"
+      base="twisted.web.client.Agent">persistent</code> option is True. You can
+      change the value like bellow:
+    </p>
+
+    <pre class="python">
+from twisted.web.client import Agent
+
+agent = Agent(reactor, persistent=True)
+agent.maxConnections = 2
+    </pre>
+
+    <p>
+      If you set the maxConnections to 2, the agent opens two connectons to
+      the same host at a maximum. This does not mean that the agent always
+      opens two connections to the same host. For example, if you add
+      agent.maxConnections=2 to the previous example and execute it, the
+      actual number of connections will depend on your environment. 
+    </p>
+
+    <p>
+      If the first request is not done when the second request is invoked,
+      the second request opens a new connection. But if the first request is
+      done, the second request re-uses the previous connection.
+    </p>
+
+    <p>
+      It is important to note that you should never set the maxConnections
+      higher than 2. RFC 2616 says &quot;A single-user client SHOULD NOT
+      maintain more than 2 connections with any server or proxy.&quot;
+    </p>
+
+
     <h2>
       Conclusion
     </h2>
@@ -419,6 +532,10 @@ if __name__ == "__main__":
       </li>
       <li>
         How to control the streaming of the response body.
+      </li>
+      <li>
+        How to enable the HTTP persistent connection, and control the
+        number of connections.
       </li>
     </ul>
   </body>

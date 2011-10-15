@@ -793,6 +793,7 @@ class SlowRequest:
     """
     method = 'GET'
     stopped = False
+    persistent = False
 
     def writeTo(self, transport):
         self.finished = Deferred()
@@ -811,6 +812,8 @@ class SimpleRequest:
     returns a succeeded L{Deferred}.  This vaguely emulates the behavior of a
     L{Request} with no body producer.
     """
+    persistent = False
+
     def writeTo(self, transport):
         transport.write('SOME BYTES')
         return succeed(None)
@@ -879,6 +882,7 @@ class HTTP11ClientProtocolTests(TestCase):
         L{RequestGenerationFailed} wrapping the underlying failure.
         """
         class BrokenRequest:
+            persistent = False
             def writeTo(self, transport):
                 return fail(ArbitraryException())
 
@@ -901,6 +905,7 @@ class HTTP11ClientProtocolTests(TestCase):
         a L{Failure} of L{RequestGenerationFailed} wrapping that exception.
         """
         class BrokenRequest:
+            persistent = False
             def writeTo(self, transport):
                 raise ArbitraryException()
 
@@ -991,6 +996,7 @@ class HTTP11ClientProtocolTests(TestCase):
             self.assertEqual(response.code, 200)
             self.assertEqual(response.headers, Headers())
             self.assertTrue(self.transport.disconnecting)
+            self.assertEqual(self.protocol.state, 'QUIESCENT')
         d.addCallback(cbRequest)
         self.protocol.dataReceived(
             "HTTP/1.1 200 OK\r\n"
@@ -1036,6 +1042,8 @@ class HTTP11ClientProtocolTests(TestCase):
             p = AccumulatingProtocol()
             whenFinished = p.closedDeferred = Deferred()
             response.deliverBody(p)
+            self.assertEqual(
+                self.protocol.state, 'TRANSMITTING_AFTER_RECEIVING_RESPONSE')
             return whenFinished.addCallback(
                 lambda ign: (response, p.data))
         d.addCallback(cbResponse)
@@ -1363,6 +1371,21 @@ class RequestTests(TestCase):
             self.transport.value(),
             "GET / HTTP/1.1\r\n"
             "Connection: close\r\n"
+            "Host: example.com\r\n"
+            "\r\n")
+
+
+    def test_sendSimplestPersistentRequest(self):
+        """
+        A pesistent request sends 'Connection: Keep-Alive', and does
+        not send 'Connection: close' header.
+        """
+        req = Request('GET', '/', _boringHeaders, None, persistent=True)
+        req.writeTo(self.transport)
+        self.assertEqual(
+            self.transport.value(),
+            "GET / HTTP/1.1\r\n"
+            "Connection: Keep-Alive\r\n"
             "Host: example.com\r\n"
             "\r\n")
 

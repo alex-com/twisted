@@ -538,12 +538,16 @@ class Request:
 
     @ivar bodyProducer: C{None} or an L{IBodyProducer} provider which
         produces the content body to send to the remote HTTP server.
+
+    @ivar persistent: Set to C{True} when you use HTTP persistent connecton.
+    @type persistent: Boolean
     """
-    def __init__(self, method, uri, headers, bodyProducer):
+    def __init__(self, method, uri, headers, bodyProducer, persistent=False):
         self.method = method
         self.uri = uri
         self.headers = headers
         self.bodyProducer = bodyProducer
+        self.persistent = persistent
 
 
     def _writeHeaders(self, transport, TEorCL):
@@ -557,7 +561,10 @@ class Request:
         requestLines = []
         requestLines.append(
             '%s %s HTTP/1.1\r\n' % (self.method, self.uri))
-        requestLines.append('Connection: close\r\n')
+        if self.persistent:
+            requestLines.append('Connection: Keep-Alive\r\n')
+        else:
+            requestLines.append('Connection: close\r\n')
         if TEorCL is not None:
             requestLines.append(TEorCL)
         for name, values in self.headers.getAllRawHeaders():
@@ -1220,6 +1227,10 @@ class HTTP11ClientProtocol(Protocol):
     _state = 'QUIESCENT'
     _parser = None
 
+    @property
+    def state(self):
+        return self._state
+
     def request(self, request):
         """
         Issue C{request} over C{self.transport} and return a L{Deferred} which
@@ -1258,10 +1269,6 @@ class HTTP11ClientProtocol(Protocol):
         def cbRequestWrotten(ignored):
             if self._state == 'TRANSMITTING':
                 self._state = 'WAITING'
-                # XXX We're stuck in WAITING until we lose the connection now.
-                # This will be wrong when persistent connections are supported.
-                # See #3420 for persistent connections.
-
                 self._responseDeferred.chainDeferred(self._finishedRequest)
 
         def ebRequestWriting(err):
@@ -1288,18 +1295,11 @@ class HTTP11ClientProtocol(Protocol):
             the L{HTTPClientParser} which were not part of the response it
             was parsing.
         """
-        # XXX this is because Connection: close is hard-coded above, probably
-        # will want to change that at some point.  Either the client or the
-        # server can control this.
+        assert self._state in ('WAITING', 'TRANSMITTING')
 
-        # XXX If the connection isn't being closed at this point, it's
-        # important to make sure the transport isn't paused (after _giveUp,
-        # or inside it, or something - after the parser can no longer touch
-        # the transport)
-
-        # For both of the above, see #3420 for persistent connections.
-
-        if self._state == 'TRANSMITTING':
+        if self._state == 'WAITING':
+            self._state = 'QUIESCENT'
+        else:
             # The server sent the entire response before we could send the
             # whole request.  That sucks.  Oh well.  Fire the request()
             # Deferred with the response.  But first, make sure that if the
@@ -1308,7 +1308,13 @@ class HTTP11ClientProtocol(Protocol):
             self._state = 'TRANSMITTING_AFTER_RECEIVING_RESPONSE'
             self._responseDeferred.chainDeferred(self._finishedRequest)
 
-        self._giveUp(Failure(ConnectionDone("synthetic!")))
+        reason = ConnectionDone("synthetic!")
+        connHeaders = self._parser.connHeaders.getRawHeaders('connection')
+        if (connHeaders is not None) and ('close' in connHeaders):
+            self._giveUp(Failure(reason))
+        else:
+            # It's persistent connection
+            self._disconnectParser(reason)
 
 
     def _disconnectParser(self, reason):
