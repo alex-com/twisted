@@ -14,6 +14,10 @@ Maintainer: Glyph Lefkowitz
 @var _CONTINUE: A marker left in L{Deferred.callbacks} to indicate a Deferred
     chain.  Always accompanied by a Deferred instance in the args tuple pointing
     at the Deferred which is chained to the Deferred which has this marker.
+
+@var DEBUG:
+@var DEBUG_HISTORY_LOCATIONS:
+@var DEBUG_HISTORY_CALLSTACKS:
 """
 
 import traceback
@@ -153,15 +157,27 @@ def passthru(arg):
     return arg
 
 
+DEBUG = 1
+DEBUG_HISTORY_LOCATIONS = 2
+DEBUG_HISTORY_CALLSTACKS = 3
 
-def setDebugging(on):
-    """
-    Enable or disable L{Deferred} debugging.
 
-    When debugging is on, the call stacks from creation and invocation are
-    recorded, and added to any L{AlreadyCalledErrors} we raise.
+def setDebugging(level):
     """
-    Deferred.debug=bool(on)
+    Set the level of L{Deferred} debugging.
+
+    The following values are respected:
+      - DEBUG (or True): Basic debugging support. Enables history for Deferreds
+        and stores callstacks for creation and initial callback.
+      - DEBUG_HISTORY_LOCATIONS: Stores the filename/lineno of L{addCallbacks}
+        calls with the history.
+      - DEBUG_HISTORY_CALLSTACKS: Stores the callstack of L{addCallbacks} calls
+        with the history.
+      - 0 or False: Disable debugging.
+    """
+    if level and level not in (DEBUG, DEBUG_HISTORY_LOCATIONS, DEBUG_HISTORY_CALLSTACKS):
+        level = DEBUG
+    Deferred.debug = level
 
 
 
@@ -234,7 +250,7 @@ class Deferred:
 
     # Keep this class attribute for now, for compatibility with code that
     # sets it directly.
-    debug = False
+    debug = 0
 
     _chainedTo = None
 
@@ -267,6 +283,7 @@ class Deferred:
         if self.debug:
             self._debugInfo = DebugInfo()
             self._debugInfo.creator = traceback.format_stack()[:-1]
+        self.history = []
 
 
     def addCallbacks(self, callback, errback=None,
@@ -519,6 +536,13 @@ class Deferred:
                 item = current.callbacks.pop(0)
                 callback, args, kw = item[
                     isinstance(current.result, failure.Failure)]
+                if self.debug:
+                    if callback is _CONTINUE:
+                        print "ADDING", args[0].history
+                        current.history.extend(args[0].history)
+                    else:
+                        print "ADDING", callback,args,kw
+                        current.history.append((callback, args, kw))
                 args = args or ()
                 kw = kw or {}
 
@@ -548,11 +572,15 @@ class Deferred:
                 except:
                     # Including full frame information in the Failure is quite
                     # expensive, so we avoid it unless self.debug is set.
-                    current.result = failure.Failure(captureVars=self.debug)
+                    # Should I actually copy self.history here, or pass the original? It actually makes a difference!
+                    current.result = failure.Failure(captureVars=self.debug, history=current.history[:])
                 else:
                     if isinstance(current.result, Deferred):
                         # The result is another Deferred.  If it has a result,
                         # we can take it and keep going.
+                        # Is it possible for current.result.history to be modified AFTER this line? PROBABLY!
+                        if current.debug and current.result.debug: # SO UNTESTED
+                            current.history.append(current.result.history[:])
                         resultResult = getattr(current.result, 'result', _NO_RESULT)
                         if resultResult is _NO_RESULT or isinstance(resultResult, Deferred) or current.result.paused:
                             # Nope, it didn't.  Pause and chain.
