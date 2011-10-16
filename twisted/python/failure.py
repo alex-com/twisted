@@ -197,7 +197,7 @@ class Failure:
         self.count = count
         self.type = self.value = tb = None
         self.captureVars = captureVars
-        self.history = history
+        self._history = history
 
         #strings Exceptions/Failures are bad, mmkay?
         if isinstance(exc_value, (str, unicode)) and exc_type is None:
@@ -551,10 +551,10 @@ class Failure:
                     fmtHistory(el, prefix=prefix + "->  ")
                 else:
                     w(prefix)
-                    w("[callback: %s, args: %s, kwargs: %s]\n" % el)
+                    w("[callback: %s, args: %s, kwargs: %s]\n" % el[2:])
 
-        if self.history is not None:
-            fmtHistory(self.history)
+        if self._history is not None:
+            fmtHistory(self._history.getHistory())
 
         # Preamble
         if detail == 'verbose':
