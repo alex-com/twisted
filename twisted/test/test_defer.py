@@ -2015,15 +2015,17 @@ class HistoryTests(unittest.TestCase):
     def tearDown(self):
         defer.setDebugging(False)
 
+
     def assertHistory(self, historyItem, deferred, callback, args=None, kwargs=None):
         if args is None:
             args = ()
         if kwargs is None:
             kwargs = {}
-        self.assertEquals(historyItem[1], deferred)
-        self.assertEquals(historyItem[2], callback)
-        self.assertEquals(historyItem[3], args)
-        self.assertEquals(historyItem[4], kwargs)
+        self.assertEquals(historyItem.deferred, deferred)
+        self.assertEquals(historyItem.callback, callback)
+        self.assertEquals(historyItem.args, args)
+        self.assertEquals(historyItem.kwargs, kwargs)
+
 
     def test_simpleHistory(self):
         def cb1(r):
@@ -2031,11 +2033,13 @@ class HistoryTests(unittest.TestCase):
         def cb2(r):
             1 / 0
         d = defer.Deferred()
-        d.addCallback(cb1).addCallback(cb2)
+        d.addCallback(cb1)
+        d.addCallback(cb2)
         d.callback("result")
         history = d._history.getHistory()
-        self.assertEquals(len(history), 1)
+        self.assertEquals(len(history), 2)
         self.assertHistory(history[0], d, cb1)
+        self.assertHistory(history[1], d, cb2)
 
 
     def test_nestedHistory(self):
@@ -2050,9 +2054,9 @@ class HistoryTests(unittest.TestCase):
         second.callback(5)
         first.callback("result")
         history = first._history.getHistory()
-        self.assertEquals(len(history), 1)
+        self.assertEquals(len(history), 2)
         self.assertHistory(history[0], first, cb1)
-
+        self.assertHistory(history[1], second, cb2)
 
 
     # def test_formatCallbackHistory(self):

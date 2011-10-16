@@ -538,9 +538,6 @@ class Deferred:
                 item = current.callbacks.pop(0)
                 callback, args, kw = item[
                     isinstance(current.result, failure.Failure)]
-                if self.debug:
-                    if callback is _CONTINUE:
-                        args[0]._history.mergeHistory(current._history)
                 args = args or ()
                 kw = kw or {}
 
@@ -564,6 +561,9 @@ class Deferred:
                 try:
                     current._runningCallbacks = True
                     try:
+                        historyItem = None
+                        if self.debug > 0:
+                            historyItem = current._history.addHistoryItem(current, callback, args, kw)
                         current.result = callback(current.result, *args, **kw)
                     finally:
                         current._runningCallbacks = False
@@ -577,8 +577,6 @@ class Deferred:
                         # The result is another Deferred.  If it has a result,
                         # we can take it and keep going.
                         # Is it possible for current.result.history to be modified AFTER this line? PROBABLY!
-                        if current.debug and current.result.debug: # SO UNTESTED
-                            current._history.mergeHistory(current.result._history)
                         resultResult = getattr(current.result, 'result', _NO_RESULT)
                         if resultResult is _NO_RESULT or isinstance(resultResult, Deferred) or current.result.paused:
                             # Nope, it didn't.  Pause and chain.
@@ -597,9 +595,9 @@ class Deferred:
                             if current.result._debugInfo is not None:
                                 current.result._debugInfo.failResult = None
                             current.result = resultResult
-                    else:
-                        current._history.addHistoryItem(current, callback, args, kw, current.result)
 
+                if historyItem is not None:
+                    historyItem.setResult(current.result)
             if finished:
                 # As much of the callback chain - perhaps all of it - as can be
                 # processed right now has been.  The current Deferred is waiting on
@@ -730,6 +728,21 @@ class FirstError(Exception):
         return -1
 
 
+
+class _DeferredHistoryItem(object):
+    def __init__(self, invocationTime, deferred, callback, args, kwargs):
+        self.invocationTime = invocationTime
+        self.deferred = deferred
+        self.callback = callback
+        self.args = args
+        self.kwargs = kwargs
+        self.result = None
+
+    def setResult(self, result):
+        self.result = result
+
+
+
 class _DeferredHistory(object):
     """
     A debug representation of a Deferred's callbacks.
@@ -743,12 +756,20 @@ class _DeferredHistory(object):
     def getHistory(self):
         return self._history
 
-    def addHistoryItem(self, deferred, call, args, kwargs, result):
-        self._history.append((time.time(), deferred, call, args, kwargs, result))
+    def addHistoryItem(self, deferred, call, args, kwargs):
+        result = _DeferredHistoryItem(time.time(), deferred, call, args, kwargs)
+        self._history.append(result)
+        return result
 
     def mergeHistory(self, history):
         for item in history.getHistory():
             self._history.append(item)
+
+    def formatHistory(self):
+        s = ""
+        for item in self._history:
+            s += "[%s %s %s]\n" % (item.callback, item.args, item.kwargs)
+        return s
 
 
 class DeferredList(Deferred):
