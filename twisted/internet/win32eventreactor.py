@@ -207,7 +207,7 @@ class Win32Reactor(posixbase.PosixReactorBase):
     def doWaitForMultipleEvents(self, timeout):
         log.msg(channel='system', event='iteration', reactor=self)
         if timeout is None:
-            timeout = 0
+            timeout = 100
 
         # Keep track of whether we run any application code before we get to the
         # MsgWaitForMultipleObjects.  If so, there's a chance it will schedule a
