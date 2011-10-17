@@ -57,7 +57,7 @@ from win32file import (
     FD_READ, FD_CLOSE, FD_ACCEPT, FD_CONNECT,
     WSAEventSelect, WSAEnumNetworkEvents)
 from win32event import CreateEvent, MsgWaitForMultipleObjects
-from win32event import WAIT_OBJECT_0, WAIT_TIMEOUT, QS_ALLINPUT
+from win32event import WAIT_OBJECT_0, WAIT_TIMEOUT, QS_ALLINPUT, QS_ALLEVENTS
 
 import win32gui
 
@@ -239,7 +239,7 @@ class Win32Reactor(posixbase.PosixReactorBase):
 
         handles = self._events.keys() or [self.dummyEvent]
         timeout = int(timeout * 1000)
-        val = MsgWaitForMultipleObjects(handles, 0, timeout, QS_ALLINPUT)
+        val = MsgWaitForMultipleObjects(handles, 0, timeout, QS_ALLINPUT | QS_ALLEVENTS)
         if val == WAIT_TIMEOUT:
             return
         elif val == WAIT_OBJECT_0 + len(handles):
