@@ -1670,10 +1670,6 @@ class AbortConnectionMixin(object):
         that bugs should not be masked by abortConnection, in particular
         unexpected exceptions.
         """
-        # Skip if we're in win32event reactor:
-        if self.buildReactor().__class__.__name__ ==  "Win32Reactor":
-            raise SkipTest("This test will fail until ticket #5233 is fixed")
-
         self.runAbortTest(ResumeThrowsClient,
                           AbortServerProtocol,
                           clientConnectionLostReason=ZeroDivisionError)
