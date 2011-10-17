@@ -793,6 +793,53 @@ class FileBodyProducer(object):
 
 
 
+class _HTTPConnectionPool(object):
+    """
+    A pool of persistent HTTP connections.
+
+    Features:
+    - Cached connections will eventually time out.
+    - Limits on maximum number of persistent connections.
+    """
+
+    def get(self, method, uri, headers):
+        """
+        Return a Deferred of a connection, either new or cached, to be used
+        for a HTTP request.
+
+        If cached, the connection will not be used for other requests until it
+        is L{put} back, since we do not support pipelined requests.
+
+        Only GET and HEAD can be done over a persistent connection (XXX find
+        where in RFC it talks about this) so other methods will result in new
+        connections.
+
+        Headers are required since we want to check for the 'Connection'
+        header to see if it says 'close'.
+        """
+
+
+    def put(self, connection):
+        """
+        Return a persistent connection to the pool.
+        """
+
+
+    def _connect(self, uri):
+        """
+        Return a Deferred that fires with a new connection.
+        """
+
+
+    def closeCachedConnections(self):
+        """
+        Close all the cached persistent connections.
+
+        @return: A L{Deferred} that fires when all cached connections are closed.
+        """
+
+
+
 class _AgentMixin(object):
     """
     Base class offering facilities for L{Agent}-type classes.
@@ -816,7 +863,9 @@ class _AgentMixin(object):
     XXX needs to unregister lost connections from persistent cache and decrement semaphore?
 
     XXX semaphore stuff is probably doing wrong restrictions.
-    
+
+    XXX move most of the code into _HTTPConnectionPool above.
+
     @since: 11.1
     """
 
