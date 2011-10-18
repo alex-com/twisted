@@ -152,8 +152,7 @@ class ZshIntegrationTestCase(TestCase, ZshScriptTestMixin):
     """
     Test that zsh completion functions are generated without error
     """
-    generateFor = [('mktap', 'twisted.scripts.mktap.FirstPassOptions'),
-                   ('twistd', 'twisted.scripts.twistd.ServerOptions'),
+    generateFor = [('twistd', 'twisted.scripts.twistd.ServerOptions'),
                    ('trial', 'twisted.scripts.trial.Options'),
                    ('pyhtmlizer', 'twisted.scripts.htmlizer.Options'),
                    ('tap2rpm', 'twisted.scripts.tap2rpm.MyOptions'),
