@@ -59,10 +59,6 @@ class ScriptTests(TestCase, ScriptTestsMixin):
     """
     Tests for the core scripts.
     """
-    def test_mktap(self):
-        self.scriptTest("mktap")
-
-
     def test_twistd(self):
         self.scriptTest("twistd")
 
