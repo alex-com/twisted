@@ -41,22 +41,31 @@ class SerialPort(BaseSerialPort, abstract.FileDescriptor):
         self.closed = 0
         self.closedNotifies = 0
         self.writeInProgress = 0
-        
+
         self.protocol = protocol
         self._overlappedRead = win32file.OVERLAPPED()
         self._overlappedRead.hEvent = win32event.CreateEvent(None, 1, 0, None)
         self._overlappedWrite = win32file.OVERLAPPED()
         self._overlappedWrite.hEvent = win32event.CreateEvent(None, 0, 0, None)
-        
+
         self.reactor.addEvent(self._overlappedRead.hEvent, self, 'serialReadEvent')
         self.reactor.addEvent(self._overlappedWrite.hEvent, self, 'serialWriteEvent')
 
         self.protocol.makeConnection(self)
+        self._finishPortSetup()
 
+
+    def _finishPortSetup(self):
+        """
+        Finish setting up the serial port.
+
+        This is a separate method to facilitate testing.
+        """
         flags, comstat = win32file.ClearCommError(self._serial.hComPort)
         rc, self.read_buf = win32file.ReadFile(self._serial.hComPort,
                                                win32file.AllocateReadBuffer(1),
                                                self._overlappedRead)
+
 
     def serialReadEvent(self):
         #get that character we set up

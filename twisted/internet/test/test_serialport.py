@@ -44,6 +44,9 @@ class SerialPortTests(unittest.TestCase):
         class DummySerialPort(serialport.SerialPort):
             _serialFactory = DoNothing
 
+            def _finishPortSetup(self):
+                pass # override default win32 actions
+
         events = []
 
         class SerialProtocol(Protocol):
