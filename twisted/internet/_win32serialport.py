@@ -29,10 +29,10 @@ class SerialPort(BaseSerialPort, abstract.FileDescriptor):
     def __init__(self, protocol, deviceNameOrPortNumber, reactor, 
         baudrate = 9600, bytesize = EIGHTBITS, parity = PARITY_NONE,
         stopbits = STOPBITS_ONE, xonxoff = 0, rtscts = 0):
-        self._serial = serial.Serial(deviceNameOrPortNumber, baudrate=baudrate,
-                                     bytesize=bytesize, parity=parity,
-                                     stopbits=stopbits, timeout=None,
-                                     xonxoff=xonxoff, rtscts=rtscts)
+        self._serial = self._serialFactory(
+            deviceNameOrPortNumber, baudrate=baudrate, bytesize=bytesize,
+            parity=parity, stopbits=stopbits, timeout=None,
+            xonxoff=xonxoff, rtscts=rtscts)
         self.flushInput()
         self.flushOutput()
         self.reactor = reactor
@@ -105,3 +105,4 @@ class SerialPort(BaseSerialPort, abstract.FileDescriptor):
         self.reactor.removeEvent(self._overlappedWrite.hEvent)
         abstract.FileDescriptor.connectionLost(self, reason)
         self._serial.close()
+        self.protocol.connectionLost(reason)

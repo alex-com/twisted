@@ -26,6 +26,13 @@ from serial import FIVEBITS, SIXBITS, SEVENBITS, EIGHTBITS
 
 # common code for serial ports
 class BaseSerialPort:
+    """
+    Base class for Windows and POSIX serial ports.
+    """
+
+    _serialFactory = serial.Serial
+
+
     def setBaudRate(self, baudrate):
         if hasattr(self._serial, "setBaudrate"):
             self._serial.setBaudrate(baudrate)
