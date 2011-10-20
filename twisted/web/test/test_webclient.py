@@ -1505,11 +1505,7 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
     """
     Tests for the L{_HTTPConnectionPool} class.
 
-    - If there is a cached connections and method is GET, get returns one, removes it from cache and cancels its timeout.
-    - Ditto for HEAD
-    - If method is neither GET nor HEAD, getting a connection creates a new one.
     - If connection is set to close in headers, getting a connection creates a new one.
-    - If an idle connection is put back in the cache, it is added with timeout.
     - If a non-idle connection is put back in the cache, an exception is raised.
     - If a closed connection is put back in the cache, an exception is raised.
     - If an idle connection is put back in the cache and the max number of persistent connections has been exceeded, one of the connections is closed and removed from the cache.
@@ -1537,10 +1533,106 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
         # We start out with no cached connections...
         def gotConnection(conn):
             self.assertIsInstance(conn, StubHTTPProtocol)
-            self.assertEqual(conn.destination, ("https", "example.com", 80))
+            self.assertEqual(conn.destination, ("https", "example.com", 443))
 
-        d = self.pool.get("GET", "https", "example.com", 80, http_headers.Headers())
+        d = self.pool.get("GET", "https", "example.com", 443,
+                          http_headers.Headers())
         return d.addCallback(gotConnection)
+
+
+    def test_putStartsTimeout(self):
+        """
+        If a connection is put back to the pool, a 240-sec timeout is started.
+
+        When the timeout hits, the connection is closed and removed from the
+        pool.
+        """
+        # We start out with one cached connection:
+        protocol = StubHTTPProtocol()
+        protocol.makeConnection(StringTransport())
+        self.pool.put("http", "example.com", 80, protocol)
+
+        # Connection is in pool, still not closed:
+        self.assertEquals(protocol.transport.disconnecting, False)
+        self.assertIn(protocol,
+                      self.pool._connections[("http", "example.com", 80)])
+
+        # Advance 239 seconds, still not closed:
+        self.fakeReactor.advance(239)
+        self.assertEquals(protocol.transport.disconnecting, False)
+        self.assertIn(protocol,
+                      self.pool._connections[("http", "example.com", 80)])
+
+        # Advance past 240 seconds, connection will be closed:
+        self.fakeReactor.advance(1.1)
+        self.assertEquals(protocol.transport.disconnecting, True)
+        self.assertNotIn(protocol,
+                         self.pool._connections[("http", "example.com", 80)])
+
+
+    def getCachedConnection(self, method):
+        """
+        Get a cached connection, make sure timeout is cancelled and it is
+        removed from cache.
+        """
+        # We start out with one cached connection:
+        protocol = StubHTTPProtocol()
+        protocol.makeConnection(StringTransport())
+        self.pool.put("http", "example.com", 80, protocol)
+
+        def gotConnection(conn):
+            # We got the cached connection:
+            self.assertIdentical(protocol, conn)
+            self.assertNotIn(conn,
+                             self.pool._connections[("http", "example.com", 80)])
+            # And the timeout was cancelled:
+            self.fakeReactor.advance(241)
+            self.assertEquals(conn.transport.disconnecting, False)
+
+        return self.pool.get(method, "http", "example.com", 80,
+                             http_headers.Headers()
+                             ).addCallback(gotConnection)
+
+
+    def test_getCachedConnectionGET(self):
+        """
+        For the GET HTTP method, getting an address which has a
+        cached connection returns the cached connection, removes it from the
+        cache and cancels its timeout.
+        """
+        return self.getCachedConnection("GET")
+
+
+    def test_getCachedConnectionHEAD(self):
+        """
+        For the HEAD HTTP method, getting an address which has a
+        cached connection returns the cached connection, removes it from the
+        cache and cancels its timeout.
+        """
+        return self.getCachedConnection("HEAD")
+
+
+    def test_getNotCachedConnectionMADEUP(self):
+        """
+        For the MADEUP HTTP method (i.e. methods that are neither GET nor
+        HEAD), getting an address which has a cached connection does not
+        return the cached connection, but rather a new one.
+        """
+        # We start out with one cached connection:
+        protocol = StubHTTPProtocol()
+        protocol.makeConnection(StringTransport())
+        self.pool.put("http", "example.com", 80, protocol)
+
+        def gotConnection(conn):
+            # We got a new connection, old one is still cached:
+            self.assertNotIdentical(protocol, conn)
+            self.assertIsInstance(conn, StubHTTPProtocol)
+            self.assertIn(protocol,
+                          self.pool._connections[("http", "example.com", 80)])
+
+        return self.pool.get("MADEUP", "http", "example.com", 80,
+                             http_headers.Headers()
+                             ).addCallback(gotConnection)
 
 
 

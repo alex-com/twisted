@@ -797,13 +797,20 @@ class _HTTPConnectionPool(object):
     """
     A pool of persistent HTTP connections.
 
+    @ivar _connections: Map (scheme, host, port) to set of
+        L{HTTP11ClientProtocol} instances.
+
     Features:
     - Cached connections will eventually time out.
     - Limits on maximum number of persistent connections.
     """
 
+    cachedConnectionTimeout = 240
+
     def __init__(self, reactor):
-        self.reactor = reactor
+        self._reactor = reactor
+        self._connections = {}
+        self._timeouts = {}
 
 
     def get(self, method, scheme, host, port, headers):
@@ -821,13 +828,36 @@ class _HTTPConnectionPool(object):
         Headers are required since we want to check for the 'Connection'
         header to see if it says 'close'.
         """
+        key = (scheme, host, port)
+        if method in ("GET", "HEAD"):
+            # Try to get cached version:
+            conns = self._connections.get(key)
+            if conns:
+                conn = conns.pop()
+                # Cancel timeout:
+                self._timeouts[conn].cancel()
+                del self._timeouts[conn]
+                return defer.succeed(conn)
         return self._connect(scheme, host, port)
 
 
-    def put(self, connection):
+    def _remove(self, scheme, host, port, connection):
+        """
+        Remove a connection from the cache and disconnect it.
+        """
+        connection.transport.loseConnection()
+        self._connections[(scheme, host, port)].remove(connection)
+
+
+    def put(self, scheme, host, port, connection):
         """
         Return a persistent connection to the pool.
         """
+        conns = self._connections.setdefault((scheme, host, port), set())
+        conns.add(connection)
+        cid = self._reactor.callLater(self.cachedConnectionTimeout, self._remove,
+                                      scheme, host, port, connection)
+        self._timeouts[connection] = cid
 
 
     def _connect(self, uri):
