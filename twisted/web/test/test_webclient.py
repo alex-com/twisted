@@ -1500,6 +1500,31 @@ class FakeReactorAndConnectMixin:
 
 
 
+class HTTPConnectionPoolTests(unitest.TestCase, FakeReactorAndConnectMixin):
+    """
+    Tests for the L{_HTTPConnectionPool} class.
+
+    - If there are no cached connections, get returns a new connection.
+    - If there is a cached connections and method is GET, get returns one, removes it from cache and cancels its timeout.
+    - Ditto for HEAD
+    - If method is neither GET nor HEAD, getting a connection creates a new one.
+    - If connection is set to close in headers, getting a connection creates a new one.
+    - If an idle connection is put back in the cache, it is added with timeout.
+    - If a non-idle connection is put back in the cache, an exception is raised.
+    - If a closed connection is put back in the cache, an exception is raised.
+    - If an idle connection is put back in the cache and the max number of persistent connections has been exceeded, one of the connections is closed and removed from the cache.
+    - closeCachedConnections closes all cached connections and removes them from the cache.
+    - Max persistent connections are tied to (scheme, host, port); different keys have different max connections.
+
+    Elsewhere (probably AgentTests? or new class for agent mixin) we will need to test: 
+    - Agent calls connection pool with correct paremeters when it wants connection
+    - When a request is done and the connection is closed it is not added back to pool
+    - When a request is done and the connection is still open it is added back to pool
+    - If persistent is set to False a 'Connection: close' header is added when getting connection from pool.
+    """
+
+
+
 class AgentTests(unittest.TestCase, FakeReactorAndConnectMixin):
     """
     Tests for the new HTTP client API provided by L{Agent}.
