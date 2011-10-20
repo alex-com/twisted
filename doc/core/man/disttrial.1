@@ -1,0 +1,84 @@
+.TH DISTTRIAL "1" "Oct 2007" "" ""
+.SH NAME
+disttrial \- run unit tests using several processes
+.SH SYNOPSIS
+.B disttrial [options] [[file|package|module|TestCase|testmethod]...]
+.PP
+.B disttrial --help
+.SH DESCRIPTION
+.PP
+disttrial loads and executes a suite of unit tests, obtained from modules,
+packages and files listed on the command line, using different process worders.
+.PP
+disttrial use the same logic that trial(1) to load tests.  Please refer to the
+trial documentation for more information.
+.TP
+\fB--disablegc\fR
+Disable the garbage collector.
+.TP
+\fB-e\fR, \fB--rterrors\fR
+Print tracebacks to standard output as soon as they occur
+.TP
+\fB--force-gc\fR
+Run gc.collect() before and after each test case. This can be used to
+isolate errors that occur when objects get collected.  This option would be
+the default, except it makes tests run about ten times slower.
+.TP
+\fB-h\fR, \fB--help\fR
+Print a usage message to standard output, then exit.
+.TP
+\fB--help-reporters\fR
+Print a list of valid reporters to standard output, then exit.
+.TP
+\fB--help-reactors\fR
+List the names of possibly available reactors.
+.TP
+\fB-N\fR, \fB--no-recurse\fR
+By default, trial recurses through packages to find every module inside
+every subpackage.  Unless, that is, you specify this option.
+.TP
+\fB\-r\fR, \fB\--reactor\fR \fI<reactor>\fR
+Choose which reactor to use.  See --help-reactors for a list.
+.TP
+\fB--recursionlimit\fR
+Set Python's recursion limit.
+.TP
+\fB--reporter\fR
+Select the reporter to use for Trial's output.  Use the --help-reporters
+option to see a list of valid reporters.
+.TP
+\fB--spew\fR
+Print an insanely verbose log of everything that happens. Useful when
+debugging freezes or locks in complex code.
+.TP
+\fB--temp-directory <directory>\fR
+WARNING: Do not use this options unless you know what you are doing.
+By default, disttrial creates a directory called _trial_temp under the current
+working directory.  When disttrial runs, it first \fIdeletes\fR this directory,
+then creates it, then changes into the directory to run the tests. The log
+file and any coverage files are stored here. Use this option if you wish to
+have trial run in a directory other than _trial_temp. Be warned, disttrial
+will \fIdelete\fR the directory before re-creating it.
+.TP
+\fB--testmodule <filename>\fR
+Ask trial to look into <filename> and run any tests specified using the
+Emacs-style buffer variable 'test-case-name'.
+.TP
+\fB--unclean-warnings\fR
+As of Twisted 2.6, trial will report an error if the reactor is left unclean
+at the end of the test. This option is provided to assist in migrating from
+Twisted 2.5 to Twisted 2.6 and later. Enabling this option will turn the errors
+into warnings.
+.TP
+\fB-z\fR, \fB--random [<seed>]\fR
+Run the tests in random order using the specified seed.
+.PP
+.SH AUTHOR
+Written by Thomas Herve
+.SH "REPORTING BUGS"
+To report a bug, visit \fIhttp://twistedmatrix.com/bugs/\fR
+.SH COPYRIGHT
+Copyright \(co 2007 Twisted Matrix Laboratories
+.br
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
