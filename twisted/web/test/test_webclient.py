@@ -31,7 +31,7 @@ from twisted.internet.error import ConnectionRefusedError
 from twisted.internet.protocol import Protocol
 from twisted.internet.defer import Deferred, succeed
 from twisted.internet.endpoints import TCP4ClientEndpoint
-from twisted.web.client import FileBodyProducer, Request
+from twisted.web.client import FileBodyProducer, Request, _HTTPConnectionPool
 from twisted.web.iweb import UNKNOWN_LENGTH, IBodyProducer, IResponse
 from twisted.web._newclient import HTTP11ClientProtocol, Response
 from twisted.web.error import SchemeNotSupported
@@ -1495,16 +1495,16 @@ class FakeReactorAndConnectMixin:
         """
         protocol = StubHTTPProtocol()
         protocol.makeConnection(None)
+        protocol.destination = (scheme, host, port)
         self.protocol = protocol
         return succeed(protocol)
 
 
 
-class HTTPConnectionPoolTests(unitest.TestCase, FakeReactorAndConnectMixin):
+class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
     """
     Tests for the L{_HTTPConnectionPool} class.
 
-    - If there are no cached connections, get returns a new connection.
     - If there is a cached connections and method is GET, get returns one, removes it from cache and cancels its timeout.
     - Ditto for HEAD
     - If method is neither GET nor HEAD, getting a connection creates a new one.
@@ -1522,6 +1522,25 @@ class HTTPConnectionPoolTests(unitest.TestCase, FakeReactorAndConnectMixin):
     - When a request is done and the connection is still open it is added back to pool
     - If persistent is set to False a 'Connection: close' header is added when getting connection from pool.
     """
+
+    def setUp(self):
+        self.fakeReactor = self.Reactor()
+        self.pool = _HTTPConnectionPool(self.fakeReactor)
+        self.pool._connect = self._dummyConnect
+
+
+    def test_getReturnsNewIfCacheEmpty(self):
+        """
+        If there are no cached connections, L{_HTTPConnectionPool.get} returns
+        a new connection.
+        """
+        # We start out with no cached connections...
+        def gotConnection(conn):
+            self.assertIsInstance(conn, StubHTTPProtocol)
+            self.assertEqual(conn.destination, ("https", "example.com", 80))
+
+        d = self.pool.get("GET", "https", "example.com", 80, http_headers.Headers())
+        return d.addCallback(gotConnection)
 
 
 

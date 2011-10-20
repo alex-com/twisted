@@ -802,7 +802,11 @@ class _HTTPConnectionPool(object):
     - Limits on maximum number of persistent connections.
     """
 
-    def get(self, method, uri, headers):
+    def __init__(self, reactor):
+        self.reactor = reactor
+
+
+    def get(self, method, scheme, host, port, headers):
         """
         Return a Deferred of a connection, either new or cached, to be used
         for a HTTP request.
@@ -817,6 +821,7 @@ class _HTTPConnectionPool(object):
         Headers are required since we want to check for the 'Connection'
         header to see if it says 'close'.
         """
+        return self._connect(scheme, host, port)
 
 
     def put(self, connection):
