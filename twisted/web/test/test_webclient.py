@@ -1505,11 +1505,9 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
     """
     Tests for the L{_HTTPConnectionPool} class.
 
-    - If connection is set to close in headers, getting a connection creates a new one.
-    - If a non-idle connection is put back in the cache, an exception is raised.
-    - If a closed connection is put back in the cache, an exception is raised.
+    - If a non-quiescent connection is put back in the cache, an exception is raised.
     - If an idle connection is put back in the cache and the max number of persistent connections has been exceeded, one of the connections is closed and removed from the cache.
-    - closeCachedConnections closes all cached connections and removes them from the cache.
+    - closeCachedConnections closes all cached connections and removes them from the cache, and returns Deferred that fires when they are actually closed.
     - Max persistent connections are tied to (scheme, host, port); different keys have different max connections.
 
     Elsewhere (probably AgentTests? or new class for agent mixin) we will need to test: 
@@ -1562,15 +1560,17 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
         self.assertEquals(protocol.transport.disconnecting, False)
         self.assertIn(protocol,
                       self.pool._connections[("http", "example.com", 80)])
+        self.assertIn(protocol, self.pool._timeouts)
 
         # Advance past 240 seconds, connection will be closed:
         self.fakeReactor.advance(1.1)
         self.assertEquals(protocol.transport.disconnecting, True)
         self.assertNotIn(protocol,
                          self.pool._connections[("http", "example.com", 80)])
+        self.assertNotIn(protocol, self.pool._timeouts)
 
 
-    def getCachedConnection(self, method):
+    def getCachedConnectionTest(self, method):
         """
         Get a cached connection, make sure timeout is cancelled and it is
         removed from cache.
@@ -1588,6 +1588,7 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
             # And the timeout was cancelled:
             self.fakeReactor.advance(241)
             self.assertEquals(conn.transport.disconnecting, False)
+            self.assertNotIn(conn, self.pool._timeouts)
 
         return self.pool.get(method, "http", "example.com", 80,
                              http_headers.Headers()
@@ -1600,7 +1601,7 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
         cached connection returns the cached connection, removes it from the
         cache and cancels its timeout.
         """
-        return self.getCachedConnection("GET")
+        return self.getCachedConnectionTest("GET")
 
 
     def test_getCachedConnectionHEAD(self):
@@ -1609,14 +1610,14 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
         cached connection returns the cached connection, removes it from the
         cache and cancels its timeout.
         """
-        return self.getCachedConnection("HEAD")
+        return self.getCachedConnectionTest("HEAD")
 
 
-    def test_getNotCachedConnectionMADEUP(self):
+    def getNewConnectionTest(self, method, headers):
         """
-        For the MADEUP HTTP method (i.e. methods that are neither GET nor
-        HEAD), getting an address which has a cached connection does not
-        return the cached connection, but rather a new one.
+        For certain method or header parameters, getting an address which has
+        a cached connection does not return the cached connection, but rather
+        a new one.
         """
         # We start out with one cached connection:
         protocol = StubHTTPProtocol()
@@ -1630,9 +1631,28 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
             self.assertIn(protocol,
                           self.pool._connections[("http", "example.com", 80)])
 
-        return self.pool.get("MADEUP", "http", "example.com", 80,
-                             http_headers.Headers()
+        return self.pool.get(method, "http", "example.com", 80, headers
                              ).addCallback(gotConnection)
+
+
+    def test_getNotCachedConnectionOtherMethods(self):
+        """
+        For a HTTP method that is neither GET nor HEAD, getting an address
+        which has a cached connection does not return the cached connection,
+        but rather a new one.
+        """
+        return self.getNewConnectionTest("METHOD", http_headers.Headers())
+
+
+    def test_getNotCachedConnectionCloseHeader(self):
+        """
+        When the Connection header is set to close, getting an address which
+        has a cached connection does not return the cached connection, but
+        rather a new one.
+        """
+        headers = http_headers.Headers()
+        headers.addRawHeader("Connection", "close")
+        return self.getNewConnectionTest("GET", headers)
 
 
 

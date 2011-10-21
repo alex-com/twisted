@@ -829,7 +829,8 @@ class _HTTPConnectionPool(object):
         header to see if it says 'close'.
         """
         key = (scheme, host, port)
-        if method in ("GET", "HEAD"):
+        if (method in ("GET", "HEAD") and
+            headers.getRawHeaders("connection") != ["close"]):
             # Try to get cached version:
             conns = self._connections.get(key)
             if conns:
@@ -847,6 +848,7 @@ class _HTTPConnectionPool(object):
         """
         connection.transport.loseConnection()
         self._connections[(scheme, host, port)].remove(connection)
+        del self._timeouts[connection]
 
 
     def put(self, scheme, host, port, connection):
