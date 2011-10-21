@@ -805,15 +805,18 @@ class _HTTPConnectionPool(object):
     - Limits on maximum number of persistent connections.
     """
 
+    _protocol = HTTP11ClientProtocol
+
     cachedConnectionTimeout = 240
 
-    def __init__(self, reactor):
+    def __init__(self, reactor, persistent=False):
         self._reactor = reactor
+        self.persistent = persistent
         self._connections = {}
         self._timeouts = {}
 
 
-    def get(self, method, scheme, host, port, headers):
+    def _getConnection(self, method, scheme, host, port, headers):
         """
         Return a Deferred of a connection, either new or cached, to be used
         for a HTTP request.
@@ -842,7 +845,7 @@ class _HTTPConnectionPool(object):
         return self._connect(scheme, host, port)
 
 
-    def _remove(self, scheme, host, port, connection):
+    def _removeConnection(self, scheme, host, port, connection):
         """
         Remove a connection from the cache and disconnect it.
         """
@@ -851,259 +854,16 @@ class _HTTPConnectionPool(object):
         del self._timeouts[connection]
 
 
-    def put(self, scheme, host, port, connection):
+    def _putConnection(self, scheme, host, port, connection):
         """
         Return a persistent connection to the pool.
         """
         conns = self._connections.setdefault((scheme, host, port), set())
         conns.add(connection)
-        cid = self._reactor.callLater(self.cachedConnectionTimeout, self._remove,
+        cid = self._reactor.callLater(self.cachedConnectionTimeout,
+                                      self._removeConnection,
                                       scheme, host, port, connection)
         self._timeouts[connection] = cid
-
-
-    def _connect(self, uri):
-        """
-        Return a Deferred that fires with a new connection.
-        """
-
-
-    def closeCachedConnections(self):
-        """
-        Close all the cached persistent connections.
-
-        @return: A L{Deferred} that fires when all cached connections are closed.
-        """
-
-
-
-class _AgentMixin(object):
-    """
-    Base class offering facilities for L{Agent}-type classes.
-
-    @ivar persistent: Set to C{True} when you use HTTP persistent connecton.
-    @type persistent: C{bool}
-
-    @ivar maxPersistentConnsPerHost: Max number of persistent cache HTTP
-        connections per host.  The default value is 2, as per RFC 2616.
-    @type maxPersistentConnsPerHost: C{int}
-
-    @ivar _semaphores: A dictiinary mapping a tuple (scheme, host, port) to
-        an instance of L{DeferredSemaphore}.  It is used to limit the number
-        of cached persistent connections to a server when
-        C{self.persistent==True}.
-
-    @ivar _protocolCache: A dictiinary mapping a tuple (scheme, host, port)
-        to a list of instances of L{HTTP11ClientProtocol}.  It is used to
-        cache the connections to the servers when C{self.persistent==True}.
-
-    XXX needs to unregister lost connections from persistent cache and decrement semaphore?
-
-    XXX semaphore stuff is probably doing wrong restrictions.
-
-    XXX move most of the code into _HTTPConnectionPool above.
-
-    @since: 11.1
-    """
-
-
-    def __init__(self, persistent=False, maxPersistentConnsPerHost=2):
-        self.persistent = persistent
-        self.maxPersistentConnsPerHost = maxPersistentConnsPerHost
-        self._semaphores = {}
-        self._protocolCache = {}
-
-
-    def _connectAndRequest(self, method, uri, headers, bodyProducer,
-                           requestPath=None):
-        """
-        Internal helper to make the request, restricting number of parallel
-        connects. C{_unrestrictedConnectAndRequest} does the actual work.
-
-        @param requestPath: If specified, the path to use for the request
-            instead of the path extracted from C{uri}.
-        """
-        scheme, host, port, path = _parse(uri)
-        if requestPath is None:
-            requestPath = path
-        if headers is None:
-            headers = Headers()
-        if not headers.hasHeader('host'):
-            headers = headers.copy()
-            headers.addRawHeader(
-                'host', self._computeHostValue(scheme, host, port))
-
-        if self.persistent:
-            sem = self._semaphores.get((scheme, host, port))
-            if sem is None:
-                sem = defer.DeferredSemaphore(self.maxPersistentConnsPerHost)
-                self._semaphores[scheme, host, port] = sem
-            return sem.run(self._unrestrictedConnectAndRequest,
-                           method, scheme, host, port, headers,
-                           bodyProducer, requestPath)
-        else:
-            return self._unrestrictedConnectAndRequest(
-                method, scheme, host, port, headers, bodyProducer,
-                requestPath)
-
-
-    def _unrestrictedConnectAndRequest(self, method, scheme, host, port,
-                            headers, bodyProducer, requestPath):
-        """
-        Issue a new request.
-
-        This will be called by _connectAndRequest, users should not call it.
-
-        @param method: The request method to send.
-        @type method: C{str}
-
-        @param scheme: A string like C{'http'} or C{'https'} (the only two
-            supported values) to use to determine how to establish the
-            connection.
-
-        @param host: A C{str} giving the hostname which will be connected to in
-            order to issue a request.
-
-        @param port: An C{int} giving the port number the connection will be on.
-
-        @param headers: The request headers to send.  If no I{Host} header is
-            included, one will be added based on the request URI.
-        @type headers: L{Headers}
-
-        @param bodyProducer: An object which will produce the request body or,
-            if the request body is to be empty, L{None}.
-        @type bodyProducer: L{IBodyProducer} provider
-
-        @param requestPath: A C{str} giving the path portion that will be sent
-            in the request.
-        
-        @return: A L{Deferred} which fires with the result of the request (a
-            L{Response} instance), or fails if there is a problem setting up a
-            connection over which to issue the request.  It may also fail with
-            L{SchemeNotSupported} if the scheme of the given URI is not
-            supported.
-        @rtype: L{Deferred}
-        """
-        protos = self._protocolCache.setdefault((scheme, host, port), [])
-        maybeDisconnected = False
-        while protos:
-            # connection exists
-            p = protos.pop(0)
-            if p.state == 'QUIESCENT':
-                d = defer.succeed(p)
-                maybeDisconnected = True
-                break
-        else:
-            # new connection
-            d = self._connect(scheme, host, port)
-        req = Request(method, requestPath, headers, bodyProducer,
-                      persistent=self.persistent)
-
-        def saveProtocol(response, proto):
-            if self.persistent:
-                protos.append(proto)
-            return response
-
-        def cbConnected(proto):
-            def ebRequest(f):
-                # Previous connection is unavailable.
-                if f.check(ResponseFailed):
-                    for reason in f.value.reasons:
-                        if (isinstance(reason, failure.Failure) and 
-                            isinstance(reason.value, ConnectionDone)):
-                            # Maybe timeout has been exeeded before I send
-                            # the request. So I retry again.
-                            def retry(proto):
-                                d = proto.request(req)
-                                d.addCallback(saveProtocol, proto)
-                                return d
-                            d = self._connect(scheme, host, port)
-                            d.addCallback(retry)
-                            return d
-                return f
-            d = proto.request(req)
-            d.addCallback(saveProtocol, proto)
-            if maybeDisconnected:
-                d.addErrback(ebRequest)
-            return d
-        d.addCallback(cbConnected)
-        return d
-
-
-    def closeCachedConnections(self):
-        """
-        Close all the cached persistent connections.
-
-        XXX should return Deferred of when all connections are gone.
-        """
-        cached = self._protocolCache.values()
-        self._protocolCache = {}
-        for protos in cached:
-            for p in protos:
-                # Might want to use abortConnection when #78 is merged:
-                p.transport.loseConnection()
-
-
-    def _computeHostValue(self, scheme, host, port):
-        """
-        Compute the string to use for the value of the I{Host} header, based on
-        the given scheme, host name, and port number.
-        """
-        if (scheme, port) in (('http', 80), ('https', 443)):
-            return host
-        return '%s:%d' % (host, port)
-
-
-
-class Agent(_AgentMixin):
-    """
-    L{Agent} is a very basic HTTP client.  It supports I{HTTP} and I{HTTPS}
-    scheme URIs (but performs no certificate checking by default).  It also
-    supports persistent connections.
-
-    @ivar _reactor: The L{IReactorTCP} and L{IReactorSSL} implementation which
-        will be used to set up connections over which to issue requests.
-
-    @ivar _contextFactory: A web context factory which will be used to create
-        SSL context objects for any SSL connections the agent needs to make.
-
-    @ivar _connectTimeout: If not C{None}, the timeout passed to C{connectTCP}
-        or C{connectSSL} for specifying the connection timeout.
-
-    @ivar _bindAddress: If not C{None}, the address passed to C{connectTCP} or
-        C{connectSSL} for specifying the local address to bind to.
-
-    @since: 9.0
-    """
-    _protocol = HTTP11ClientProtocol
-
-
-    def __init__(self, reactor, contextFactory=WebClientContextFactory(),
-                 connectTimeout=None, bindAddress=None,
-                 persistent=False):
-        _AgentMixin.__init__(self, persistent)
-        self._reactor = reactor
-        self._contextFactory = contextFactory
-        self._connectTimeout = connectTimeout
-        self._bindAddress = bindAddress
-
-
-    def _wrapContextFactory(self, host, port):
-        """
-        Create and return a normal context factory wrapped around
-        C{self._contextFactory} in such a way that C{self._contextFactory} will
-        have the host and port information passed to it.
-
-        @param host: A C{str} giving the hostname which will be connected to in
-            order to issue a request.
-
-        @param port: An C{int} giving the port number the connection will be
-            on.
-
-        @return: A context factory suitable to be passed to
-            C{reactor.connectSSL}.
-        """
-        return _WebToNormalContextFactory(self._contextFactory, host, port)
 
 
     def _connect(self, scheme, host, port):
@@ -1138,6 +898,100 @@ class Agent(_AgentMixin):
             d = defer.fail(SchemeNotSupported(
                     "Unsupported scheme: %r" % (scheme,)))
         return d
+
+
+    def _connectAndRequest(self, method, uri, headers, bodyProducer,
+                           requestPath=None):
+        """
+        Get a connection (cached or new), then send the request.
+
+        @param requestPath: If specified, the path to use for the request
+            instead of the path extracted from C{uri}.
+        """
+        scheme, host, port, path = _parse(uri)
+        if requestPath is None:
+            requestPath = path
+        if headers is None:
+            headers = Headers()
+        if not headers.hasHeader('host'):
+            headers = headers.copy()
+            headers.addRawHeader(
+                'host', self._computeHostValue(scheme, host, port))
+        d = self._getConnection(method, scheme, host, port, headers)
+        def cbConnected(proto):
+            return proto.request(
+                Request(method, requestPath, headers, bodyProducer))
+        d.addCallback(cbConnected)
+        return d
+
+
+    def _computeHostValue(self, scheme, host, port):
+        """
+        Compute the string to use for the value of the I{Host} header, based on
+        the given scheme, host name, and port number.
+        """
+        if (scheme, port) in (('http', 80), ('https', 443)):
+            return host
+        return '%s:%d' % (host, port)
+
+
+    def closeCachedConnections(self):
+        """
+        Close all the cached persistent connections.
+
+        @return: A L{Deferred} that fires when all cached connections are
+            closed.
+        """
+
+
+
+class Agent(_HTTPConnectionPool):
+    """
+    L{Agent} is a very basic HTTP client.  It supports I{HTTP} and I{HTTPS}
+    scheme URIs (but performs no certificate checking by default).  It also
+    supports persistent connections.
+
+    @ivar _reactor: The L{IReactorTCP} and L{IReactorSSL} implementation which
+        will be used to set up connections over which to issue requests.
+
+    @ivar _contextFactory: A web context factory which will be used to create
+        SSL context objects for any SSL connections the agent needs to make.
+
+    @ivar _connectTimeout: If not C{None}, the timeout passed to C{connectTCP}
+        or C{connectSSL} for specifying the connection timeout.
+
+    @ivar _bindAddress: If not C{None}, the address passed to C{connectTCP} or
+        C{connectSSL} for specifying the local address to bind to.
+
+    @since: 9.0
+    """
+
+
+    def __init__(self, reactor, contextFactory=WebClientContextFactory(),
+                 connectTimeout=None, bindAddress=None,
+                 persistent=False):
+        _HTTPConnectionPool.__init__(self, reactor, persistent)
+        self._contextFactory = contextFactory
+        self._connectTimeout = connectTimeout
+        self._bindAddress = bindAddress
+
+
+    def _wrapContextFactory(self, host, port):
+        """
+        Create and return a normal context factory wrapped around
+        C{self._contextFactory} in such a way that C{self._contextFactory} will
+        have the host and port information passed to it.
+
+        @param host: A C{str} giving the hostname which will be connected to in
+            order to issue a request.
+
+        @param port: An C{int} giving the port number the connection will be
+            on.
+
+        @return: A context factory suitable to be passed to
+            C{reactor.connectSSL}.
+        """
+        return _WebToNormalContextFactory(self._contextFactory, host, port)
 
 
     def request(self, method, uri, headers=None, bodyProducer=None):
@@ -1179,7 +1033,7 @@ class _HTTP11ClientFactory(protocol.ClientFactory):
 
 
 
-class ProxyAgent(_AgentMixin):
+class ProxyAgent(_HTTPConnectionPool):
     """
     An HTTP agent able to cross HTTP proxies.
 
@@ -1193,8 +1047,12 @@ class ProxyAgent(_AgentMixin):
 
     _factory = _HTTP11ClientFactory
 
-    def __init__(self, endpoint, persistent=False):
-        _AgentMixin.__init__(self, persistent)
+    def __init__(self, endpoint):
+        # The way ProxyAgent overrides _connect with an endpoint doesn't match
+        # well with the connection pool implementation. This is solvable, but
+        # for the moment we'll just disable persistence:
+        from twisted.internet import reactor # XXX
+        _HTTPConnectionPool.__init__(self, reactor, persistent=False)
         self._proxyEndpoint = endpoint
 
 

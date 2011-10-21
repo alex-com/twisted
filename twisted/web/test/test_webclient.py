@@ -815,157 +815,6 @@ class WebClientTestCase(unittest.TestCase):
         return d
 
 
-    @defer.inlineCallbacks
-    def test_agentPersistentConnection(self):
-        """
-        L{client.Agent} uses HTTP 1.1 persistent connection
-        C{persistent} is True. A connection will be saved as a instance
-        of L{HTTP11ClientProtocol} in agent's C{_protocolCache} when the
-        request is done.
-        """
-        self.agent = client.Agent(reactor, persistent=True)
-        # the first request will be redirected
-        url = self.getURL('redirect')
-        connKey = client._parse(url)[:3]
-        response = yield self.agent.request('GET', url)
-        self.assertEquals(response.code, 302)
-        location = response.headers.getRawHeaders('location')
-        self.assertTrue(location is not None)
-        self.assertEquals(len(location), 1)
-        location = location[0]
-        self.assertEquals(location, "/file")
-    
-        # flush body data
-        yield getBody(response)
-        protos = self.agent._protocolCache.get(connKey)
-        self.assertTrue(protos is not None)
-        # the connection still remains:
-        self.assertEquals(len(protos), 1)
-        p1 = protos[0]
-
-        # the second request with the same scheme, host, port
-        url = self.getURL(location[1:]) # getURL assumes no / prefix
-        connKey2 = client._parse(url)[:3]
-        self.assertEquals(connKey, connKey2)
-        response = yield self.agent.request('GET', url)
-        self.assertEquals(response.code, 200)
-        body = yield getBody(response)
-        self.assertEquals(body, "0123456789")
-        protos = self.agent._protocolCache.get(connKey)
-        self.assertTrue(protos is not None)
-        self.assertEquals(len(protos), 1)
-        p2 = protos[0]
-        
-        # the same connection is used by two requests
-        self.assertTrue(p1 is p2)
-
-        # Clean up:
-        yield self.agent.closeCachedConnections()
-        
-
-    @defer.inlineCallbacks
-    def test_agentPersistentConnectionReconnect(self):
-        """
-        Maybe timeout has been exeeded before the agent re-use the
-        cached connection. In this case, the agent automatically
-        reconnects onece.
-        """
-        self.agent = client.Agent(reactor, persistent=True)
-
-        # the first request will be redirected
-        url = self.getURL('redirect')
-        connKey = client._parse(url)[:3]
-        response = yield self.agent.request('GET', url)
-        self.assertEquals(response.code, 302)
-        location = response.headers.getRawHeaders('location')
-        self.assertTrue(location is not None)
-        self.assertEquals(len(location), 1)
-        location = location[0]
-
-        # flush body data
-        yield getBody(response)
-        protos = self.agent._protocolCache.get(connKey)
-        self.assertTrue(protos is not None)
-
-        # the connection still remains
-        self.assertEquals(len(protos), 1)
-        connections = self.wrapper.protocols.keys()
-        self.assertEquals(len(connections), 1)
-        # the server close connection
-        proto = connections.pop()
-        proto.transport.loseConnection()
-        p1 = protos[0]
-        # the second request
-        url = self.getURL(location[1:]) # getURL assumes no / at start
-        connKey2 = client._parse(url)[:3]
-
-        # request to the same scheme, host, port
-        # this will open a new connection
-        self.assertEquals(connKey, connKey2)
-        response = yield self.agent.request('GET', url)
-        self.assertEquals(response.code, 200)
-        body = yield getBody(response)
-        self.assertEquals(body, "0123456789")
-        protos = self.agent._protocolCache.get(connKey)
-        self.assertTrue(protos is not None)
-        self.assertEquals(len(protos), 1)
-        p2 = protos[0]
-        # two connections are not the same
-        self.assertTrue(p1 is not p2)
-
-        # clean up
-        yield agent.closeCachedConnections()
-
-
-    def test_agentMultipleConnections(self):
-        """
-        L{client.Agent} creates multiple connections when its attribute
-        C{persistent} is True. The number of connections to a server is
-        limited to C{maxConnections} (default 1).
-        """
-        def eb(failure):
-            pass
-        self.agent = client.Agent(reactor, persistent=True)
-        self.agent.maxConnections = 2
-        # the first request creates a new connection, takes 1 second
-        url = self.getURL('delay1')
-        d1 = self.agent.request('GET', url)
-        d1.addCallback(getBody)
-        connKey = client._parse(url)[:3]
-        sem = self.agent._semaphores.get(connKey)
-        self.assertTrue(sem is not None)
-        # initial number of sem.tokens is 2, and the first request uses one
-        self.assertEquals(sem.tokens, 1)
-        self.assertEquals(len(sem.waiting), 0)
-        # The second request also creates a new connection, takes 2 seconds
-        url = self.getURL('delay2')
-        d2 = self.agent.request('GET', url)
-        d2.addCallback(getBody)
-        # the second request uses the other token
-        self.assertEquals(sem.tokens, 0)
-        self.assertEquals(len(sem.waiting), 0)
-        # the thrid request starts when the first request is done
-        url = self.getURL('file')
-        d3 = self.agent.request('GET', url)
-        d3.addCallback(getBody)
-        d3.addCallback(self.assertEquals, "0123456789")
-        # the third request is placed on the semaphore queue
-        self.assertEquals(sem.tokens, 0)
-        self.assertEquals(len(sem.waiting), 1)
-        def finished(ignore):
-            self.assertEquals(len(sem.waiting), 0)
-            protos = self.agent._protocolCache.get(connKey)
-            self.assertTrue(protos is not None)
-            # two different connections are cached
-            self.assertEquals(len(protos), 2)
-            self.assertTrue(protos[0] is not protos[1])
-        # d2 will be fired at the end
-        d2.addCallback(lambda dummy: d1)
-        d2.addCallback(lambda dummy: d3)
-        d2.addCallback(finished)
-        self.cleanupServerConnections = 2
-        return d2
-
 
 class WebClientSSLTestCase(WebClientTestCase):
     def _listen(self, site):
@@ -1509,9 +1358,9 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
     - If an idle connection is put back in the cache and the max number of persistent connections has been exceeded, one of the connections is closed and removed from the cache.
     - closeCachedConnections closes all cached connections and removes them from the cache, and returns Deferred that fires when they are actually closed.
     - Max persistent connections are tied to (scheme, host, port); different keys have different max connections.
+    - test for persistent flag, and its effect on behavior
 
     Elsewhere (probably AgentTests? or new class for agent mixin) we will need to test: 
-    - Agent calls connection pool with correct paremeters when it wants connection
     - When a request is done and the connection is closed it is not added back to pool
     - When a request is done and the connection is still open it is added back to pool
     - If persistent is set to False a 'Connection: close' header is added when getting connection from pool.
@@ -1533,7 +1382,7 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
             self.assertIsInstance(conn, StubHTTPProtocol)
             self.assertEqual(conn.destination, ("https", "example.com", 443))
 
-        d = self.pool.get("GET", "https", "example.com", 443,
+        d = self.pool._getConnection("GET", "https", "example.com", 443,
                           http_headers.Headers())
         return d.addCallback(gotConnection)
 
@@ -1548,7 +1397,7 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
         # We start out with one cached connection:
         protocol = StubHTTPProtocol()
         protocol.makeConnection(StringTransport())
-        self.pool.put("http", "example.com", 80, protocol)
+        self.pool._putConnection("http", "example.com", 80, protocol)
 
         # Connection is in pool, still not closed:
         self.assertEquals(protocol.transport.disconnecting, False)
@@ -1578,7 +1427,7 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
         # We start out with one cached connection:
         protocol = StubHTTPProtocol()
         protocol.makeConnection(StringTransport())
-        self.pool.put("http", "example.com", 80, protocol)
+        self.pool._putConnection("http", "example.com", 80, protocol)
 
         def gotConnection(conn):
             # We got the cached connection:
@@ -1590,7 +1439,7 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
             self.assertEquals(conn.transport.disconnecting, False)
             self.assertNotIn(conn, self.pool._timeouts)
 
-        return self.pool.get(method, "http", "example.com", 80,
+        return self.pool._getConnection(method, "http", "example.com", 80,
                              http_headers.Headers()
                              ).addCallback(gotConnection)
 
@@ -1622,7 +1471,7 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
         # We start out with one cached connection:
         protocol = StubHTTPProtocol()
         protocol.makeConnection(StringTransport())
-        self.pool.put("http", "example.com", 80, protocol)
+        self.pool._putConnection("http", "example.com", 80, protocol)
 
         def gotConnection(conn):
             # We got a new connection, old one is still cached:
@@ -1631,8 +1480,8 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
             self.assertIn(protocol,
                           self.pool._connections[("http", "example.com", 80)])
 
-        return self.pool.get(method, "http", "example.com", 80, headers
-                             ).addCallback(gotConnection)
+        return self.pool._getConnection(method, "http", "example.com", 80,
+                                        headers).addCallback(gotConnection)
 
 
     def test_getNotCachedConnectionOtherMethods(self):
@@ -1677,6 +1526,25 @@ class AgentTests(unittest.TestCase, FakeReactorAndConnectMixin):
         which agent is implemented in terms of, to fire its Deferreds.
         """
         self.reactor.advance(0)
+
+
+    def test_connectUsesConnectionPool(self):
+        """
+        When a connection is made by the Agent, it uses the C{_getConnection}
+        method to do so.
+        """
+        getParams = []
+        originalGet = self.agent._getConnection
+        def get(*args):
+            getParams.append(args)
+            return originalGet(*args)
+        self.agent._getConnection = get
+        headers = http_headers.Headers()
+        headers.addRawHeader("host", "foo")
+        result = self.agent.request('GET', 'http://foo/', headers=headers)
+        # Matching parameters were passed to pool's get:
+        self.assertEqual(getParams[0][:-1], ("GET", "http", "foo", 80))
+        self.assertIdentical(getParams[0][-1], headers)
 
 
     def test_unsupportedScheme(self):
@@ -1934,57 +1802,6 @@ class AgentTests(unittest.TestCase, FakeReactorAndConnectMixin):
         self.assertEqual(5, timeout)
 
 
-    def test_persistentConnectionCache(self):
-        """
-        Connections will be held as instances of L{HTTP11ClientProtocol}
-        in agent's C{_protocolCache} which is a dictioinary mapping a tuple
-        (scheme, host, port) to a list of instances of
-        L{HTTP11ClientProtocol}.
-        """
-        self.agent.persistent = True
-        self.agent.maxConnections = 2
-        self.agent._connect = self._dummyConnect
-        # the first request opens a new connecton
-        d1 = self.agent.request(
-            'GET', 'http://example.com:1234/foo')
-        self.assertEquals(len(self.agent._protocolCache.keys()), 1)
-        protos = self.agent._protocolCache['http', 'example.com', 1234]
-        self.assertIsInstance(protos, list)
-        self.assertEquals(len(protos), 0)
-        # the second request to the different path
-        d2 = self.agent.request(
-            'GET', 'http://example.com:1234/bar')
-        self.assertEquals(len(self.agent._protocolCache.keys()), 1)
-        protos = self.agent._protocolCache['http', 'example.com', 1234]
-        self.assertIsInstance(protos, list)
-        self.assertEquals(len(protos), 0)
-        # fire the first request
-        d1.result.result.callback('First request done')
-        self.assertEquals(len(self.agent._protocolCache.keys()), 1)
-        protos = self.agent._protocolCache['http', 'example.com', 1234]
-        self.assertIsInstance(protos, list)
-        self.assertEquals(len(protos), 1)
-        # fire the second request
-        d2.result.result.callback('Second request done')
-        self.assertEquals(len(self.agent._protocolCache.keys()), 1)
-        protos = self.agent._protocolCache['http', 'example.com', 1234]
-        self.assertIsInstance(protos, list)
-        self.assertEquals(len(protos), 2)
-        # the third request to the different host
-        d3 = self.agent.request(
-            'GET', 'http://another.example.com/')
-        self.assertEquals(len(self.agent._protocolCache.keys()), 2)
-        protos = self.agent._protocolCache['http', 'another.example.com', 80]
-        self.assertIsInstance(protos, list)
-        self.assertEquals(len(protos), 0)
-        # fire the third request
-        d3.result.result.callback('Third request done')
-        self.assertEquals(len(self.agent._protocolCache.keys()), 2)
-        protos = self.agent._protocolCache['http', 'another.example.com', 80]
-        self.assertIsInstance(protos, list)
-        self.assertEquals(len(protos), 1)
-
-
     def test_connectSSLTimeout(self):
         """
         L{Agent} takes a C{connectTimeout} argument which is forwarded to the
@@ -2016,45 +1833,6 @@ class AgentTests(unittest.TestCase, FakeReactorAndConnectMixin):
         agent.request('GET', 'https://foo/')
         address = self.reactor.sslClients.pop()[5]
         self.assertEqual('192.168.0.1', address)
-
-
-    def test_multipleConnectionSemaphore(self):
-        """
-        The number of connections to a server is controlled by
-        L{DeferredSemaphore}.  C{_semaphores) is a dictioinary mapping a
-        tuple (scheme, host, port) to an instance of L{DeferredSemaphore}.
-        """
-        self.agent.persistent = True
-        self.agent.maxConnections = 2
-        self.agent._connect = self._dummyConnect
-        # the first request opens a new connecton
-        d1 = self.agent.request(
-            'GET', 'http://example.com:1234/foo')
-        p1 = self.protocol
-        self.assertEquals(len(self.agent._semaphores.keys()), 1)
-        sem = self.agent._semaphores['http', 'example.com', 1234]
-        self.assertIsInstance(sem, defer.DeferredSemaphore)
-        self.assertEquals(len(sem.waiting), 0)
-        # the second request to the same host opens an another connection
-        d2 = self.agent.request(
-            'GET', 'http://example.com:1234/bar')
-        self.assertTrue(self.protocol is not p1)
-        self.assertEquals(len(self.agent._semaphores.keys()), 1)
-        sem = self.agent._semaphores['http', 'example.com', 1234]
-        self.assertIsInstance(sem, defer.DeferredSemaphore)
-        self.assertEquals(len(sem.waiting), 0)
-        p2 = self.protocol
-        # the third request to the same host does not open a connection
-        d3 = self.agent.request(
-            'GET', 'http://example.com:1234/baz')
-        self.assertTrue(self.protocol is p2)
-        self.assertEquals(len(self.agent._semaphores.keys()), 1)
-        sem = self.agent._semaphores['http', 'example.com', 1234]
-        self.assertIsInstance(sem, defer.DeferredSemaphore)
-        # third request is on the semaphore queue
-        self.assertEquals(len(sem.waiting), 1)
-        d1.result.result.callback('First request done')
-        self.assertEquals(len(sem.waiting), 0)
 
 
 
