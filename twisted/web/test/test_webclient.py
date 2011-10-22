@@ -1354,7 +1354,7 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
     """
     Tests for the L{_HTTPConnectionPool} class.
 
-    - If a non-quiescent connection is put back in the cache, an exception is raised.
+    - 
     - If an idle connection is put back in the cache and the max number of persistent connections has been exceeded, one of the connections is closed and removed from the cache.
     - closeCachedConnections closes all cached connections and removes them from the cache, and returns Deferred that fires when they are actually closed.
     - Max persistent connections are tied to (scheme, host, port); different keys have different max connections.
@@ -1502,6 +1502,25 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
         headers = http_headers.Headers()
         headers.addRawHeader("Connection", "close")
         return self.getNewConnectionTest("GET", headers)
+
+
+    def test_putNotQuiescent(self):
+        """
+        If a non-quiescent connection is put back in the cache, an error is
+        logged.
+        """
+        protocol = StubHTTPProtocol()
+        # By default state is QUIESCENT
+        self.assertEqual(protocol.state, "QUIESCENT")
+
+        protocol.state = "NOTQUIESCENT"
+        self.pool._putConnection("http", "example.com", 80, protocol)
+        error, = self.flushLoggedErrors(RuntimeError)
+        self.assertEqual(
+            error.value.args[0],
+            "BUG: Non-quiescent protocol added to connection pool.")
+        self.assertTrue(not self.pool._connections.get(
+                ("http", "example.com", 80)))
 
 
 

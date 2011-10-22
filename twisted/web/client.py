@@ -858,6 +858,14 @@ class _HTTPConnectionPool(object):
         """
         Return a persistent connection to the pool.
         """
+        if connection.state != "QUIESCENT":
+            # Log with traceback for debugging purposes:
+            try:
+                raise RuntimeError(
+                    "BUG: Non-quiescent protocol added to connection pool.")
+            except:
+                log.err()
+            return
         conns = self._connections.setdefault((scheme, host, port), set())
         conns.add(connection)
         cid = self._reactor.callLater(self.cachedConnectionTimeout,
@@ -1043,6 +1051,8 @@ class ProxyAgent(_HTTPConnectionPool):
         the factory.
 
     @since: 11.1
+
+    XXX make sure actually working correctly (disable persistence should do it, open separate ticket). add reactor parameter.
     """
 
     _factory = _HTTP11ClientFactory
