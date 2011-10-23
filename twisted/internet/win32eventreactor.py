@@ -53,6 +53,15 @@ from weakref import WeakKeyDictionary
 from zope.interface import implements
 
 # Win32 imports
+import win32api
+
+# WSAEnumNetworkEvents was added in pywin32 215
+version = win32api.GetFileVersionInfo(
+    win32api.__file__, chr(92))['FileVersionLS'] >> 16
+if version < 215:
+    raise ImportError(
+        "pywin32 build 215 or later required - found %d" % (version,))
+
 from win32file import (
     FD_READ, FD_CLOSE, FD_ACCEPT, FD_CONNECT,
     WSAEventSelect, WSAEnumNetworkEvents)
