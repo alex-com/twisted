@@ -1361,8 +1361,7 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
     - test for persistent flag, and its effect on behavior
 
     Elsewhere (probably AgentTests? or new class for agent mixin) we will need to test: 
-    - When a request is done and the connection is closed it is not added back to pool
-    - When a request is done and the connection is still open it is added back to pool
+    - HTTP protocol instanstiated with appropriate pool._putConnection as its quiescent callback
     - If persistent is set to False a 'Connection: close' header is added when getting connection from pool.
     """
 

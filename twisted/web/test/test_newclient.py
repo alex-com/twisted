@@ -1321,6 +1321,73 @@ class HTTP11ClientProtocolTests(TestCase):
         return deferred.addCallback(checkError)
 
 
+    def test_quiescentCallbackCalled(self):
+        """
+        If after a response is done the {HTTP11ClientProtocol} stays open and
+        returns to QUIESCENT state, the C{quiescentCallback} is called with
+        the protocol instance.
+
+        This is useful for implementing a persistent connection pool.
+        """
+        quiescentResult = []
+        def callback(p):
+            self.assertEqual(p, protocol)
+            self.assertEqual(p.state, "QUIESCENT")
+            quiescentResult.append(p)
+
+        transport = StringTransport()
+        protocol = HTTP11ClientProtocol(callback)
+        protocol.makeConnection(transport)
+
+        requestDeferred = protocol.request(
+            Request('GET', '/', _boringHeaders, None, persistent=True))
+        protocol.dataReceived(
+            "HTTP/1.1 200 OK\r\n"
+            "Content-length: 3\r\n"
+            "\r\n")
+
+        # Headers done, but still no quiescent callback:
+        self.assertEqual(quiescentResult, [])
+
+        protocol.dataReceived("abc")
+        result = []
+        requestDeferred.addCallback(result.append)
+        response = result[0]
+
+        bodyProtocol = AccumulatingProtocol()
+        response.deliverBody(bodyProtocol)
+        bodyProtocol.closedReason.trap(ResponseDone)
+        self.assertEqual(quiescentResult, [protocol])
+
+
+    def test_quiescentCallbackNotCalled(self):
+        """
+        If after a response is done the {HTTP11ClientProtocol} disconnects,
+        the C{quiescentCallback} is not called.
+        """
+        quiescentResult = []
+        transport = StringTransport()
+        protocol = HTTP11ClientProtocol(quiescentResult.append)
+        protocol.makeConnection(transport)
+
+        requestDeferred = protocol.request(
+            Request('GET', '/', _boringHeaders, None, persistent=False))
+        protocol.dataReceived(
+            "HTTP/1.1 200 OK\r\n"
+            "Content-length: 0\r\n"
+            "Connection: close\r\n"
+            "\r\n")
+
+        result = []
+        requestDeferred.addCallback(result.append)
+        response = result[0]
+
+        bodyProtocol = AccumulatingProtocol()
+        response.deliverBody(bodyProtocol)
+        bodyProtocol.closedReason.trap(ResponseDone)
+        self.assertEqual(quiescentResult, [])
+
+
 
 class StringProducer:
     """

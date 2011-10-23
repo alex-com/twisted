@@ -561,6 +561,7 @@ class Request:
         requestLines = []
         requestLines.append(
             '%s %s HTTP/1.1\r\n' % (self.method, self.uri))
+        # XXX get rid of this, move management to _HTTPConnectionPool? or maybe not.
         if self.persistent:
             requestLines.append('Connection: Keep-Alive\r\n')
         else:
@@ -1222,14 +1223,18 @@ class HTTP11ClientProtocol(Protocol):
             be aborted.
 
           - CONNECTION_LOST: The connection has been lost.
-
     """
     _state = 'QUIESCENT'
     _parser = None
 
+    def __init__(self, quiescentCallback=lambda c: None):
+        self._quiescentCallback = quiescentCallback
+
+
     @property
     def state(self):
         return self._state
+
 
     def request(self, request):
         """
@@ -1295,6 +1300,9 @@ class HTTP11ClientProtocol(Protocol):
             the L{HTTPClientParser} which were not part of the response it
             was parsing.
         """
+        # Currently the rest parameter is ignored. Don't forget to use it if
+        # we ever add support for pipelining. And maybe check what trailers
+        # mean.
         assert self._state in ('WAITING', 'TRANSMITTING')
 
         if self._state == 'WAITING':
@@ -1313,8 +1321,10 @@ class HTTP11ClientProtocol(Protocol):
         if (connHeaders is not None) and ('close' in connHeaders):
             self._giveUp(Failure(reason))
         else:
-            # It's persistent connection
+            # XXX should not be here if not quiescent
+            # It's a persistent connection:
             self._disconnectParser(reason)
+            self._quiescentCallback(self)
 
 
     def _disconnectParser(self, reason):
@@ -1324,6 +1334,7 @@ class HTTP11ClientProtocol(Protocol):
 
         @type reason: L{Failure}
         """
+        # XXX clear _currentRequest
         if self._parser is not None:
             parser = self._parser
             self._parser = None
