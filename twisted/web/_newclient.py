@@ -1316,12 +1316,18 @@ class HTTP11ClientProtocol(Protocol):
             self._state = 'TRANSMITTING_AFTER_RECEIVING_RESPONSE'
             self._responseDeferred.chainDeferred(self._finishedRequest)
 
+        # This will happen if we're being called due to connection being lost;
+        # if so, no need to disconnect parser again, or to call
+        # _quiescentCallback.
+        if self._parser is None:
+            return
+
         reason = ConnectionDone("synthetic!")
-        connHeaders = self._parser.connHeaders.getRawHeaders('connection')
-        if (connHeaders is not None) and ('close' in connHeaders):
+        connHeaders = self._parser.connHeaders.getRawHeaders('connection', ())
+        if (('close' in connHeaders)) or self._state != "QUIESCENT":
             self._giveUp(Failure(reason))
         else:
-            # XXX should not be here if not quiescent
+            # XXX should also disconnect if *request* had 'connection: close'
             # It's a persistent connection:
             self._disconnectParser(reason)
             self._quiescentCallback(self)

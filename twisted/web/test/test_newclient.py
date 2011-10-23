@@ -1001,6 +1001,7 @@ class HTTP11ClientProtocolTests(TestCase):
         self.protocol.dataReceived(
             "HTTP/1.1 200 OK\r\n"
             "Content-Length: 0\r\n"
+            "Connection: close\r\n"
             "\r\n")
         return d
 
@@ -1029,6 +1030,8 @@ class HTTP11ClientProtocolTests(TestCase):
         If response bytes are delivered to L{HTTP11ClientProtocol} before the
         L{Deferred} returned by L{Request.writeTo} fires, those response bytes
         are parsed as part of the response.
+
+        The connection is also closed, because we're in a confusing state.
         """
         request = SlowRequest()
         d = self.protocol.request(request)
@@ -1044,6 +1047,7 @@ class HTTP11ClientProtocolTests(TestCase):
             response.deliverBody(p)
             self.assertEqual(
                 self.protocol.state, 'TRANSMITTING_AFTER_RECEIVING_RESPONSE')
+            self.assertEqual(self.transport.disconnecting, True)
             return whenFinished.addCallback(
                 lambda ign: (response, p.data))
         d.addCallback(cbResponse)
