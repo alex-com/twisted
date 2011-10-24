@@ -28,10 +28,12 @@ from twisted.test.proto_helpers import MemoryReactor
 from twisted.internet.address import IPv4Address
 from twisted.internet.task import Clock
 from twisted.internet.error import ConnectionRefusedError
-from twisted.internet.protocol import Protocol
+from twisted.internet.protocol import Protocol, Factory
 from twisted.internet.defer import Deferred, succeed
-from twisted.internet.endpoints import TCP4ClientEndpoint
+from twisted.internet.endpoints import TCP4ClientEndpoint, SSL4ClientEndpoint
 from twisted.web.client import FileBodyProducer, Request, _HTTPConnectionPool
+from twisted.web.client import _WebToNormalContextFactory
+from twisted.web.client import WebClientContextFactory
 from twisted.web.iweb import UNKNOWN_LENGTH, IBodyProducer, IResponse
 from twisted.web._newclient import HTTP11ClientProtocol, Response
 from twisted.web.error import SchemeNotSupported
@@ -1326,8 +1328,8 @@ class FileBodyProducerTests(unittest.TestCase):
 
 class FakeReactorAndConnectMixin:
     """
-    A test mixin providing a testable C{Reactor} class and a dummy
-    C{Agent._connect} method.
+    A test mixin providing a testable C{Reactor} class and a dummy C{connect}
+    method which allows instances to pretend to be endpoints.
     """
 
     class Reactor(MemoryReactor, Clock):
@@ -1336,17 +1338,45 @@ class FakeReactorAndConnectMixin:
             Clock.__init__(self)
 
 
-    def _dummyConnect(self, scheme, host, port):
+    def connect(self, factory):
         """
-        Fake implementation of L{Agent._connect} which synchronously
+        Fake implementation of an endpoint which synchronously
         succeeds with an instance of L{StubHTTPProtocol} for ease of
         testing.
         """
         protocol = StubHTTPProtocol()
         protocol.makeConnection(None)
-        protocol.destination = (scheme, host, port)
         self.protocol = protocol
         return succeed(protocol)
+
+
+
+class DummyEndpoint(object):
+    """
+    An endpoint that uses a fake transport.
+    """
+
+    def connect(self, factory):
+        protocol = factory.buildProtocol(None)
+        protocol.makeConnection(StringTransport())
+        return succeed(protocol)
+
+
+
+class BadEndpoint(object):
+    """
+    An endpoint that shouldn't be called.
+    """
+
+    def connect(self, factory):
+        raise RuntimeError("This endpoint should not have been used.")
+
+
+class DummyFactory(Factory):
+    """
+    Create C{StubHTTPProtocol} instances.
+    """
+    protocol = StubHTTPProtocol
 
 
 
@@ -1356,19 +1386,20 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
 
     - 
     - If an idle connection is put back in the cache and the max number of persistent connections has been exceeded, one of the connections is closed and removed from the cache.
-    - closeCachedConnections closes all cached connections and removes them from the cache, and returns Deferred that fires when they are actually closed.
+    - closeCachedConnections closes all cached connections and removes them from the cache.
     - Max persistent connections are tied to (scheme, host, port); different keys have different max connections.
     - test for persistent flag, and its effect on behavior
 
     Elsewhere (probably AgentTests? or new class for agent mixin) we will need to test: 
     - HTTP protocol instanstiated with appropriate pool._putConnection as its quiescent callback
-    - If persistent is set to False a 'Connection: close' header is added when getting connection from pool.
+    - If persistent is set to False, Agent makes Requests with persistent=False and with _connect. - move _connectAndRequest to Agent, do logic there.
+    - The opposite for persistent=True.
     """
 
     def setUp(self):
         self.fakeReactor = self.Reactor()
         self.pool = _HTTPConnectionPool(self.fakeReactor)
-        self.pool._connect = self._dummyConnect
+        self.pool._factory = DummyFactory
 
 
     def test_getReturnsNewIfCacheEmpty(self):
@@ -1379,10 +1410,9 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
         # We start out with no cached connections...
         def gotConnection(conn):
             self.assertIsInstance(conn, StubHTTPProtocol)
-            self.assertEqual(conn.destination, ("https", "example.com", 443))
 
-        d = self.pool._getConnection("GET", "https", "example.com", 443,
-                          http_headers.Headers())
+        d = self.pool._getConnection(DummyEndpoint(), "GET", "https",
+                                     "example.com", 443, http_headers.Headers())
         return d.addCallback(gotConnection)
 
 
@@ -1438,9 +1468,10 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
             self.assertEquals(conn.transport.disconnecting, False)
             self.assertNotIn(conn, self.pool._timeouts)
 
-        return self.pool._getConnection(method, "http", "example.com", 80,
-                             http_headers.Headers()
-                             ).addCallback(gotConnection)
+        return self.pool._getConnection(BadEndpoint(),
+                                        method, "http", "example.com", 80,
+                                        http_headers.Headers()
+                                        ).addCallback(gotConnection)
 
 
     def test_getCachedConnectionGET(self):
@@ -1479,8 +1510,9 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
             self.assertIn(protocol,
                           self.pool._connections[("http", "example.com", 80)])
 
-        return self.pool._getConnection(method, "http", "example.com", 80,
-                                        headers).addCallback(gotConnection)
+        return self.pool._getConnection(DummyEndpoint(), method, "http", 
+                                        "example.com", 80, headers
+                                        ).addCallback(gotConnection)
 
 
     def test_getNotCachedConnectionOtherMethods(self):
@@ -1522,6 +1554,108 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
                 ("http", "example.com", 80)))
 
 
+    def test_hostProvided(self):
+        """
+        If C{None} is passed to L{_HTTPConnectionPool._connectAndRequest} for
+        the C{headers} parameter, a L{Headers} instance is created for the
+        request and a I{Host} header added to it.
+        """
+        self.pool._connectAndRequest(self, 'GET', 'http://example.com/foo',
+                                     None, object())
+
+        protocol = self.protocol
+
+        # The request should have been issued with a host header based on
+        # the request URL.
+        self.assertEqual(len(protocol.requests), 1)
+        req, res = protocol.requests.pop()
+        self.assertEqual(req.headers.getRawHeaders('host'), ['example.com'])
+
+
+    def test_hostOverride(self):
+        """
+        If the headers passed to L{_HTTPConnectionPool._connectAndRequest}
+        includes a value for the I{Host} header, that value takes precedence
+        over the one which would otherwise be automatically provided.
+        """
+        headers = http_headers.Headers({'foo': ['bar'], 'host': ['quux']})
+        body = object()
+        self.pool._connectAndRequest(
+            self, 'GET', 'http://example.com/baz', headers, body)
+
+        protocol = self.protocol
+
+        # The request should have been issued with the host header specified
+        # above, not one based on the request URI.
+        self.assertEqual(len(protocol.requests), 1)
+        req, res = protocol.requests.pop()
+        self.assertEqual(req.headers.getRawHeaders('host'), ['quux'])
+
+
+    def test_headersUnmodified(self):
+        """
+        If a I{Host} header must be added to the request, the L{Headers}
+        instance passed to L{_HTTPConnectionPool._connectAndRequest} is not
+        modified.
+        """
+        headers = http_headers.Headers()
+        body = object()
+        self.pool._connectAndRequest(
+            self, 'GET', 'http://example.com/foo', headers, body)
+
+        protocol = self.protocol
+
+        # The request should have been issued.
+        self.assertEqual(len(protocol.requests), 1)
+        # And the headers object passed in should not have changed.
+        self.assertEqual(headers, http_headers.Headers())
+
+
+    def test_hostValueStandardHTTP(self):
+        """
+        When passed a scheme of C{'http'} and a port of C{80},
+        L{_HTTPConnectionPool._computeHostValue} returns a string giving just
+        the host name passed to it.
+        """
+        self.assertEqual(
+            self.pool._computeHostValue('http', 'example.com', 80),
+            'example.com')
+
+
+    def test_hostValueNonStandardHTTP(self):
+        """
+        When passed a scheme of C{'http'} and a port other than C{80},
+        L{_HTTPConnectionPool._computeHostValue} returns a string giving the
+        host passed to it joined together with the port number by C{":"}.
+        """
+        self.assertEqual(
+            self.pool._computeHostValue('http', 'example.com', 54321),
+            'example.com:54321')
+
+
+    def test_hostValueStandardHTTPS(self):
+        """
+        When passed a scheme of C{'https'} and a port of C{443},
+        L{_HTTPConnectionPool._computeHostValue} returns a string giving just
+        the host name passed to it.
+        """
+        self.assertEqual(
+            self.pool._computeHostValue('https', 'example.com', 443),
+            'example.com')
+
+
+    def test_hostValueNonStandardHTTPS(self):
+        """
+        When passed a scheme of C{'https'} and a port other than C{443},
+        L{_HTTPConnectionPool._computeHostValue} returns a string giving the
+        host passed to it joined together with the port number by C{":"}.
+        """
+        self.assertEqual(
+            self.pool._computeHostValue('https', 'example.com', 54321),
+            'example.com:54321')
+
+
+
 
 class AgentTests(unittest.TestCase, FakeReactorAndConnectMixin):
     """
@@ -1548,21 +1682,36 @@ class AgentTests(unittest.TestCase, FakeReactorAndConnectMixin):
 
     def test_connectUsesConnectionPool(self):
         """
-        When a connection is made by the Agent, it uses the C{_getConnection}
-        method to do so.
+        When a connection is made by the Agent, it uses the pool's
+        C{_connectAndRequest} method to do so, with the endpoint returned
+        by C{self._getEndpoint}.
         """
-        getParams = []
-        originalGet = self.agent._getConnection
-        def get(*args):
-            getParams.append(args)
-            return originalGet(*args)
-        self.agent._getConnection = get
+        endpoint = DummyEndpoint()
+        def getEndpoint(scheme, host, port):
+            self.assertEqual((scheme, host, port),
+                             ("http", "foo", 80))
+            return endpoint
+        self.agent._getEndpoint = getEndpoint
+
+        class DummyPool(object):
+            connected = False
+            def _connectAndRequest(this, ep, method, uri, headrs, bp,
+                                   requestPath=None):
+                this.connected = True
+                self.assertEqual(ep, endpoint)
+                self.assertEqual(method, "GET")
+                self.assertEqual(uri, "http://foo/")
+                self.assertIdentical(headrs, headers)
+                self.assertIdentical(bp, bodyProducer)
+
+        self.agent._pool = DummyPool()
+
         headers = http_headers.Headers()
         headers.addRawHeader("host", "foo")
-        result = self.agent.request('GET', 'http://foo/', headers=headers)
-        # Matching parameters were passed to pool's get:
-        self.assertEqual(getParams[0][:-1], ("GET", "http", "foo", 80))
-        self.assertIdentical(getParams[0][-1], headers)
+        bodyProducer = object()
+        result = self.agent.request('GET', 'http://foo/',
+                                    bodyProducer=bodyProducer, headers=headers)
+        self.assertEqual(self.agent._pool.connected, True)
 
 
     def test_unsupportedScheme(self):
@@ -1591,51 +1740,33 @@ class AgentTests(unittest.TestCase, FakeReactorAndConnectMixin):
 
     def test_connectHTTP(self):
         """
-        L{Agent._connect} uses C{connectTCP} to set up a connection to
-        a server when passed a scheme of C{'http'} and returns a
-        L{Deferred} which fires (when that connection is established)
-        with the protocol associated with that connection.
+        L{Agent._getEndpoint} return a C{TCP4ClientEndpoint} when passed a
+        scheme of C{'http'}.
         """
         expectedHost = 'example.com'
         expectedPort = 1234
-        d = self.agent._connect('http', expectedHost, expectedPort)
-        host, port, factory = self.reactor.tcpClients.pop()[:3]
-        self.assertEqual(host, expectedHost)
-        self.assertEqual(port, expectedPort)
-        protocol = factory.buildProtocol(IPv4Address('TCP', '10.0.0.1', port))
-        self.assertIsInstance(protocol, HTTP11ClientProtocol)
-        self.completeConnection()
-        d.addCallback(self.assertIdentical, protocol)
-        return d
+        endpoint = self.agent._getEndpoint('http', expectedHost, expectedPort)
+        self.assertEqual(endpoint._host, expectedHost)
+        self.assertEqual(endpoint._port, expectedPort)
+        self.assertIsInstance(endpoint, TCP4ClientEndpoint)
 
 
     def test_connectHTTPS(self):
         """
-        L{Agent._connect} uses C{connectSSL} to set up a connection to
-        a server when passed a scheme of C{'https'} and returns a
-        L{Deferred} which fires (when that connection is established)
-        with the protocol associated with that connection.
+        L{Agent._getEndpoint} return a C{SSL4ClientEndpoint} when passed a
+        scheme of C{'https'}.
         """
         expectedHost = 'example.com'
         expectedPort = 4321
-        d = self.agent._connect('https', expectedHost, expectedPort)
-        host, port, factory, contextFactory = self.reactor.sslClients.pop()[:4]
-        self.assertEqual(host, expectedHost)
-        self.assertEqual(port, expectedPort)
-        context = contextFactory.getContext()
-
-        # This is a pretty weak assertion.  It's true that the context must be
-        # an instance of OpenSSL.SSL.Context, Unfortunately these are pretty
-        # opaque and there's not much more than checking its type that we could
-        # do here.  It would be nice if the SSL APIs involved more testable (ie,
-        # inspectable) objects.
-        self.assertIsInstance(context, ContextType)
-
-        protocol = factory.buildProtocol(IPv4Address('TCP', '10.0.0.1', port))
-        self.assertIsInstance(protocol, HTTP11ClientProtocol)
-        self.completeConnection()
-        d.addCallback(self.assertIdentical, protocol)
-        return d
+        endpoint = self.agent._getEndpoint('https', expectedHost, expectedPort)
+        self.assertIsInstance(endpoint, SSL4ClientEndpoint)
+        self.assertEqual(endpoint._host, expectedHost)
+        self.assertEqual(endpoint._port, expectedPort)
+        self.assertIsInstance(endpoint._sslContextFactory,
+                              _WebToNormalContextFactory)
+        # Default context factory was used:
+        self.assertIsInstance(endpoint._sslContextFactory._webContext,
+                              WebClientContextFactory)
     if ssl is None:
         test_connectHTTPS.skip = "OpenSSL not present"
 
@@ -1659,16 +1790,11 @@ class AgentTests(unittest.TestCase, FakeReactorAndConnectMixin):
                 return expectedContext
 
         agent = client.Agent(self.reactor, StubWebContextFactory())
-        d = agent._connect('https', expectedHost, expectedPort)
-        host, port, factory, contextFactory = self.reactor.sslClients.pop()[:4]
+        endpoint = agent._getEndpoint('https', expectedHost, expectedPort)
+        contextFactory = endpoint._sslContextFactory
         context = contextFactory.getContext()
         self.assertEqual(context, expectedContext)
         self.assertEqual(contextArgs, [(expectedHost, expectedPort)])
-        protocol = factory.buildProtocol(IPv4Address('TCP', '10.0.0.1', port))
-        self.assertIsInstance(protocol, HTTP11ClientProtocol)
-        self.completeConnection()
-        d.addCallback(self.assertIdentical, protocol)
-        return d
 
 
     def test_request(self):
@@ -1679,7 +1805,7 @@ class AgentTests(unittest.TestCase, FakeReactorAndConnectMixin):
         passed to it.  It returns a L{Deferred} which fires with an
         L{IResponse} from the server.
         """
-        self.agent._connect = self._dummyConnect
+        self.agent._getEndpoint = lambda *args: self
 
         headers = http_headers.Headers({'foo': ['bar']})
         # Just going to check the body for identity, so it doesn't need to be
@@ -1701,112 +1827,6 @@ class AgentTests(unittest.TestCase, FakeReactorAndConnectMixin):
             http_headers.Headers({'foo': ['bar'],
                                   'host': ['example.com:1234']}))
         self.assertIdentical(req.bodyProducer, body)
-
-
-    def test_hostProvided(self):
-        """
-        If C{None} is passed to L{Agent.request} for the C{headers}
-        parameter, a L{Headers} instance is created for the request and a
-        I{Host} header added to it.
-        """
-        self.agent._connect = self._dummyConnect
-
-        self.agent.request('GET', 'http://example.com/foo')
-
-        protocol = self.protocol
-
-        # The request should have been issued with a host header based on
-        # the request URL.
-        self.assertEqual(len(protocol.requests), 1)
-        req, res = protocol.requests.pop()
-        self.assertEqual(req.headers.getRawHeaders('host'), ['example.com'])
-
-
-    def test_hostOverride(self):
-        """
-        If the headers passed to L{Agent.request} includes a value for the
-        I{Host} header, that value takes precedence over the one which would
-        otherwise be automatically provided.
-        """
-        self.agent._connect = self._dummyConnect
-
-        headers = http_headers.Headers({'foo': ['bar'], 'host': ['quux']})
-        body = object()
-        self.agent.request(
-            'GET', 'http://example.com/baz', headers, body)
-
-        protocol = self.protocol
-
-        # The request should have been issued with the host header specified
-        # above, not one based on the request URI.
-        self.assertEqual(len(protocol.requests), 1)
-        req, res = protocol.requests.pop()
-        self.assertEqual(req.headers.getRawHeaders('host'), ['quux'])
-
-
-    def test_headersUnmodified(self):
-        """
-        If a I{Host} header must be added to the request, the L{Headers}
-        instance passed to L{Agent.request} is not modified.
-        """
-        self.agent._connect = self._dummyConnect
-
-        headers = http_headers.Headers()
-        body = object()
-        self.agent.request(
-            'GET', 'http://example.com/foo', headers, body)
-
-        protocol = self.protocol
-
-        # The request should have been issued.
-        self.assertEqual(len(protocol.requests), 1)
-        # And the headers object passed in should not have changed.
-        self.assertEqual(headers, http_headers.Headers())
-
-
-    def test_hostValueStandardHTTP(self):
-        """
-        When passed a scheme of C{'http'} and a port of C{80},
-        L{Agent._computeHostValue} returns a string giving just the
-        host name passed to it.
-        """
-        self.assertEqual(
-            self.agent._computeHostValue('http', 'example.com', 80),
-            'example.com')
-
-
-    def test_hostValueNonStandardHTTP(self):
-        """
-        When passed a scheme of C{'http'} and a port other than C{80},
-        L{Agent._computeHostValue} returns a string giving the host
-        passed to it joined together with the port number by C{":"}.
-        """
-        self.assertEqual(
-            self.agent._computeHostValue('http', 'example.com', 54321),
-            'example.com:54321')
-
-
-    def test_hostValueStandardHTTPS(self):
-        """
-        When passed a scheme of C{'https'} and a port of C{443},
-        L{Agent._computeHostValue} returns a string giving just the
-        host name passed to it.
-        """
-        self.assertEqual(
-            self.agent._computeHostValue('https', 'example.com', 443),
-            'example.com')
-
-
-    def test_hostValueNonStandardHTTPS(self):
-        """
-        When passed a scheme of C{'https'} and a port other than
-        C{443}, L{Agent._computeHostValue} returns a string giving the
-        host passed to it joined together with the port number by
-        C{":"}.
-        """
-        self.assertEqual(
-            self.agent._computeHostValue('https', 'example.com', 54321),
-            'example.com:54321')
 
 
     def test_connectTimeout(self):
@@ -2491,6 +2511,26 @@ class ProxyAgentTests(unittest.TestCase, FakeReactorAndConnectMixin):
 
 
 
+class StubEndpoint(object):
+    """
+    Endpoint that wraps existing endpoint, substitutes StubHTTPProtocol, and
+    resulting protocol instances are attached to the given test case.
+    """
+
+    def __init__(self, endpoint, testCase):
+        self.endpoint = endpoint
+        self.testCase = testCase
+        self.factory = Factory()
+        self.protocol = StubHTTPProtocol()
+        self.factory.buildProtocol = lambda addr: self.protocol
+
+    def connect(self, ignoredFactory):
+        self.testCase.protocol = self.protocol
+        self.endpoint.connect(self.factory)
+        return succeed(self.protocol)
+
+
+
 class RedirectAgentTests(unittest.TestCase, FakeReactorAndConnectMixin):
     """
     Tests for L{client.RedirectAgent}.
@@ -2499,15 +2539,10 @@ class RedirectAgentTests(unittest.TestCase, FakeReactorAndConnectMixin):
     def setUp(self):
         self.reactor = self.Reactor()
         agent = client.Agent(self.reactor)
-        self._oldConnect = agent._connect
-        agent._connect = self._dummyConnect
+        _oldGetEndpoint = agent._getEndpoint
+        agent._getEndpoint = lambda *args: (
+            StubEndpoint(_oldGetEndpoint(*args), self))
         self.agent = client.RedirectAgent(agent)
-
-
-    def _dummyConnect(self, scheme, host, port):
-        self._oldConnect(scheme, host, port)
-        return FakeReactorAndConnectMixin._dummyConnect(
-            self, scheme, host, port)
 
 
     def test_noRedirect(self):

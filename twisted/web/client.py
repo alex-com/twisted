@@ -14,9 +14,11 @@ import zlib
 from zope.interface import implements
 
 from twisted.python import log
+from twisted.python.failure import Failure
 from twisted.web import http
 from twisted.internet import defer, protocol, task, reactor
 from twisted.internet.interfaces import IProtocol
+from twisted.internet.endpoints import TCP4ClientEndpoint, SSL4ClientEndpoint
 from twisted.python import failure
 from twisted.python.util import InsensitiveDict
 from twisted.python.components import proxyForInterface
@@ -793,9 +795,21 @@ class FileBodyProducer(object):
 
 
 
+class _HTTP11ClientFactory(protocol.ClientFactory):
+    """
+    A simple factory for L{HTTP11ClientProtocol}, used by L{ProxyAgent}.
+
+    @since: 11.1
+    """
+    protocol = HTTP11ClientProtocol
+
+
+
 class _HTTPConnectionPool(object):
     """
     A pool of persistent HTTP connections.
+
+    @ivar _factory: The factory used to connect to the proxy.
 
     @ivar _connections: Map (scheme, host, port) to set of
         L{HTTP11ClientProtocol} instances.
@@ -805,7 +819,7 @@ class _HTTPConnectionPool(object):
     - Limits on maximum number of persistent connections.
     """
 
-    _protocol = HTTP11ClientProtocol
+    _factory = _HTTP11ClientFactory
 
     cachedConnectionTimeout = 240
 
@@ -816,13 +830,16 @@ class _HTTPConnectionPool(object):
         self._timeouts = {}
 
 
-    def _getConnection(self, method, scheme, host, port, headers):
+    def _getConnection(self, endpoint, method, scheme, host, port, headers):
         """
         Return a Deferred of a connection, either new or cached, to be used
         for a HTTP request.
 
         If cached, the connection will not be used for other requests until it
         is L{put} back, since we do not support pipelined requests.
+
+        If not cached, the passed in endpoint is used to create the
+        connection.
 
         Only GET and HEAD can be done over a persistent connection (XXX find
         where in RFC it talks about this) so other methods will result in new
@@ -842,7 +859,7 @@ class _HTTPConnectionPool(object):
                 self._timeouts[conn].cancel()
                 del self._timeouts[conn]
                 return defer.succeed(conn)
-        return self._connect(scheme, host, port)
+        return endpoint.connect(self._factory())
 
 
     def _removeConnection(self, scheme, host, port, connection):
@@ -874,41 +891,7 @@ class _HTTPConnectionPool(object):
         self._timeouts[connection] = cid
 
 
-    def _connect(self, scheme, host, port):
-        """
-        Connect to the given host and port, using a transport selected based on
-        scheme.
-
-        @param scheme: A string like C{'http'} or C{'https'} (the only two
-            supported values) to use to determine how to establish the
-            connection.
-
-        @param host: A C{str} giving the hostname which will be connected to in
-            order to issue a request.
-
-        @param port: An C{int} giving the port number the connection will be
-            on.
-
-        @return: A L{Deferred} which fires with a connected instance of
-            C{self._protocol}.
-        """
-        cc = ClientCreator(self._reactor, self._protocol)
-        kwargs = {}
-        if self._connectTimeout is not None:
-            kwargs['timeout'] = self._connectTimeout
-        kwargs['bindAddress'] = self._bindAddress
-        if scheme == 'http':
-            d = cc.connectTCP(host, port, **kwargs)
-        elif scheme == 'https':
-            d = cc.connectSSL(host, port, self._wrapContextFactory(host, port),
-                              **kwargs)
-        else:
-            d = defer.fail(SchemeNotSupported(
-                    "Unsupported scheme: %r" % (scheme,)))
-        return d
-
-
-    def _connectAndRequest(self, method, uri, headers, bodyProducer,
+    def _connectAndRequest(self, endpoint, method, uri, headers, bodyProducer,
                            requestPath=None):
         """
         Get a connection (cached or new), then send the request.
@@ -925,7 +908,7 @@ class _HTTPConnectionPool(object):
             headers = headers.copy()
             headers.addRawHeader(
                 'host', self._computeHostValue(scheme, host, port))
-        d = self._getConnection(method, scheme, host, port, headers)
+        d = self._getConnection(endpoint, method, scheme, host, port, headers)
         def cbConnected(proto):
             return proto.request(
                 Request(method, requestPath, headers, bodyProducer))
@@ -946,14 +929,11 @@ class _HTTPConnectionPool(object):
     def closeCachedConnections(self):
         """
         Close all the cached persistent connections.
-
-        @return: A L{Deferred} that fires when all cached connections are
-            closed.
         """
 
 
 
-class Agent(_HTTPConnectionPool):
+class Agent(object):
     """
     L{Agent} is a very basic HTTP client.  It supports I{HTTP} and I{HTTPS}
     scheme URIs (but performs no certificate checking by default).  It also
@@ -978,10 +958,11 @@ class Agent(_HTTPConnectionPool):
     def __init__(self, reactor, contextFactory=WebClientContextFactory(),
                  connectTimeout=None, bindAddress=None,
                  persistent=False):
-        _HTTPConnectionPool.__init__(self, reactor, persistent)
+        self._reactor = reactor
         self._contextFactory = contextFactory
         self._connectTimeout = connectTimeout
         self._bindAddress = bindAddress
+        self._pool = _HTTPConnectionPool(reactor, persistent)
 
 
     def _wrapContextFactory(self, host, port):
@@ -1000,6 +981,37 @@ class Agent(_HTTPConnectionPool):
             C{reactor.connectSSL}.
         """
         return _WebToNormalContextFactory(self._contextFactory, host, port)
+
+
+    def _getEndpoint(self, scheme, host, port):
+        """
+        Get an endpoint for the given host and port, using a transport
+        selected based on scheme.
+
+        @param scheme: A string like C{'http'} or C{'https'} (the only two
+            supported values) to use to determine how to establish the
+            connection.
+
+        @param host: A C{str} giving the hostname which will be connected to in
+            order to issue a request.
+
+        @param port: An C{int} giving the port number the connection will be
+            on.
+
+        @return: An endpoint which can be used to connect to given address.
+        """
+        kwargs = {}
+        if self._connectTimeout is not None:
+            kwargs['timeout'] = self._connectTimeout
+        kwargs['bindAddress'] = self._bindAddress
+        if scheme == 'http':
+            return TCP4ClientEndpoint(self._reactor, host, port, **kwargs)
+        elif scheme == 'https':
+            return SSL4ClientEndpoint(self._reactor, host, port,
+                                      self._wrapContextFactory(host, port),
+                                      **kwargs)
+        else:
+            raise SchemeNotSupported("Unsupported scheme: %r" % (scheme,))
 
 
     def request(self, method, uri, headers=None, bodyProducer=None):
@@ -1027,17 +1039,13 @@ class Agent(_HTTPConnectionPool):
             given URI is not supported.
         @rtype: L{Deferred}
         """
-        return self._connectAndRequest(method, uri, headers, bodyProducer)
-
-
-
-class _HTTP11ClientFactory(protocol.ClientFactory):
-    """
-    A simple factory for L{HTTP11ClientProtocol}, used by L{ProxyAgent}.
-
-    @since: 11.1
-    """
-    protocol = HTTP11ClientProtocol
+        scheme, host, port, path = _parse(uri)
+        try:
+            endpoint = self._getEndpoint(scheme, host, port)
+        except SchemeNotSupported:
+            return defer.fail(Failure())
+        return self._pool._connectAndRequest(endpoint, method, uri, headers,
+                                             bodyProducer)
 
 
 
@@ -1045,41 +1053,25 @@ class ProxyAgent(_HTTPConnectionPool):
     """
     An HTTP agent able to cross HTTP proxies.
 
-    @ivar _factory: The factory used to connect to the proxy.
-
-    @ivar _proxyEndpoint: The endpoint used to connect to the proxy, passing
-        the factory.
+    @ivar _proxyEndpoint: The endpoint used to connect to the proxy.
 
     @since: 11.1
 
     XXX make sure actually working correctly (disable persistence should do it, open separate ticket). add reactor parameter.
     """
 
-    _factory = _HTTP11ClientFactory
-
     def __init__(self, endpoint):
-        # The way ProxyAgent overrides _connect with an endpoint doesn't match
-        # well with the connection pool implementation. This is solvable, but
-        # for the moment we'll just disable persistence:
         from twisted.internet import reactor # XXX
         _HTTPConnectionPool.__init__(self, reactor, persistent=False)
         self._proxyEndpoint = endpoint
-
-
-    def _connect(self, scheme, host, port):
-        """
-        Ignore the connection to the expected host, and connect to the proxy
-        instead.
-        """
-        return self._proxyEndpoint.connect(self._factory())
 
 
     def request(self, method, uri, headers=None, bodyProducer=None):
         """
         Issue a new request via the configured proxy.
         """
-        return self._connectAndRequest(method, uri, headers, bodyProducer,
-                                       requestPath=uri)
+        return self._connectAndRequest(self._proxyEndpoint, method, uri, headers,
+                                       bodyProducer, requestPath=uri)
 
 
 

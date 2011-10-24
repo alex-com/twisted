@@ -561,7 +561,6 @@ class Request:
         requestLines = []
         requestLines.append(
             '%s %s HTTP/1.1\r\n' % (self.method, self.uri))
-        # XXX get rid of this, move management to _HTTPConnectionPool? or maybe not.
         if self.persistent:
             requestLines.append('Connection: Keep-Alive\r\n')
         else:
