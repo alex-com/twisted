@@ -53,7 +53,7 @@ from weakref import WeakKeyDictionary
 from zope.interface import implements
 
 # Win32 imports
-import win32api
+import pywintypes, win32api
 
 # WSAEnumNetworkEvents was added in pywin32 215
 version = win32api.GetFileVersionInfo(
@@ -266,8 +266,11 @@ class Win32Reactor(posixbase.PosixReactorBase):
             # know that the connection is closed.
             try:
                 events = WSAEnumNetworkEvents(fd, event)
-            except TypeError:
-                # It wasn't a socket fd
+            except (TypeError, pywintypes.error):
+                # It wasn't a socket fd.  The pywintypes.error case is not
+                # exercised by the test suite; it is triggered when fd is a
+                # serial port; see #2462 for progress on unit testing serial
+                # port support.
                 pass
             else:
                 if FD_CLOSE in events:
