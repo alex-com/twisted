@@ -33,7 +33,7 @@ from twisted.internet.defer import Deferred, succeed
 from twisted.internet.endpoints import TCP4ClientEndpoint, SSL4ClientEndpoint
 from twisted.web.client import FileBodyProducer, Request, _HTTPConnectionPool
 from twisted.web.client import _WebToNormalContextFactory
-from twisted.web.client import WebClientContextFactory
+from twisted.web.client import WebClientContextFactory, _HTTP11ClientFactory
 from twisted.web.iweb import UNKNOWN_LENGTH, IBodyProducer, IResponse
 from twisted.web._newclient import HTTP11ClientProtocol, Response
 from twisted.web.error import SchemeNotSupported
@@ -1338,6 +1338,37 @@ class FakeReactorAndConnectMixin:
             Clock.__init__(self)
 
 
+    class StubEndpoint(object):
+        """
+        Endpoint that wraps existing endpoint, substitutes StubHTTPProtocol, and
+        resulting protocol instances are attached to the given test case.
+        """
+
+        def __init__(self, endpoint, testCase):
+            self.endpoint = endpoint
+            self.testCase = testCase
+            self.factory = _HTTP11ClientFactory()
+            self.protocol = StubHTTPProtocol()
+            self.factory.buildProtocol = lambda addr: self.protocol
+
+        def connect(self, ignoredFactory):
+            self.testCase.protocol = self.protocol
+            self.endpoint.connect(self.factory)
+            return succeed(self.protocol)
+
+
+    def buildAgentForWrapperTest(self, reactor):
+        """
+        Return an Agent suitable for use in tests that wrap the Agent and want
+        both a fake reactor and StubHTTPProtocol.
+        """
+        agent = client.Agent(reactor)
+        _oldGetEndpoint = agent._getEndpoint
+        agent._getEndpoint = lambda *args: (
+            self.StubEndpoint(_oldGetEndpoint(*args), self))
+        return agent
+
+
     def connect(self, factory):
         """
         Fake implementation of an endpoint which synchronously
@@ -1976,8 +2007,7 @@ class CookieAgentTests(unittest.TestCase, CookieTestsMixin,
         cookieJar = cookielib.CookieJar()
         self.assertEqual(list(cookieJar), [])
 
-        agent = client.Agent(self.reactor)
-        agent._connect = self._dummyConnect
+        agent = self.buildAgentForWrapperTest(self.reactor)
         cookieAgent = client.CookieAgent(agent, cookieJar)
         d = cookieAgent.request(
             'GET', 'http://example.com:1234/foo?bar')
@@ -2017,8 +2047,7 @@ class CookieAgentTests(unittest.TestCase, CookieTestsMixin,
         self.addCookies(cookieJar, uri, [cookie])
         self.assertEqual(len(list(cookieJar)), 1)
 
-        agent = client.Agent(self.reactor)
-        agent._connect = self._dummyConnect
+        agent = self.buildAgentForWrapperTest(self.reactor)
         cookieAgent = client.CookieAgent(agent, cookieJar)
         cookieAgent.request('GET', uri)
 
@@ -2038,8 +2067,7 @@ class CookieAgentTests(unittest.TestCase, CookieTestsMixin,
         self.addCookies(cookieJar, uri, [cookie])
         self.assertEqual(len(list(cookieJar)), 1)
 
-        agent = client.Agent(self.reactor)
-        agent._connect = self._dummyConnect
+        agent = self.buildAgentForWrapperTest(self.reactor)
         cookieAgent = client.CookieAgent(agent, cookieJar)
         cookieAgent.request('GET', uri)
 
@@ -2059,8 +2087,7 @@ class CookieAgentTests(unittest.TestCase, CookieTestsMixin,
         self.addCookies(cookieJar, uri, [cookie])
         self.assertEqual(len(list(cookieJar)), 1)
 
-        agent = client.Agent(self.reactor)
-        agent._connect = self._dummyConnect
+        agent = self.buildAgentForWrapperTest(self.reactor)
         cookieAgent = client.CookieAgent(agent, cookieJar)
         cookieAgent.request('GET', uri)
 
@@ -2080,8 +2107,7 @@ class CookieAgentTests(unittest.TestCase, CookieTestsMixin,
         self.addCookies(cookieJar, uri, [cookie])
         self.assertEqual(len(list(cookieJar)), 1)
 
-        agent = client.Agent(self.reactor)
-        agent._connect = self._dummyConnect
+        agent = self.buildAgentForWrapperTest(self.reactor)
         cookieAgent = client.CookieAgent(agent, cookieJar)
         cookieAgent.request('GET', uri)
 
@@ -2127,8 +2153,7 @@ class ContentDecoderAgentTests(unittest.TestCase, FakeReactorAndConnectMixin):
         Create an L{Agent} wrapped around a fake reactor.
         """
         self.reactor = self.Reactor()
-        self.agent = client.Agent(self.reactor)
-        self.agent._connect = self._dummyConnect
+        self.agent = self.buildAgentForWrapperTest(self.reactor)
 
 
     def test_acceptHeaders(self):
@@ -2274,8 +2299,7 @@ class ContentDecoderAgentWithGzipTests(unittest.TestCase,
         Create an L{Agent} wrapped around a fake reactor.
         """
         self.reactor = self.Reactor()
-        agent = client.Agent(self.reactor)
-        agent._connect = self._dummyConnect
+        agent = self.buildAgentForWrapperTest(self.reactor)
         self.agent = client.ContentDecoderAgent(
             agent, [("gzip", client.GzipDecoder)])
 
@@ -2466,14 +2490,8 @@ class ProxyAgentTests(unittest.TestCase, FakeReactorAndConnectMixin):
         self.reactor = self.Reactor()
         self.agent = client.ProxyAgent(
             TCP4ClientEndpoint(self.reactor, "bar", 5678))
-        self._oldConnect = self.agent._connect
-        self.agent._connect = self._dummyConnect
-
-
-    def _dummyConnect(self, scheme, host, port):
-        self._oldConnect(scheme, host, port)
-        return FakeReactorAndConnectMixin._dummyConnect(
-            self, scheme, host, port)
+        oldEndpoint = self.agent._proxyEndpoint
+        self.agent._proxyEndpoint = self.StubEndpoint(oldEndpoint, self)
 
 
     def test_proxyRequest(self):
@@ -2511,26 +2529,6 @@ class ProxyAgentTests(unittest.TestCase, FakeReactorAndConnectMixin):
 
 
 
-class StubEndpoint(object):
-    """
-    Endpoint that wraps existing endpoint, substitutes StubHTTPProtocol, and
-    resulting protocol instances are attached to the given test case.
-    """
-
-    def __init__(self, endpoint, testCase):
-        self.endpoint = endpoint
-        self.testCase = testCase
-        self.factory = Factory()
-        self.protocol = StubHTTPProtocol()
-        self.factory.buildProtocol = lambda addr: self.protocol
-
-    def connect(self, ignoredFactory):
-        self.testCase.protocol = self.protocol
-        self.endpoint.connect(self.factory)
-        return succeed(self.protocol)
-
-
-
 class RedirectAgentTests(unittest.TestCase, FakeReactorAndConnectMixin):
     """
     Tests for L{client.RedirectAgent}.
@@ -2538,11 +2536,8 @@ class RedirectAgentTests(unittest.TestCase, FakeReactorAndConnectMixin):
 
     def setUp(self):
         self.reactor = self.Reactor()
-        agent = client.Agent(self.reactor)
-        _oldGetEndpoint = agent._getEndpoint
-        agent._getEndpoint = lambda *args: (
-            StubEndpoint(_oldGetEndpoint(*args), self))
-        self.agent = client.RedirectAgent(agent)
+        self.agent = client.RedirectAgent(
+            self.buildAgentForWrapperTest(self.reactor))
 
 
     def test_noRedirect(self):
@@ -2689,9 +2684,7 @@ class RedirectAgentTests(unittest.TestCase, FakeReactorAndConnectMixin):
         deferred fires with L{ResponseFailed} error wrapping a
         L{InfiniteRedirection} exception.
         """
-        agent = client.Agent(self.reactor)
-        self._oldConnect = agent._connect
-        agent._connect = self._dummyConnect
+        agent = self.buildAgentForWrapperTest(self.reactor)
         redirectAgent = client.RedirectAgent(agent, 1)
 
         deferred = redirectAgent.request('GET', 'http://example.com/foo')

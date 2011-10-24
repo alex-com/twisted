@@ -1049,7 +1049,7 @@ class Agent(object):
 
 
 
-class ProxyAgent(_HTTPConnectionPool):
+class ProxyAgent(object):
     """
     An HTTP agent able to cross HTTP proxies.
 
@@ -1062,16 +1062,17 @@ class ProxyAgent(_HTTPConnectionPool):
 
     def __init__(self, endpoint):
         from twisted.internet import reactor # XXX
-        _HTTPConnectionPool.__init__(self, reactor, persistent=False)
         self._proxyEndpoint = endpoint
+        self._pool = _HTTPConnectionPool(reactor, persistent=False)
 
 
     def request(self, method, uri, headers=None, bodyProducer=None):
         """
         Issue a new request via the configured proxy.
         """
-        return self._connectAndRequest(self._proxyEndpoint, method, uri, headers,
-                                       bodyProducer, requestPath=uri)
+        return self._pool._connectAndRequest(self._proxyEndpoint, method, uri,
+                                             headers, bodyProducer,
+                                             requestPath=uri)
 
 
 
