@@ -28,6 +28,10 @@ class Options(usage.Options, strcred.AuthOptionMixin):
 
     longdesc = 'This creates a ftp.tap file that can be used by twistd'
 
+    def __init__(self, *a, **kw):
+        usage.Options.__init__(self, *a, **kw)
+        self.addChecker(checkers.AllowAnonymousAccess())
+
 
     def opt_password_file(self, filename):
         """
@@ -40,11 +44,7 @@ class Options(usage.Options, strcred.AuthOptionMixin):
         msg = deprecate.getDeprecationWarningString(
             self.opt_password_file, versions.Version('Twisted', 11, 1, 0))
         warnings.warn(msg, category=DeprecationWarning, stacklevel=2)
-
-
-    def postOptions(self):
-        if not self.has_key('password-file'):
-            self['password-file'] = None;
+        self.addChecker(checkers.FilePasswordDB(filename, cache=True))
 
 
 
@@ -52,12 +52,7 @@ def makeService(config):
     f = ftp.FTPFactory()
 
     r = ftp.FTPRealm(config['root'])
-    p = portal.Portal(r)
-    p.registerChecker(checkers.AllowAnonymousAccess(), credentials.IAnonymous)
-
-    if config['password-file'] is not None:
-        p.registerChecker(
-            checkers.FilePasswordDB(config['password-file'], cache=True))
+    p = portal.Portal(r, config.get('credCheckers', []))
 
     f.tld = config['root']
     f.userAnonymous = config['userAnonymous']
