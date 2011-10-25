@@ -1031,11 +1031,17 @@ class HTTP11ClientProtocolTests(TestCase):
         L{Deferred} returned by L{Request.writeTo} fires, those response bytes
         are parsed as part of the response.
 
-        The connection is also closed, because we're in a confusing state.
+        The connection is also closed, because we're in a confusing state, and
+        therefore the C{quiescentCallback} isn't called.
         """
+        quiescentResult = []
+        transport = StringTransport()
+        protocol = HTTP11ClientProtocol(quiescentResult.append)
+        protocol.makeConnection(transport)
+
         request = SlowRequest()
-        d = self.protocol.request(request)
-        self.protocol.dataReceived(
+        d = protocol.request(request)
+        protocol.dataReceived(
             "HTTP/1.1 200 OK\r\n"
             "X-Foo: bar\r\n"
             "Content-Length: 6\r\n"
@@ -1046,8 +1052,9 @@ class HTTP11ClientProtocolTests(TestCase):
             whenFinished = p.closedDeferred = Deferred()
             response.deliverBody(p)
             self.assertEqual(
-                self.protocol.state, 'TRANSMITTING_AFTER_RECEIVING_RESPONSE')
+                protocol.state, 'TRANSMITTING_AFTER_RECEIVING_RESPONSE')
             self.assertEqual(self.transport.disconnecting, True)
+            self.assertEqual(quiescentResult, [])
             return whenFinished.addCallback(
                 lambda ign: (response, p.data))
         d.addCallback(cbResponse)
