@@ -561,9 +561,7 @@ class Request:
         requestLines = []
         requestLines.append(
             '%s %s HTTP/1.1\r\n' % (self.method, self.uri))
-        if self.persistent:
-            requestLines.append('Connection: Keep-Alive\r\n')
-        else:
+        if not self.persistent:
             requestLines.append('Connection: close\r\n')
         if TEorCL is not None:
             requestLines.append(TEorCL)
@@ -1225,6 +1223,11 @@ class HTTP11ClientProtocol(Protocol):
     """
     _state = 'QUIESCENT'
     _parser = None
+    _finishedRequest = None
+    _currentRequest = None
+    _transportProxy = None
+    _responseDeferred = None
+
 
     def __init__(self, quiescentCallback=lambda c: None):
         self._quiescentCallback = quiescentCallback
@@ -1329,7 +1332,14 @@ class HTTP11ClientProtocol(Protocol):
             # XXX should also disconnect if *request* had 'connection: close'
             # It's a persistent connection:
             self._disconnectParser(reason)
-            self._quiescentCallback(self)
+            # If callback throws exception, just log it - keeping persistent
+            # connections around is just an optimisation:
+            try:
+                self._quiescentCallback(self)
+            except:
+                # XXX test this
+                log.err()
+                self.transport.loseConnection()
 
 
     def _disconnectParser(self, reason):
@@ -1339,17 +1349,19 @@ class HTTP11ClientProtocol(Protocol):
 
         @type reason: L{Failure}
         """
-        # XXX clear _currentRequest
         if self._parser is not None:
             parser = self._parser
             self._parser = None
+            self._currentRequest = None
+            self._finishedRequest = None
+            self._responseDeferred = None
 
             # The parser is no longer allowed to do anything to the real
             # transport.  Stop proxying from the parser's transport to the real
             # transport before telling the parser it's done so that it can't do
             # anything.
             self._transportProxy._stopProxying()
-
+            self._transportProxy = None
             parser.connectionLost(reason)
 
 

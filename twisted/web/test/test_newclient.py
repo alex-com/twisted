@@ -1328,8 +1328,8 @@ class HTTP11ClientProtocolTests(TestCase):
     def test_quiescentCallbackCalled(self):
         """
         If after a response is done the {HTTP11ClientProtocol} stays open and
-        returns to QUIESCENT state, the C{quiescentCallback} is called with
-        the protocol instance.
+        returns to QUIESCENT state, all per-request state is reset and the
+        C{quiescentCallback} is called with the protocol instance.
 
         This is useful for implementing a persistent connection pool.
         """
@@ -1337,6 +1337,11 @@ class HTTP11ClientProtocolTests(TestCase):
         def callback(p):
             self.assertEqual(p, protocol)
             self.assertEqual(p.state, "QUIESCENT")
+            self.assertEqual(p._parser, None)
+            self.assertEqual(p._finishedRequest, None)
+            self.assertEqual(p._currentRequest, None)
+            self.assertEqual(p._transportProxy, None)
+            self.assertEqual(p._responseDeferred, None)
             quiescentResult.append(p)
 
         transport = StringTransport()
@@ -1448,15 +1453,13 @@ class RequestTests(TestCase):
 
     def test_sendSimplestPersistentRequest(self):
         """
-        A pesistent request sends 'Connection: Keep-Alive', and does
-        not send 'Connection: close' header.
+        A pesistent request does not send 'Connection: close' header.
         """
         req = Request('GET', '/', _boringHeaders, None, persistent=True)
         req.writeTo(self.transport)
         self.assertEqual(
             self.transport.value(),
             "GET / HTTP/1.1\r\n"
-            "Connection: Keep-Alive\r\n"
             "Host: example.com\r\n"
             "\r\n")
 
