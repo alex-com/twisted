@@ -1326,18 +1326,16 @@ class HTTP11ClientProtocol(Protocol):
 
         reason = ConnectionDone("synthetic!")
         connHeaders = self._parser.connHeaders.getRawHeaders('connection', ())
-        if (('close' in connHeaders)) or self._state != "QUIESCENT":
+        if (('close' in connHeaders) or self._state != "QUIESCENT" or
+            not self._currentRequest.persistent):
             self._giveUp(Failure(reason))
         else:
-            # XXX should also disconnect if *request* had 'connection: close'
-            # It's a persistent connection:
             self._disconnectParser(reason)
             # If callback throws exception, just log it - keeping persistent
             # connections around is just an optimisation:
             try:
                 self._quiescentCallback(self)
             except:
-                # XXX test this
                 log.err()
                 self.transport.loseConnection()
 

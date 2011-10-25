@@ -1371,8 +1371,9 @@ class HTTP11ClientProtocolTests(TestCase):
 
     def test_quiescentCallbackNotCalled(self):
         """
-        If after a response is done the {HTTP11ClientProtocol} disconnects,
-        the C{quiescentCallback} is not called.
+        If after a response is done the {HTTP11ClientProtocol} returns a
+        C{Connection: close} header in the response, the C{quiescentCallback}
+        is not called and the connection is lost.
         """
         quiescentResult = []
         transport = StringTransport()
@@ -1380,7 +1381,7 @@ class HTTP11ClientProtocolTests(TestCase):
         protocol.makeConnection(transport)
 
         requestDeferred = protocol.request(
-            Request('GET', '/', _boringHeaders, None, persistent=False))
+            Request('GET', '/', _boringHeaders, None, persistent=True))
         protocol.dataReceived(
             "HTTP/1.1 200 OK\r\n"
             "Content-length: 0\r\n"
@@ -1395,6 +1396,66 @@ class HTTP11ClientProtocolTests(TestCase):
         response.deliverBody(bodyProtocol)
         bodyProtocol.closedReason.trap(ResponseDone)
         self.assertEqual(quiescentResult, [])
+        self.assertEqual(transport.disconnecting, True)
+
+
+    def test_quiescentCallbackNotCalledNonPersistentQuery(self):
+        """
+        If the request was non-persistent (i.e. sent C{Connection: close}),
+        the C{quiescentCallback} is not called and the connection is lost.
+        """
+        quiescentResult = []
+        transport = StringTransport()
+        protocol = HTTP11ClientProtocol(quiescentResult.append)
+        protocol.makeConnection(transport)
+
+        requestDeferred = protocol.request(
+            Request('GET', '/', _boringHeaders, None, persistent=False))
+        protocol.dataReceived(
+            "HTTP/1.1 200 OK\r\n"
+            "Content-length: 0\r\n"
+            "\r\n")
+
+        result = []
+        requestDeferred.addCallback(result.append)
+        response = result[0]
+
+        bodyProtocol = AccumulatingProtocol()
+        response.deliverBody(bodyProtocol)
+        bodyProtocol.closedReason.trap(ResponseDone)
+        self.assertEqual(quiescentResult, [])
+        self.assertEqual(transport.disconnecting, True)
+
+
+    def test_quiescentCallbackThrows(self):
+        """
+        If C{quiescentCallback} throws an exception, the error is logged and
+        protocol is disconnected.
+        """
+        def callback(p):
+            raise ZeroDivisionError()
+
+        transport = StringTransport()
+        protocol = HTTP11ClientProtocol(callback)
+        protocol.makeConnection(transport)
+
+        requestDeferred = protocol.request(
+            Request('GET', '/', _boringHeaders, None, persistent=True))
+        protocol.dataReceived(
+            "HTTP/1.1 200 OK\r\n"
+            "Content-length: 0\r\n"
+            "\r\n")
+
+        result = []
+        requestDeferred.addCallback(result.append)
+        response = result[0]
+        bodyProtocol = AccumulatingProtocol()
+        response.deliverBody(bodyProtocol)
+        bodyProtocol.closedReason.trap(ResponseDone)
+
+        e, = self.flushLoggedErrors()
+        self.assertIsInstance(e.value, ZeroDivisionError)
+        self.assertTrue(transport.disconnecting)
 
 
 
