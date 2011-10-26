@@ -1347,7 +1347,7 @@ class FakeReactorAndConnectMixin:
         def __init__(self, endpoint, testCase):
             self.endpoint = endpoint
             self.testCase = testCase
-            self.factory = _HTTP11ClientFactory()
+            self.factory = _HTTP11ClientFactory(lambda p: None)
             self.protocol = StubHTTPProtocol()
             self.factory.buildProtocol = lambda addr: self.protocol
 
@@ -1407,6 +1407,9 @@ class DummyFactory(Factory):
     """
     Create C{StubHTTPProtocol} instances.
     """
+    def __init__(self, quiescentCallback):
+        pass
+
     protocol = StubHTTPProtocol
 
 
@@ -1423,8 +1426,11 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
 
     Elsewhere (probably AgentTests? or new class for agent mixin) we will need to test: 
     - HTTP protocol instanstiated with appropriate pool._putConnection as its quiescent callback
-    - If persistent is set to False, Agent makes Requests with persistent=False and with _connect. - move _connectAndRequest to Agent, do logic there.
+    - If persistent is set to False, Agent makes Requests with persistent=False and with new connections each time.
     - The opposite for persistent=True.
+
+    Proxy:
+    - Proxy is always in non-persistent mode, and file ticket.
     """
 
     def setUp(self):
@@ -1560,6 +1566,8 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
         When the Connection header is set to close, getting an address which
         has a cached connection does not return the cached connection, but
         rather a new one.
+
+        XXX maybe this test and code should be deleted...
         """
         headers = http_headers.Headers()
         headers.addRawHeader("Connection", "close")
@@ -1685,6 +1693,44 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
             self.pool._computeHostValue('https', 'example.com', 54321),
             'example.com:54321')
 
+
+    def test_getUsesQuiescentCallback(self):
+        """
+        When L{_HTTPConnectionPool._getConnection} connects, it returns a
+        C{Deferred} that fires with an instance of L{HTTP11ClientProtocol}
+        that has the correct quiescent callback attached. When this callback
+        is called the protocol is returned to the cache correctly, using the
+        right key.
+        """
+        class StringEndpoint(object):
+            def connect(self, factory):
+                p = factory.buildProtocol(None)
+                p.makeConnection(StringTransport())
+                return succeed(p)
+
+        pool = _HTTPConnectionPool(self.fakeReactor)
+        result = []
+        headers = http_headers.Headers()
+        pool._getConnection(
+            StringEndpoint(), "GET", "http", "foo", 80, headers).addCallback(
+            result.append)
+        protocol = result[0]
+        self.assertIsInstance(protocol, HTTP11ClientProtocol)
+
+        # Now that we have protocol instance, lets try to put it back in the
+        # pool:
+        protocol._state = "QUIESCENT"
+        protocol._quiescentCallback(protocol)
+
+        # If we try to retrive a connection to same destination again, we
+        # should get the same protocol, because it should've been added back
+        # to the pool:
+        result2 = []
+        headers = http_headers.Headers()
+        pool._getConnection(
+            StringEndpoint(), "GET", "http", "foo", 80, headers).addCallback(
+            result2.append)
+        self.assertEqual(result2[0], protocol)
 
 
 

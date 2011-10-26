@@ -795,13 +795,20 @@ class FileBodyProducer(object):
 
 
 
-class _HTTP11ClientFactory(protocol.ClientFactory):
+class _HTTP11ClientFactory(protocol.Factory):
     """
-    A simple factory for L{HTTP11ClientProtocol}, used by L{ProxyAgent}.
+    A factory for L{HTTP11ClientProtocol}, used by L{_HTTPConnectionPool}.
+
+    @ivar _quiescentCallback: The quiescent callback to be passed to protocol
+        instances, used to return them to the connection pool.
 
     @since: 11.1
     """
-    protocol = HTTP11ClientProtocol
+    def __init__(self, quiescentCallback):
+        self._quiescentCallback = quiescentCallback
+
+    def buildProtocol(self, addr):
+        return HTTP11ClientProtocol(self._quiescentCallback)
 
 
 
@@ -859,7 +866,11 @@ class _HTTPConnectionPool(object):
                 self._timeouts[conn].cancel()
                 del self._timeouts[conn]
                 return defer.succeed(conn)
-        return endpoint.connect(self._factory())
+
+        def quiescentCallback(proto):
+            self._putConnection(scheme, host, port, proto)
+        factory = self._factory(quiescentCallback)
+        return endpoint.connect(factory)
 
 
     def _removeConnection(self, scheme, host, port, connection):
