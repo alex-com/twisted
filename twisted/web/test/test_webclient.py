@@ -1449,7 +1449,7 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
             self.assertIsInstance(conn, StubHTTPProtocol)
 
         d = self.pool._getConnection(DummyEndpoint(), "GET", "https",
-                                     "example.com", 443, http_headers.Headers())
+                                     "example.com", 443)
         return d.addCallback(gotConnection)
 
 
@@ -1506,8 +1506,7 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
             self.assertNotIn(conn, self.pool._timeouts)
 
         return self.pool._getConnection(BadEndpoint(),
-                                        method, "http", "example.com", 80,
-                                        http_headers.Headers()
+                                        method, "http", "example.com", 80
                                         ).addCallback(gotConnection)
 
 
@@ -1547,8 +1546,8 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
             self.assertIn(protocol,
                           self.pool._connections[("http", "example.com", 80)])
 
-        return self.pool._getConnection(DummyEndpoint(), method, "http", 
-                                        "example.com", 80, headers
+        return self.pool._getConnection(DummyEndpoint(), method, "http",
+                                        "example.com", 80
                                         ).addCallback(gotConnection)
 
 
@@ -1559,19 +1558,6 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
         but rather a new one.
         """
         return self.getNewConnectionTest("METHOD", http_headers.Headers())
-
-
-    def test_getNotCachedConnectionCloseHeader(self):
-        """
-        When the Connection header is set to close, getting an address which
-        has a cached connection does not return the cached connection, but
-        rather a new one.
-
-        XXX maybe this test and code should be deleted...
-        """
-        headers = http_headers.Headers()
-        headers.addRawHeader("Connection", "close")
-        return self.getNewConnectionTest("GET", headers)
 
 
     def test_putNotQuiescent(self):
@@ -1710,9 +1696,8 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
 
         pool = _HTTPConnectionPool(self.fakeReactor)
         result = []
-        headers = http_headers.Headers()
         pool._getConnection(
-            StringEndpoint(), "GET", "http", "foo", 80, headers).addCallback(
+            StringEndpoint(), "GET", "http", "foo", 80).addCallback(
             result.append)
         protocol = result[0]
         self.assertIsInstance(protocol, HTTP11ClientProtocol)
@@ -1726,9 +1711,8 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
         # should get the same protocol, because it should've been added back
         # to the pool:
         result2 = []
-        headers = http_headers.Headers()
         pool._getConnection(
-            StringEndpoint(), "GET", "http", "foo", 80, headers).addCallback(
+            StringEndpoint(), "GET", "http", "foo", 80).addCallback(
             result2.append)
         self.assertEqual(result2[0], protocol)
 

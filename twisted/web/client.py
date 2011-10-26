@@ -837,7 +837,7 @@ class _HTTPConnectionPool(object):
         self._timeouts = {}
 
 
-    def _getConnection(self, endpoint, method, scheme, host, port, headers):
+    def _getConnection(self, endpoint, method, scheme, host, port):
         """
         Return a Deferred of a connection, either new or cached, to be used
         for a HTTP request.
@@ -851,13 +851,9 @@ class _HTTPConnectionPool(object):
         Only GET and HEAD can be done over a persistent connection (XXX find
         where in RFC it talks about this) so other methods will result in new
         connections.
-
-        Headers are required since we want to check for the 'Connection'
-        header to see if it says 'close'.
         """
         key = (scheme, host, port)
-        if (method in ("GET", "HEAD") and
-            headers.getRawHeaders("connection") != ["close"]):
+        if method in ("GET", "HEAD"):
             # Try to get cached version:
             conns = self._connections.get(key)
             if conns:
@@ -919,7 +915,7 @@ class _HTTPConnectionPool(object):
             headers = headers.copy()
             headers.addRawHeader(
                 'host', self._computeHostValue(scheme, host, port))
-        d = self._getConnection(endpoint, method, scheme, host, port, headers)
+        d = self._getConnection(endpoint, method, scheme, host, port)
         def cbConnected(proto):
             return proto.request(
                 Request(method, requestPath, headers, bodyProducer))
