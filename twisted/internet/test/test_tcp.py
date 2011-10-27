@@ -948,6 +948,41 @@ class WriteSequenceTests(ReactorBuilder):
         self.runReactor(reactor)
 
 
+    def test_writeSequenceWithUnicodeRaisesException(self):
+        """
+        C{writeSequence} with an element in the sequence of type unicode raises
+        TypeError("Data must not be unicode")
+        """
+        client, server = self.client, self.server
+        reactor = self.buildReactor()
+
+        port = reactor.listenTCP(0, server)
+        self.addCleanup(port.stopListening)
+
+        connector = reactor.connectTCP(
+            "127.0.0.1", port.getHost().port, client)
+        self.addCleanup(connector.disconnect)
+
+        def serverConnected(proto):
+            log.msg("server connected %s" % proto)
+            try:
+                proto.transport.writeSequence([u"Unicode is not kosher"])
+            except TypeError, ex:
+                self.assertEquals(str(ex), "Data must not be unicode")
+            else:
+                self.fail("Reactor %r: Did not raise a TypeError exception for unicode given to writeSequence" % reactor.__class__)
+
+        d = server.protocolConnectionMade.addCallback(serverConnected)
+
+        def stop(result):
+            reactor.stop()
+            return result
+
+        d.addBoth(stop)
+
+        self.runReactor(reactor)
+
+
     def _producerTest(self, clientConnected):
         """
         Helper for testing producers which call C{writeSequence}.  This will set
