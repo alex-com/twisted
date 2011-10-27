@@ -951,7 +951,7 @@ class WriteSequenceTests(ReactorBuilder):
     def test_writeSequenceWithUnicodeRaisesException(self):
         """
         C{writeSequence} with an element in the sequence of type unicode raises
-        TypeError("Data must not be unicode")
+        C{TypeError}.
         """
         client, server = self.client, self.server
         reactor = self.buildReactor()
@@ -965,20 +965,14 @@ class WriteSequenceTests(ReactorBuilder):
 
         def serverConnected(proto):
             log.msg("server connected %s" % proto)
-            try:
-                proto.transport.writeSequence([u"Unicode is not kosher"])
-            except TypeError, ex:
-                self.assertEquals(str(ex), "Data must not be unicode")
-            else:
-                self.fail("Reactor %r: Did not raise a TypeError exception for unicode given to writeSequence" % reactor.__class__)
+            exc = self.assertRaises(
+                TypeError,
+                proto.transport.writeSequence, [u"Unicode is not kosher"])
+            self.assertEquals(str(exc), "Data must not be unicode")
 
         d = server.protocolConnectionMade.addCallback(serverConnected)
-
-        def stop(result):
-            reactor.stop()
-            return result
-
-        d.addBoth(stop)
+        d.addErrback(log.err)
+        d.addCallback(lambda ignored: reactor.stop())
 
         self.runReactor(reactor)
 
