@@ -32,8 +32,14 @@ class DoNothing(object):
 
 class SerialPortTests(unittest.TestCase):
     """
-    Twisted's serial port support is fully functional.
+    Minimal testing for Twisted's serial port support.
+
+    See ticket #2462 for the eventual full test suite.
     """
+
+    if serialport is None:
+        skip = "Serial port support is not available."
+
 
     def test_connectionMadeLost(self):
         """
@@ -64,7 +70,3 @@ class SerialPortTests(unittest.TestCase):
         f = Failure(ConnectionDone())
         port.connectionLost(f)
         self.assertEqual(events, ["connectionMade", ("connectionLost", f)])
-
-
-if serialport is None:
-    SerialPortTests.skip = "Serial port support is not available."

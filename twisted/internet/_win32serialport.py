@@ -22,7 +22,7 @@ from serialport import BaseSerialPort
 
 
 class SerialPort(BaseSerialPort, abstract.FileDescriptor):
-    """A select()able serial device, acting as a transport."""
+    """A serial device, acting as a transport, that uses a win32 event."""
 
     connected = 1
 
@@ -92,6 +92,7 @@ class SerialPort(BaseSerialPort, abstract.FileDescriptor):
                                                win32file.AllocateReadBuffer(1),
                                                self._overlappedRead)
 
+
     def write(self, data):
         if data:
             if self.writeInProgress:
@@ -99,6 +100,7 @@ class SerialPort(BaseSerialPort, abstract.FileDescriptor):
             else:
                 self.writeInProgress = 1
                 win32file.WriteFile(self._serial.hComPort, data, self._overlappedWrite)
+
 
     def serialWriteEvent(self):
         try:
@@ -108,8 +110,15 @@ class SerialPort(BaseSerialPort, abstract.FileDescriptor):
             return
         else:
             win32file.WriteFile(self._serial.hComPort, dataToWrite, self._overlappedWrite)
-    
+
+
     def connectionLost(self, reason):
+        """
+        Called when the serial port disconnects.
+
+        Will call C{connectionLost} on the protocol that is handling the
+        serial data.
+        """
         self.reactor.removeEvent(self._overlappedRead.hEvent)
         self.reactor.removeEvent(self._overlappedWrite.hEvent)
         abstract.FileDescriptor.connectionLost(self, reason)

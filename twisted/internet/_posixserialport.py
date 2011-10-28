@@ -43,8 +43,10 @@ class SerialPort(BaseSerialPort, abstract.FileDescriptor):
         self.protocol.makeConnection(self)
         self.startReading()
 
+
     def fileno(self):
         return self._serial.fd
+
 
     def writeSomeData(self, data):
         """
@@ -52,13 +54,21 @@ class SerialPort(BaseSerialPort, abstract.FileDescriptor):
         """
         return fdesc.writeToFD(self.fileno(), data)
 
+
     def doRead(self):
         """
         Some data's readable from serial device.
         """
         return fdesc.readFromFD(self.fileno(), self.protocol.dataReceived)
 
+
     def connectionLost(self, reason):
+        """
+        Called when the serial port disconnects.
+
+        Will call C{connectionLost} on the protocol that is handling the
+        serial data.
+        """
         abstract.FileDescriptor.connectionLost(self, reason)
         self._serial.close()
         self.protocol.connectionLost(reason)
