@@ -7,20 +7,20 @@ Tests for L{twisted.tap.ftp}.
 
 from twisted.trial.unittest import TestCase
 
-from twisted.python.usage import UsageError
-from twisted.tap.ftp import Options, makeService
-from twisted.python import deprecate, versions
+from twisted.tap.ftp import Options
+from twisted.python import versions
 from twisted.python.filepath import FilePath
 
 
 class FTPOptionsTestCase(TestCase):
     """
-    Tests for the command line option parser used for I{twistd mail}.
+    Tests for the command line option parser used for C{twistd ftp}.
     """
-            
-    def testPasswordfileDeprecation(self):
+
+    def test_passwordfileDeprecation(self):
         """
-        Test that the --passwordfile option will emit a correct warning.
+        Test that the --passwordfile option will emit a warning stating that
+        said option is deprecated.
         """
         passwd = FilePath(self.mktemp())
         passwd.setContent("usernameTest:passwordTest")
