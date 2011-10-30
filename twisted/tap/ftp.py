@@ -16,6 +16,7 @@ from twisted.python import usage, deprecate, versions
 import warnings
 
 
+
 class Options(usage.Options, strcred.AuthOptionMixin):
     synopsis = """[options].
     WARNING: This FTP server is probably INSECURE do not use it.
@@ -30,7 +31,7 @@ class Options(usage.Options, strcred.AuthOptionMixin):
         optActions={"root": usage.CompleteDirs(descr="root of the ftp site")}
         )
 
-    longdesc = 'This creates a ftp.tap file that can be used by twistd'
+    longdesc = ''
 
     def __init__(self, *a, **kw):
         usage.Options.__init__(self, *a, **kw)

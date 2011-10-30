@@ -13,6 +13,7 @@ from twisted.python import versions
 from twisted.python.filepath import FilePath
 
 
+
 class FTPOptionsTestCase(TestCase):
     """
     Tests for the command line option parser used for C{twistd ftp}.
@@ -32,7 +33,7 @@ class FTPOptionsTestCase(TestCase):
 
     def test_passwordfileDeprecation(self):
         """
-        Test that the --passwordfile option will emit a warning stating that
+        The C{--password-file} option will emit a warning stating that
         said option is deprecated.
         """
         self.callDeprecated(
@@ -42,7 +43,8 @@ class FTPOptionsTestCase(TestCase):
 
     def test_authAdded(self):
         """
-        Tests that the --auth command generates a checker.
+        The C{--auth} command-line option will add a checker to the list of
+        checkers
         """
         numCheckers = len(self.options['credCheckers'])
         self.options.parseOptions(['--auth', 'file:' + self.filename])
@@ -51,8 +53,9 @@ class FTPOptionsTestCase(TestCase):
 
     def test_authFailure(self):
         """
-        Tests that the --auth command generates a checker does not authorize
-        invalid logins
+        The checker created by the C{--auth} command-line option returns a
+        L{Deferred} that fails with L{UnauthorizedLogin} when
+        presented with credentials that are unknown to that checker.
         """
         self.options.parseOptions(['--auth', 'file:' + self.filename])
         checker = self.options['credCheckers'][-1]
@@ -65,8 +68,9 @@ class FTPOptionsTestCase(TestCase):
 
     def test_authSuccess(self):
         """
-        Tests that the --auth command generates a checker that authorizes valid
-        logins
+        The checker created by the C{--auth} command-line option returns a
+        L{Deferred} that returns the avatar id when presented with credentials
+        that are known to that checker.
         """
         self.options.parseOptions(['--auth', 'file:' + self.filename])
         checker = self.options['credCheckers'][-1]
