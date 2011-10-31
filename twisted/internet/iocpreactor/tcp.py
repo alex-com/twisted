@@ -34,11 +34,6 @@ connectExErrors = {
         ERROR_NETWORK_UNREACHABLE: errno.WSAENETUNREACH,
         }
 
-if struct.calcsize('P') == 4:
-    _CONTEXT_VALUE_FORMAT = 'L'
-else:
-    _CONTEXT_VALUE_FORMAT == 'Q'
-
 class Connection(abstract.FileHandle, _SocketCloser, _AbortingMixin):
     """
     @ivar TLS: C{False} to indicate the connection is in normal TCP mode,
@@ -284,7 +279,7 @@ class Client(Connection):
         else:
             self.socket.setsockopt(
                 socket.SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT,
-                struct.pack(_CONTEXT_VALUE_FORMAT, self.socket.fileno()))
+                struct.pack('P', self.socket.fileno()))
             self.protocol = self.connector.buildProtocol(self.getPeer())
             self.connected = True
             logPrefix = self._getLogPrefix(self.protocol)
@@ -566,7 +561,7 @@ class Port(_SocketCloser, _LogOwner):
         else:
             evt.newskt.setsockopt(
                 socket.SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT,
-                struct.pack(_CONTEXT_VALUE_FORMAT, self.socket.fileno()))
+                struct.pack('P', self.socket.fileno()))
             family, lAddr, rAddr = _iocp.get_accept_addrs(evt.newskt.fileno(),
                                                           evt.buff)
             assert family == self.addressFamily
