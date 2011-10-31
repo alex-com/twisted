@@ -278,9 +278,9 @@ class Client(Connection):
             self.failIfNotConnected(error.getConnectError((rc,
                                     errno.errorcode.get(rc, 'Unknown error'))))
         else:
-            self.socket.setsockopt(socket.SOL_SOCKET,
-                                   SO_UPDATE_CONNECT_CONTEXT,
-                                   struct.pack('I', self.socket.fileno()))
+            self.socket.setsockopt(
+                socket.SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT,
+                self.socket.fileno())
             self.protocol = self.connector.buildProtocol(self.getPeer())
             self.connected = True
             logPrefix = self._getLogPrefix(self.protocol)
@@ -560,8 +560,9 @@ class Port(_SocketCloser, _LogOwner):
                     (errno.errorcode.get(rc, 'unknown error'), rc))
             return False
         else:
-            evt.newskt.setsockopt(socket.SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT,
-                                  struct.pack('I', self.socket.fileno()))
+            evt.newskt.setsockopt(
+                socket.SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT,
+                self.socket.fileno())
             family, lAddr, rAddr = _iocp.get_accept_addrs(evt.newskt.fileno(),
                                                           evt.buff)
             assert family == self.addressFamily
