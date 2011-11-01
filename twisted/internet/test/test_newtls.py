@@ -52,8 +52,6 @@ class IntegrationTests(unittest.TestCase, ContextGeneratingMixin):
 
         class ProducerProtocol(protocol.Protocol):
             def connectionMade(self):
-                from twisted.python import log
-                log.msg("connectionmade")
                 self.transport.startTLS(clientContext)
                 if not isinstance(self.transport.protocol,
                                   tls.TLSMemoryBIOProtocol):
@@ -69,7 +67,6 @@ class IntegrationTests(unittest.TestCase, ContextGeneratingMixin):
                 result.append(self.transport.protocol._producer)
 
                 self.transport.loseConnection()
-                log.msg("connectionmade done" + str(result))
 
             def connectionLost(self, reason):
                 done.callback(None)
@@ -77,13 +74,12 @@ class IntegrationTests(unittest.TestCase, ContextGeneratingMixin):
         serverFactory = protocol.ServerFactory
         serverFactory.protocol = protocol.Protocol
         serverPort = reactor.listenSSL(0, protocol.ServerFactory(),
-                                       self.getServerContext())
+                                       self.getServerContext(),
+                                       interface="127.0.0.1")
         self.addCleanup(serverPort.stopListening)
         factory = protocol.ClientFactory()
         factory.protocol = ProducerProtocol
-        reactor.connectTCP(
-            serverPort.getHost().host, serverPort.getHost().port,
-            factory)
+        reactor.connectTCP("127.0.0.1", serverPort.getHost().port, factory)
 
         def gotResult(_):
             self.assertEqual(result, [producer, None])
