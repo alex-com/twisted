@@ -71,6 +71,20 @@ class _BypassTLS(object):
         return self._base.loseConnection(self._connection, reason)
 
 
+    def registerProducer(self, *args, **kwargs):
+        """
+        Register a producer with the underlying connection.
+        """
+        return self._base.registerProducer(self._connection, *args, **kwargs)
+
+
+    def unregisterProducer(self):
+        """
+        Unregister a producer with the underlying connection.
+        """
+        return self._base.unregisterProducer(self._connection)
+
+
 
 def startTLS(transport, contextFactory, normal, bypass):
     """
@@ -223,6 +237,34 @@ class ConnectionMixin(object):
                 self.startTLS(waiting.context, waiting.extra)
                 self.writeSequence(waiting.bufferedData)
         return result
+
+
+    def registerProducer(self, producer, streaming):
+        """
+        Register a producer.
+
+        If TLS is enabled, the TLS connection handles this.
+        """
+        if self.TLS:
+            # Registering a producer before we're connected shouldn't be a
+            # problem. If we end up with a write(), that's already handled in
+            # the write() code above, and there are no other potential
+            # side-effects.
+            self.protocol.registerProducer(producer, streaming)
+        else:
+            FileDescriptor.registerProducer(producer, streaming)
+
+
+    def unregisterProducer(self):
+        """
+        Unregister a producer.
+
+        If TLS is enabled, the TLS connection handles this.
+        """
+        if self.TLS:
+            self.protocol.unregisterProducer()
+        else:
+            FileDescriptor.unregisterProducer()
 
 
 
