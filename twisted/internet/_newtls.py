@@ -252,7 +252,7 @@ class ConnectionMixin(object):
             # side-effects.
             self.protocol.registerProducer(producer, streaming)
         else:
-            FileDescriptor.registerProducer(producer, streaming)
+            FileDescriptor.registerProducer(self, producer, streaming)
 
 
     def unregisterProducer(self):
@@ -264,7 +264,7 @@ class ConnectionMixin(object):
         if self.TLS:
             self.protocol.unregisterProducer()
         else:
-            FileDescriptor.unregisterProducer()
+            FileDescriptor.unregisterProducer(self)
 
 
 
