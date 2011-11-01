@@ -209,7 +209,7 @@ class Connection(abstract.FileHandle, _SocketCloser, _AbortingMixin):
             # side-effects.
             self.protocol.registerProducer(producer, streaming)
         else:
-            FileHandle.registerProducer(self, producer, streaming)
+            abstract.FileHandle.registerProducer(self, producer, streaming)
 
 
     def unregisterProducer(self):
@@ -221,7 +221,7 @@ class Connection(abstract.FileHandle, _SocketCloser, _AbortingMixin):
         if self.TLS:
             self.protocol.unregisterProducer()
         else:
-            FileHandle.unregisterProducer(self)
+            abstract.FileHandle.unregisterProducer(self)
 
 if _startTLS is not None:
     classImplements(Connection, interfaces.ITLSTransport)
