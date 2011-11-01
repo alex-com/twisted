@@ -58,7 +58,10 @@ try:
     # WSAEnumNetworkEvents was added in pywin32 215
     from win32file import WSAEnumNetworkEvents
 except ImportError:
-    print 'pywin32 too old for reliable disconnection notification'
+    import warnings
+    warnings.warn(
+        'Reliable disconnection notification requires pywin32 215 or later',
+        category=UserWarning)
     def WSAEnumNetworkEvents(fd, event):
         return set([FD_READ])
 
