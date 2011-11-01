@@ -42,6 +42,10 @@ class IntegrationTests(unittest.TestCase, ContextGeneratingMixin):
         clientContext = self.getClientContext()
 
         class FakeProducer(object):
+            def pauseProducing(self):
+                pass
+            def resumeProducing(self):
+                pass
             def stopProducing(self):
                 pass
         producer = FakeProducer()
