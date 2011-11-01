@@ -52,6 +52,8 @@ class IntegrationTests(unittest.TestCase, ContextGeneratingMixin):
 
         class ProducerProtocol(protocol.Protocol):
             def connectionMade(self):
+                from twisted.python import log
+                log.msg("connectionmade")
                 self.transport.startTLS(clientContext)
                 if not isinstance(self.transport.protocol,
                                   tls.TLSMemoryBIOProtocol):
@@ -65,14 +67,17 @@ class IntegrationTests(unittest.TestCase, ContextGeneratingMixin):
                 self.transport.unregisterProducer()
                 # The producer was unregistered from the TLSMemoryBioProtocol:
                 result.append(self.transport.protocol._producer)
+
                 self.transport.loseConnection()
+                log.msg("connectionmade done" + str(result))
 
             def connectionLost(self, reason):
                 done.callback(None)
 
         serverFactory = protocol.ServerFactory
         serverFactory.protocol = protocol.Protocol
-        serverPort = reactor.listenSSL(0, protocol.ServerFactory(), self.getServerContext())
+        serverPort = reactor.listenSSL(0, protocol.ServerFactory(),
+                                       self.getServerContext())
         self.addCleanup(serverPort.stopListening)
         factory = protocol.ClientFactory()
         factory.protocol = ProducerProtocol
