@@ -53,18 +53,15 @@ from weakref import WeakKeyDictionary
 from zope.interface import implements
 
 # Win32 imports
-import pywintypes, win32api
+from win32file import FD_READ, FD_CLOSE, FD_ACCEPT, FD_CONNECT, WSAEventSelect
+try:
+    # WSAEnumNetworkEvents was added in pywin32 215
+    from win32file import WSAEnumNetworkEvents
+except ImportError:
+    print 'pywin32 too old for reliable disconnection notification'
+    def WSAEnumNetworkEvents(fd, event):
+        return set([FD_READ])
 
-# WSAEnumNetworkEvents was added in pywin32 215
-version = win32api.GetFileVersionInfo(
-    win32api.__file__, chr(92))['FileVersionLS'] >> 16
-if version < 215:
-    raise ImportError(
-        "pywin32 build 215 or later required - found %d" % (version,))
-
-from win32file import (
-    FD_READ, FD_CLOSE, FD_ACCEPT, FD_CONNECT,
-    WSAEventSelect, WSAEnumNetworkEvents)
 from win32event import CreateEvent, MsgWaitForMultipleObjects
 from win32event import WAIT_OBJECT_0, WAIT_TIMEOUT, QS_ALLINPUT, QS_ALLEVENTS
 
@@ -260,19 +257,19 @@ class Win32Reactor(posixbase.PosixReactorBase):
             event = handles[val - WAIT_OBJECT_0]
             fd, action = self._events[event]
 
-            # Since we asked for FD_READ | FD_CLOSE, check to see if we actually
-            # got FD_CLOSE.  This needs a special check because it only gets
-            # delivered once.  If we miss it, it's gone forever and we'll never
-            # know that the connection is closed.
-            try:
-                events = WSAEnumNetworkEvents(fd, event)
-            except (TypeError, pywintypes.error):
-                # It wasn't a socket fd.  The pywintypes.error case is not
-                # exercised by the test suite; it is triggered when fd is a
-                # serial port; see #2462 for progress on unit testing serial
-                # port support.
-                pass
-            else:
+            if fd in self._reads:
+                # Before anything, make sure it's still a valid file descriptor.
+                fileno = fd.fileno()
+                if fileno == -1:
+                    self._disconnectSelectable(fd, posixbase._NO_FILEDESC, False)
+                    return
+
+                # Since it's a socket (not another arbitrary event added via
+                # addEvent) and we asked for FD_READ | FD_CLOSE, check to see if
+                # we actually got FD_CLOSE.  This needs a special check because
+                # it only gets delivered once.  If we miss it, it's gone forever
+                # and we'll never know that the connection is closed.
+                events = WSAEnumNetworkEvents(fileno, event)
                 if FD_CLOSE in events:
                     self._closedAndReading[fd] = True
             log.callWithLogger(fd, self._runAction, action, fd)
