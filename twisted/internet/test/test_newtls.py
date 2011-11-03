@@ -155,4 +155,72 @@ class ProducerTestsMixin(ReactorBuilder, TLSMixin, ContextGeneratingMixin):
         self.assertEqual(result, [producer, None])
 
 
+    def startTLSAfterRegisterProducer(self, streaming):
+        """
+        When a producer is registered, and then startTLS is called,
+        the producer is re-registered with the C{TLSMemoryBIOProtocol}.
+        """
+        result = []
+        done = Deferred()
+        clientContext = self.getClientContext()
+        serverContext = self.getServerContext()
+
+        producer = FakeProducer()
+        reactor = self.buildReactor()
+
+        class RegisterTLSProtocol(protocol.Protocol):
+            def connectionMade(self):
+                self.transport.registerProducer(producer, streaming)
+                self.transport.startTLS(serverContext)
+                # Store TLSMemoryBIOProtocol and underlying transport producer
+                # status:
+                if streaming:
+                    # _ProducerMembrane -> producer:
+                    result.append(self.transport.protocol._producer._producer)
+                    result.append(self.transport.producer._producer)
+                else:
+                    # _ProducerMembrane -> _PullToPush -> producer:
+                    result.append(self.transport.protocol._producer._producer._producer)
+                    result.append(self.transport.producer._producer._producer)
+                self.transport.unregisterProducer()
+                self.transport.loseConnection()
+
+            def connectionLost(self, reason):
+                reactor.stop()
+
+        serverFactory = protocol.ServerFactory
+        serverFactory.protocol = RegisterTLSProtocol
+        serverPort = reactor.listenTCP(0, protocol.ServerFactory(),
+                                       interface="127.0.0.1")
+        self.addCleanup(serverPort.stopListening)
+
+        class StartTLSProtocol(protocol.Protocol):
+            def connectionMade(self):
+                self.transport.startTLS(clientContext)
+
+        factory = protocol.ClientFactory()
+        factory.protocol = StartTLSProtocol
+        reactor.connectTCP("127.0.0.1", serverPort.getHost().port, factory)
+        self.runReactor(reactor, timeout=2)
+
+        self.assertEqual(result, [producer, producer])
+
+
+    def test_startTLSAfterRegisterProducerStreaming(self):
+        """
+        When a streaming producer is registered, and then startTLS is called,
+        the producer is re-registered with the C{TLSMemoryBIOProtocol}.
+        """
+        self.startTLSAfterRegisterProducer(True)
+
+
+    def test_startTLSAfterRegisterProducerNonStreaming(self):
+        """
+        When a non-streaming producer is registered, and then startTLS is
+        called, the producer is re-registered with the
+        C{TLSMemoryBIOProtocol}.
+        """
+        self.startTLSAfterRegisterProducer(False)
+
+
 globals().update(ProducerTestsMixin.makeTestCaseClasses())

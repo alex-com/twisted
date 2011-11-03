@@ -128,6 +128,13 @@ def startTLS(transport, contextFactory, normal, bypass):
     else:
         client = not transport._tlsClientDefault
 
+    # If we have a producer, unregister it, and then re-register it below once
+    # we've switched to TLS mode, so it gets hooked up correctly:
+    producer, streaming = None, None
+    if transport.producer is not None:
+        producer, streaming = transport.producer, transport.streamingProducer
+        transport.unregisterProducer()
+
     tlsFactory = TLSMemoryBIOFactory(contextFactory, client, None)
     tlsProtocol = TLSMemoryBIOProtocol(tlsFactory, transport.protocol, False)
     transport.protocol = tlsProtocol
@@ -144,6 +151,10 @@ def startTLS(transport, contextFactory, normal, bypass):
 
     # Hook it up
     transport.protocol.makeConnection(_BypassTLS(bypass, transport))
+
+    # Restore producer if necessary:
+    if producer:
+        transport.registerProducer(producer, streaming)
 
 
 
