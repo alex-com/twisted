@@ -1053,7 +1053,7 @@ class HTTP11ClientProtocolTests(TestCase):
             response.deliverBody(p)
             self.assertEqual(
                 protocol.state, 'TRANSMITTING_AFTER_RECEIVING_RESPONSE')
-            self.assertEqual(self.transport.disconnecting, True)
+            self.assertEqual(transport.disconnecting, True)
             self.assertEqual(quiescentResult, [])
             return whenFinished.addCallback(
                 lambda ign: (response, p.data))
