@@ -1417,14 +1417,6 @@ class DummyFactory(Factory):
 class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
     """
     Tests for the L{_HTTPConnectionPool} class.
-
-    Proxy:
-    - Proxy is always in non-persistent mode, and file ticket.
-
-    Redirect:
-    - Redirect uses same connection.
-
-    Docstring/style audit.
     """
 
     def setUp(self):
@@ -2673,6 +2665,13 @@ class ProxyAgentTests(unittest.TestCase, FakeReactorAndConnectMixin):
             http_headers.Headers({'foo': ['bar'],
                                   'host': ['example.com:1234']}))
         self.assertIdentical(req.bodyProducer, body)
+
+
+    def test_nonPersistent(self):
+        """
+        C{ProxyAgent} connections are not persistent by default.
+        """
+        self.assertEqual(self.agent._pool.persistent, False)
 
 
 

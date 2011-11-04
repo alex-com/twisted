@@ -835,8 +835,10 @@ class _HTTPConnectionPool(object):
     @ivar _connections: Map (scheme, host, port) to sets of
         L{HTTP11ClientProtocol} instances.
 
-    @ivar _connections: Map L{HTTP11ClientProtocol} instances to a
-        C{IDelayedCall} instance of their timeout.
+    @ivar _timeouts: Map L{HTTP11ClientProtocol} instances to a C{IDelayedCall}
+        instance of their timeout.
+
+    @since: 12.0
     """
 
     _factory = _HTTP11ClientFactory
@@ -979,6 +981,8 @@ class Agent(object):
     @ivar _bindAddress: If not C{None}, the address passed to C{connectTCP} or
         C{connectSSL} for specifying the local address to bind to.
 
+    @ivar _pool: The L{_HTTPConnectionPool} used to manage HTTP connections.
+
     @since: 9.0
     """
 
@@ -1081,15 +1085,19 @@ class ProxyAgent(object):
     """
     An HTTP agent able to cross HTTP proxies.
 
+    Currently persistent connections are not supported. The work to fix this
+    is being tracked in ticket #5361.
+
     @ivar _proxyEndpoint: The endpoint used to connect to the proxy.
 
-    @since: 11.1
+    @ivar _pool: The L{_HTTPConnectionPool} used to manage HTTP connections.
 
-    XXX make sure actually working correctly (disable persistence should do it, open separate ticket). add reactor parameter.
+    @since: 11.1
     """
 
-    def __init__(self, endpoint):
-        from twisted.internet import reactor # XXX
+    def __init__(self, endpoint, reactor=None):
+        if reactor is None:
+            from twisted.internet import reactor
         self._proxyEndpoint = endpoint
         self._pool = _HTTPConnectionPool(reactor, persistent=False)
 
