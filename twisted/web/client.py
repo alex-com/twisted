@@ -816,18 +816,29 @@ class _HTTPConnectionPool(object):
     """
     A pool of persistent HTTP connections.
 
-    @ivar _factory: The factory used to connect to the proxy.
-
-    @ivar _connections: Map (scheme, host, port) to set of
-        L{HTTP11ClientProtocol} instances.
-
     Features:
     - Cached connections will eventually time out.
     - Limits on maximum number of persistent connections.
+
+
+    @ivar maxPersistentPerHost: The maximum number of cached persistent
+        connections for a C{host:port} destination.
+    @itype maxPersistentPerHost: C{int}
+
+    @ivar cachedConnectionTimeout: Number of seconds a cached persistent
+        connection will stay open before disconnecting.
+
+    @ivar _factory: The factory used to connect to the proxy.
+
+    @ivar _connections: Map (scheme, host, port) to sets of
+        L{HTTP11ClientProtocol} instances.
+
+    @ivar _connections: Map L{HTTP11ClientProtocol} instances to a
+        C{IDelayedCall} instance of their timeout.
     """
 
     _factory = _HTTP11ClientFactory
-
+    maxPersistentPerHost = 2
     cachedConnectionTimeout = 240
 
     def __init__(self, reactor, persistent=False):
@@ -891,6 +902,9 @@ class _HTTPConnectionPool(object):
                 log.err()
             return
         conns = self._connections.setdefault((scheme, host, port), set())
+        if len(conns) == self.maxPersistentPerHost:
+            dropped = conns.pop()
+            dropped.transport.loseConnection()
         conns.add(connection)
         cid = self._reactor.callLater(self.cachedConnectionTimeout,
                                       self._removeConnection,

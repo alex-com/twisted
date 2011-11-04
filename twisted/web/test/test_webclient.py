@@ -1418,19 +1418,21 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
     """
     Tests for the L{_HTTPConnectionPool} class.
 
-    - 
-    - If an idle connection is put back in the cache and the max number of persistent connections has been exceeded, one of the connections is closed and removed from the cache.
     - closeCachedConnections closes all cached connections and removes them from the cache.
-    - Max persistent connections are tied to (scheme, host, port); different keys have different max connections.
+    - 
     - test for persistent flag, and its effect on behavior
 
     Elsewhere (probably AgentTests? or new class for agent mixin) we will need to test: 
-    - HTTP protocol instanstiated with appropriate pool._putConnection as its quiescent callback
     - If persistent is set to False, Agent makes Requests with persistent=False and with new connections each time.
     - The opposite for persistent=True.
 
     Proxy:
     - Proxy is always in non-persistent mode, and file ticket.
+
+    Redirect:
+    - Redirect uses same connection.
+
+    Docstring/style audit.
     """
 
     def setUp(self):
@@ -1441,12 +1443,15 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
 
     def test_getReturnsNewIfCacheEmpty(self):
         """
-        If there are no cached connections, L{_HTTPConnectionPool.get} returns
-        a new connection.
+        If there are no cached connections,
+        L{_HTTPConnectionPool._getConnection} returns a new connection.
         """
-        # We start out with no cached connections...
+        self.assertEqual(self.pool._connections, {})
+
         def gotConnection(conn):
             self.assertIsInstance(conn, StubHTTPProtocol)
+            # The new connection is not stored in the pool:
+            self.assertNotIn(conn, self.pool._connections.values())
 
         d = self.pool._getConnection(DummyEndpoint(), "GET", "https",
                                      "example.com", 443)
@@ -1485,6 +1490,65 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
         self.assertNotIn(protocol, self.pool._timeouts)
 
 
+
+    def test_putExceedsMaxPersistent(self):
+        """
+        If an idle connection is put back in the cache and the max number of
+        persistent connections has been exceeded, one of the connections is
+        closed and removed from the cache.
+        """
+        pool = self.pool
+
+        # We start out with two cached connection, the max:
+        origCached = set([StubHTTPProtocol(), StubHTTPProtocol()])
+        for p in origCached:
+            p.makeConnection(StringTransport())
+            pool._putConnection("http", "example.com", 80, p)
+        self.assertEqual(pool._connections[("http", "example.com", 80)],
+                         origCached)
+
+        # Now we add another one:
+        newProtocol = StubHTTPProtocol()
+        newProtocol.makeConnection(StringTransport())
+        pool._putConnection("http", "example.com", 80, newProtocol)
+
+        # One of the cached connections will be removed and disconnected:
+        newCached = pool._connections[("http", "example.com", 80)]
+        self.assertEqual(len(newCached), 2)
+        self.assertIn(newProtocol, newCached)
+        self.assertEqual(len(origCached & newCached), 1)
+        self.assertEqual([p.transport.disconnecting for p in newCached],
+                         [False, False])
+        removed = origCached - newCached
+        self.assertEqual(len(removed), 1)
+        for p in removed:
+            self.assertEqual(p.transport.disconnecting, True)
+
+
+    def test_maxPersistentPerHost(self):
+        """
+        C{maxPersistentPerHost} is enforced per C{(scheme, host, port)}:
+        different keys have different max connections.
+        """
+        def addProtocol(scheme, host, port):
+            p = StubHTTPProtocol()
+            p.makeConnection(StringTransport())
+            self.pool._putConnection(scheme, host, port, p)
+            return p
+        persistent = set()
+        persistent.add(addProtocol("http", "example.com", 80))
+        persistent.add(addProtocol("http", "example.com", 80))
+        addProtocol("https", "example.com", 443)
+        addProtocol("http", "www2.example.com", 80)
+
+        self.assertEqual(
+            self.pool._connections[("http", "example.com", 80)], persistent)
+        self.assertEqual(
+            len(self.pool._connections[("https", "example.com", 443)]), 1)
+        self.assertEqual(
+            len(self.pool._connections[("http", "www2.example.com", 80)]), 1)
+
+
     def getCachedConnectionTest(self, method):
         """
         Get a cached connection, make sure timeout is cancelled and it is
@@ -1498,8 +1562,8 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
         def gotConnection(conn):
             # We got the cached connection:
             self.assertIdentical(protocol, conn)
-            self.assertNotIn(conn,
-                             self.pool._connections[("http", "example.com", 80)])
+            self.assertNotIn(
+                conn, self.pool._connections[("http", "example.com", 80)])
             # And the timeout was cancelled:
             self.fakeReactor.advance(241)
             self.assertEquals(conn.transport.disconnecting, False)
