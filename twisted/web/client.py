@@ -820,6 +820,8 @@ class _HTTPConnectionPool(object):
     - Cached connections will eventually time out.
     - Limits on maximum number of persistent connections.
 
+    @ivar persistent: Boolean indicating whether connections should be
+        persistent.
 
     @ivar maxPersistentPerHost: The maximum number of cached persistent
         connections for a C{host:port} destination.
@@ -841,7 +843,7 @@ class _HTTPConnectionPool(object):
     maxPersistentPerHost = 2
     cachedConnectionTimeout = 240
 
-    def __init__(self, reactor, persistent=False):
+    def __init__(self, reactor, persistent):
         self._reactor = reactor
         self.persistent = persistent
         self._connections = {}
@@ -932,7 +934,8 @@ class _HTTPConnectionPool(object):
         d = self._getConnection(endpoint, method, scheme, host, port)
         def cbConnected(proto):
             return proto.request(
-                Request(method, requestPath, headers, bodyProducer))
+                Request(method, requestPath, headers, bodyProducer,
+                        persistent=self.persistent))
         d.addCallback(cbConnected)
         return d
 

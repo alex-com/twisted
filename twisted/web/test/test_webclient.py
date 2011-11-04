@@ -1418,12 +1418,6 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
     """
     Tests for the L{_HTTPConnectionPool} class.
 
-    - test for persistent flag, and its effect on behavior
-
-    Elsewhere (probably AgentTests? or new class for agent mixin) we will need to test: 
-    - If persistent is set to False, Agent makes Requests with persistent=False and with new connections each time.
-    - The opposite for persistent=True.
-
     Proxy:
     - Proxy is always in non-persistent mode, and file ticket.
 
@@ -1435,7 +1429,7 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
 
     def setUp(self):
         self.fakeReactor = self.Reactor()
-        self.pool = _HTTPConnectionPool(self.fakeReactor)
+        self.pool = _HTTPConnectionPool(self.fakeReactor, True)
         self.pool._factory = DummyFactory
 
 
@@ -1755,7 +1749,7 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
                 p.makeConnection(StringTransport())
                 return succeed(p)
 
-        pool = _HTTPConnectionPool(self.fakeReactor)
+        pool = _HTTPConnectionPool(self.fakeReactor, True)
         result = []
         pool._getConnection(
             StringEndpoint(), "GET", "http", "foo", 80).addCallback(
@@ -1795,6 +1789,38 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
         for p in persistent:
             self.assertEqual(p.transport.disconnecting, True)
         self.assertEqual(self.pool._connections, {})
+
+
+    def test_persistent(self):
+        """
+        If C{persistent} is set to C{True} on the L{_HTTPConnectionPool},
+        C{Request}s are created with their C{persistent} flag set to C{True}.
+        """
+        pool = _HTTPConnectionPool(self.fakeReactor, persistent=True)
+        endpoint = self.StubEndpoint(
+            TCP4ClientEndpoint(self.fakeReactor, "127.0.0.1", 80), self)
+        pool._connectAndRequest(endpoint, "GET", "http://127.0.0.1", None, None)
+
+        self.assertEqual(self.protocol.requests[0][0].persistent, True)
+
+
+    def test_nonPersistent(self):
+        """
+        If C{persistent} is set to C{False} when creating the
+        L{_HTTPConnectionPool}, C{Request}s are created with their
+        C{persistent} flag set to C{False}.
+
+        Elsewhere in the tests for the underlying HTTP code we ensure that
+        this will result in the disconnection of the HTTP protocol once the
+        request is done, so that the connection will not be returned to the
+        pool.
+        """
+        pool = _HTTPConnectionPool(self.fakeReactor, persistent=False)
+        endpoint = self.StubEndpoint(
+            TCP4ClientEndpoint(self.fakeReactor, "127.0.0.1", 80), self)
+        pool._connectAndRequest(endpoint, "GET", "http://127.0.0.1", None, None)
+
+        self.assertEqual(self.protocol.requests[0][0].persistent, False)
 
 
 
@@ -2012,6 +2038,17 @@ class AgentTests(unittest.TestCase, FakeReactorAndConnectMixin):
         agent.request('GET', 'https://foo/')
         address = self.reactor.sslClients.pop()[5]
         self.assertEqual('192.168.0.1', address)
+
+
+    def test_persistent(self):
+        """
+        The persistent flag is passed to the underlying connection pool, and
+        defaults to False.
+        """
+        agent = client.Agent(self.reactor)
+        self.assertEqual(agent._pool.persistent, False)
+        agent = client.Agent(self.reactor, persistent=True)
+        self.assertEqual(agent._pool.persistent, True)
 
 
 
