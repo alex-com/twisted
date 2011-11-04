@@ -1418,8 +1418,6 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
     """
     Tests for the L{_HTTPConnectionPool} class.
 
-    - closeCachedConnections closes all cached connections and removes them from the cache.
-    - 
     - test for persistent flag, and its effect on behavior
 
     Elsewhere (probably AgentTests? or new class for agent mixin) we will need to test: 
@@ -1488,7 +1486,6 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
         self.assertNotIn(protocol,
                          self.pool._connections[("http", "example.com", 80)])
         self.assertNotIn(protocol, self.pool._timeouts)
-
 
 
     def test_putExceedsMaxPersistent(self):
@@ -1779,6 +1776,25 @@ class HTTPConnectionPoolTests(unittest.TestCase, FakeReactorAndConnectMixin):
             StringEndpoint(), "GET", "http", "foo", 80).addCallback(
             result2.append)
         self.assertEqual(result2[0], protocol)
+
+
+    def test_closeCachedConnections(self):
+        """
+        L{_HTTPConnectionPool.closeCachedConnections} closes all cached
+        connections and removes them from the cache.
+        """
+        persistent = set()
+        def addProtocol(scheme, host, port):
+            p = StubHTTPProtocol()
+            p.makeConnection(StringTransport())
+            self.pool._putConnection(scheme, host, port, p)
+            persistent.add(p)
+        addProtocol("http", "example.com", 80)
+        addProtocol("http", "www2.example.com", 80)
+        self.pool.closeCachedConnections()
+        for p in persistent:
+            self.assertEqual(p.transport.disconnecting, True)
+        self.assertEqual(self.pool._connections, {})
 
 
 

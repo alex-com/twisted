@@ -949,8 +949,12 @@ class _HTTPConnectionPool(object):
 
     def closeCachedConnections(self):
         """
-        Close all the cached persistent connections.
+        Close all persistent connections and remove them from the pool.
         """
+        for protocols in self._connections.itervalues():
+            for p in protocols:
+                p.transport.loseConnection()
+        self._connections = {}
 
 
 
