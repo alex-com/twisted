@@ -9,10 +9,10 @@ Please do not use this module directly.
 
 Maintainer: Itamar Shtull-Trauring
 
-@var _sockErrReadIgnore: list of symbolic error contants (from the Python 
+@var _sockErrReadIgnore: list of symbolic error contants (from the Python
     stdlib {errno} module) representing socket errors where the read should
     be retried.
-@var _sockErrReadRefuse: list of symbolic error contants (from the Python 
+@var _sockErrReadRefuse: list of symbolic error contants (from the Python
     stdlib {errno} module) representing socket errors where the read should
     B{not} be retried.
 """
@@ -28,12 +28,13 @@ from zope.interface import implements
 from twisted.python.runtime import platformType
 if platformType == 'win32':
     from errno import WSAEWOULDBLOCK as EWOULDBLOCK
-    from errno import WSAEINTR, WSAEMSGSIZE
+    from errno import WSAEINTR, WSAEMSGSIZE, WSAETIMEDOUT
     from errno import WSAECONNREFUSED, WSAECONNRESET, WSAENETRESET
 
     # Classify read errors
     _sockErrReadIgnore = (WSAEINTR, WSAEWOULDBLOCK, WSAEMSGSIZE)
-    _sockErrReadRefuse = (WSAECONNREFUSED, WSAECONNRESET, WSAENETRESET)
+    _sockErrReadRefuse = (WSAECONNREFUSED, WSAECONNRESET, WSAENETRESET,
+                          WSAETIMEDOUT)
 
     # POSIX-compatible write errors
     EMSGSIZE = WSAEMSGSIZE
