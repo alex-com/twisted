@@ -27,24 +27,25 @@ from zope.interface import implements
 
 from twisted.python.runtime import platformType
 if platformType == 'win32':
-    from errno import WSAEWOULDBLOCK as EWOULDBLOCK
+    from errno import WSAEWOULDBLOCK
     from errno import WSAEINTR, WSAEMSGSIZE, WSAETIMEDOUT
     from errno import WSAECONNREFUSED, WSAECONNRESET, WSAENETRESET
+    from errno import WSAEINPROGRESS
 
-    # Classify read errors
-    _sockErrReadIgnore = (WSAEINTR, WSAEWOULDBLOCK, WSAEMSGSIZE)
-    _sockErrReadRefuse = (WSAECONNREFUSED, WSAECONNRESET, WSAENETRESET,
-                          WSAETIMEDOUT)
+    # Classify read and write errors
+    _sockErrReadIgnore = [WSAEINTR, WSAEWOULDBLOCK, WSAEMSGSIZE, WSAEINPROGRESS]
+    _sockErrReadRefuse = [WSAECONNREFUSED, WSAECONNRESET, WSAENETRESET,
+                          WSAETIMEDOUT]
 
     # POSIX-compatible write errors
     EMSGSIZE = WSAEMSGSIZE
     ECONNREFUSED = WSAECONNREFUSED
-    EAGAIN = EWOULDBLOCK
+    EAGAIN = WSAEWOULDBLOCK
     EINTR = WSAEINTR
 else:
     from errno import EWOULDBLOCK, EINTR, EMSGSIZE, ECONNREFUSED, EAGAIN
-    _sockErrReadIgnore = (EAGAIN, EINTR, EWOULDBLOCK)
-    _sockErrReadRefuse = (ECONNREFUSED,)
+    _sockErrReadIgnore = [EAGAIN, EINTR, EWOULDBLOCK]
+    _sockErrReadRefuse = [ECONNREFUSED]
 
 # Twisted Imports
 from twisted.internet import base, defer, address
