@@ -6,7 +6,6 @@
 Assorted functionality which is commonly useful when writing unit tests.
 """
 
-import socket
 from StringIO import StringIO
 
 from zope.interface import implements
@@ -19,7 +18,6 @@ from twisted.protocols import basic
 from twisted.internet import protocol, error, address
 
 from twisted.internet.address import IPv4Address, UNIXAddress
-
 
 
 class AccumulatingProtocol(protocol.Protocol):

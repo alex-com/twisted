@@ -26,8 +26,7 @@ class StringUDPSocket(object):
     A fake UDP socket object, which returns a fixed sequence of strings and/or
     socket errors.  Useful for testing.
 
-    @param retvals: The data to return.
-    @type retvals: A C{list} containing either strings or C{socket.error}s.
+    @ivar retvals: A C{list} containing either strings or C{socket.error}s.
 
     @ivar connectedAddr: The address the socket is connected to.
     """
