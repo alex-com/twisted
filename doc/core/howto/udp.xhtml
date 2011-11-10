@@ -131,51 +131,54 @@ reactor.run()
 
     <h2>Multicast UDP</h2>
 
-    <p>A multicast UDP socket can send and receive datagrams from multiple
-    clients.  The interesting and useful feature of multicast is that a client
+    <p>A multicast UDP socket can send and receive datagrams from/to multiple
+    clients.  An interesting and useful feature of multicast is that a client
     can contact multiple servers with a single packet, without knowing the
-    specific IP address of any of the hosts.</p>
+    specific unicast IP address of any of the hosts.</p>
 
     <a href="listings/udp/MulticastServer.py"
     class="py-listing">MulticastServer.py</a>
 
-    <p>The server protocol is very simple and closely resembles a
-    normal <code class="API"
+    <p>With Multicast there is no server/client differentiation at the protocol
+    level. You can send multicast without Joining the group address, However you
+    can only receive if you have joined the multicast group address (IPv4 range
+    224.0.0.0-239.255.255.255). Our "server" protocol is very simple
+    and closely resembles a normal <code class="API"
     base="twisted.internet.interfaces.IReactorUDP">listenUDP</code>
     implementation.  The main difference is that instead
     of <code>listenUDP</code>, <code class="API"
     base="twisted.internet.interfaces.IReactorMulticast">listenMulticast</code>
-    is called with a specified port number.  The server must also
+    is called with a specified port number. Our server must also
     call <code class="API"
     base="twisted.internet.interfaces.IMulticastTransport">joinGroup</code> to
-    specify on which multicast IP address it will service requests.  Another
-    item of interest is the contents of the datagram.  Many different
-    applications use multicast as a way of device discovery, which leads to an
-    abundance of packets flying around.  Checking the payload can ensure that we
-    only service requests from our specific clients.
+    specify on which multicast IP address it will receive requests.  Another
+    item of interest is like any connectionless protocol once you listen on a
+    port then ANY client can send you data if they know your (addr, port),
+    however with multicast if you send to that (groupaddr, port) you will also
+    receive that information.
     </p>
 
     <a href="listings/udp/MulticastClient.py"
     class="py-listing">MulticastClient.py</a>
 
-    <p>This is a mirror implementation of a standard UDP client.  The only
-    difference is that the destination IP is the multicast address.  This
-    datagram will be distributed to every server listening on 
-    <code>224.0.0.1</code> (a special address for all hosts on the local
-    network segment, defined by
-    <a href="http://www.faqs.org/rfcs/rfc1112.html">RFC 1112</a>) and port 
-    <code>8005</code>.  Note that the client  port is specified as 
-    <code>0</code>, as we have no need to keep track of what port the client
-    is listening on.
+    <p>This strikes a very close resemblance to the Multicast "server". Server
+    logic should really be stipulated in Service classes above the protocol.
+    If the client didn't want to receive information from the server it could
+    implement this by NOT joining the multicast group address. The client could
+    also directly send to the "server" via UDP unicast if it so wished.
     </p>
 
-<h2>Acknowledgments</h2>
+<h3>Note: Multicast "Gotchas"</h3>
 
-<p>Thank you to all contributors to this document, including:</p>
-
-<ul>
-<li>Kyle Robertson, author of the explanation and examples of multicast</li>
-</ul>
+<p>A Multicast socket will have a default TTL=1. Therefore datagrams WON'T
+  traverse router Hops.</p>
+<p>The <code>224.0.0.1-255</code> range is for local services. Any multicast
+services in this range wont be forwarded past a router NO matter what their TTL.
+<a href="http://www.faqs.org/rfcs/rfc1112.html">RFC 1112</a>)</p>
+<p>The assigned multicast group <code>224.0.0.1<code> for ALL-HOSTS-ON-SUBNET is
+joined by the kernel. Therefore any process that tries to JOIN this group will
+not send a IGMP JOIN as the group has been already joined by the kernel.
+</p>
 
 </body>
 </html>
