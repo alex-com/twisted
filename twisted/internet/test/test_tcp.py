@@ -929,8 +929,10 @@ class TCPConnectionTestsBuilder(ReactorBuilder):
     def test_doubleHalfClose(self):
         """
         If one side half-closes its connection, and then the other side of the
-        connection calls C{loseWriteConnection} the connection is closed
-        correctly.
+        connection calls C{loseWriteConnection}, and then C{loseConnection} in
+        {writeConnectionLost}, the connection is closed correctly.
+
+        This rather obscure case used to fail (see ticket #3037).
         """
         reactor = self.buildReactor()
 

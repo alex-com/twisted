@@ -259,7 +259,10 @@ class FileDescriptor(_ConsumerMixin, _LogOwner):
                 # so.
                 return self._postLoseConnection()
             elif self._writeDisconnecting:
-                # I was previously asked to to half-close the connection.
+                # I was previously asked to to half-close the connection.  We
+                # set _writeDisconnected before calling handler, in case the
+                # handler calls loseConnection(), which will want to check for
+                # this attribute.
                 self._writeDisconnected = True
                 result = self._closeWriteConnection()
                 return result
