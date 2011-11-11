@@ -260,8 +260,8 @@ class FileDescriptor(_ConsumerMixin, _LogOwner):
                 return self._postLoseConnection()
             elif self._writeDisconnecting:
                 # I was previously asked to to half-close the connection.
-                result = self._closeWriteConnection()
                 self._writeDisconnected = True
+                result = self._closeWriteConnection()
                 return result
         return result
 
