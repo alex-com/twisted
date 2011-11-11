@@ -17,7 +17,7 @@ class MulticastPingPong(DatagramProtocol):
         print "Datagram %s received from %s" % (repr(datagram), repr(address))
         if datagram == "Client: Ping":
             # Rather than replying to the group multicast address, we send the
-            # reply directly to the originating port:
+            # reply directly (unicast) to the originating port:
             self.transport.write("Server: Pong", address)
 
 
