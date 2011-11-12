@@ -10,13 +10,21 @@ href="stylesheet.css" />
   </head>
 
   <body bgcolor="white">
+    <span style="display: none" id="current-docs-container">
+      <em>
+        <a id="current-docs-link">
+          Go to the latest version of this document.
+        </a>
+      </em>
+    </span>
+
     <h1 class="title"></h1>
     <div class="toc"></div>
     <div class="body">
 	
     </div>
 
-    <p><a href="index">Index</a></p>
+    <p><a href="index.html">Index</a></p>
     <span class="version">Version: </span>
 
     <div>
@@ -40,7 +48,22 @@ href="stylesheet.css" />
         _uacct = "UA-99018-6";
         urchinTracker();
         </script>
-        <!-- End of that stuff -->
+        <!-- End of GA stuff -->
+
+        <!-- If the documentation isn't current, insert a current link. -->
+        <script type="text/javascript">
+          if (window.location.pathname.indexOf('/current/') == -1) {
+              <!-- Give the user a link to this page, but in the current version of the docs. -->
+              var link = document.getElementById('current-docs-link');
+              link.href = window.location.pathname.replace(/\/\d+\.\d+\.\d+/, '/current');
+              <!-- And make it visible -->
+              var container = document.getElementById('current-docs-container');
+              container.style.display = "";
+              delete link;
+              delete container;
+          }
+        </script>
+
     </div>
 
   </body>
