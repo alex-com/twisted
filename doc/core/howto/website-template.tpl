@@ -17,6 +17,32 @@ href="stylesheet.css" />
     </div>
 
     <p><a href="index">Index</a></p>
+    <span class="version">Version: </span>
+
+    <div>
+        <!--WEBBOT bot="HTMLMarkup" startspan ALT="Site Meter" -->
+        <!--
+        <script type="text/javascript" language="JavaScript">var site="sm7twistedmatrix"</script>
+        <script type="text/javascript" language="JavaScript1.2" src="http://sm7.sitemeter.com/js/counter.js?site=sm7twistedmatrix">
+        </script>
+        <noscript>
+        -->
+        <a href="http://sm7.sitemeter.com/stats.asp?site=sm7twistedmatrix" target="_top">
+        <img src="http://sm7.sitemeter.com/meter.asp?site=sm7twistedmatrix" alt="Site Meter" border="0" /></a>
+        <!-- </noscript> -->
+        <!-- Copyright (c)2002 Site Meter -->
+
+        <!--WEBBOT bot="HTMLMarkup" Endspan -->
+
+        <!-- Google analytics, obviously. -->
+        <script src="http://www.google-analytics.com/urchin.js" type="text/javascript"></script>
+        <script type="text/javascript">
+        _uacct = "UA-99018-6";
+        urchinTracker();
+        </script>
+        <!-- End of that stuff -->
+    </div>
+
   </body>
 </html>
 
