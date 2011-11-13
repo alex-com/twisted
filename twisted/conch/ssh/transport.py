@@ -16,14 +16,17 @@ import zlib
 import array
 
 # external library imports
+from zope.interface import implements
 from Crypto import Util
 from Crypto.Cipher import XOR
 
 # twisted imports
 from twisted.internet import protocol, defer
+from twisted.internet.interfaces import IAddress
 from twisted.conch import error
-from twisted.python import log, randbytes
+from twisted.python import log, randbytes, util
 from twisted.python.hashlib import md5, sha1
+
 
 # sibling imports
 from twisted.conch.ssh import keys
@@ -64,7 +67,26 @@ def _generateX(random, bits):
         if 2 <= x <= (2 ** bits) - 2:
             return x
 
+class SSHTransportAddress(object, util.FancyEqMixin):
+    """
+    Object representing an SSH Transport endpoint.
 
+    @ivar address: A instance of an object which implements I{IAddress} to which
+    this transport address is connected.
+    """
+    
+    implements(IAddress)
+
+    compareAttributes = ('address',)
+
+    def __init__(self, address):
+        self.address = address
+
+    def __repr__(self):
+        return 'SSHTransportAddress(%r)' % self.address
+
+    def __hash__(self):
+        return hash(('SSH', self.address))
 
 class SSHTransportBase(protocol.Protocol):
     """
@@ -462,6 +484,26 @@ class SSHTransportBase(protocol.Protocol):
             log.msg("couldn't handle %s" % messageNum)
             log.msg(repr(payload))
             self.sendUnimplemented()
+
+    def getPeer(self):
+        """
+        Returns an L{SSHTransportAddress} corresponding to the other (peer) side
+        of this transport.
+
+        @return: L{SSHTransportAddress} for the peer
+        @rtype: L{SSHTransportAddress}
+        """
+        return SSHTransportAddress(self.transport.getPeer())
+
+    def getHost(self):
+        """
+        Returns an L{SSHTransportAddress} corresponding to the this side of
+        transport.
+
+        @return: L{SSHTransportAddress} for the peer
+        @rtype: L{SSHTransportAddress}
+        """        
+        return SSHTransportAddress(self.transport.getHost())
 
 
     # Client-initiated rekeying looks like this:
