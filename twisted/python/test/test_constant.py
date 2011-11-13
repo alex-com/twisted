@@ -179,17 +179,3 @@ class NamesTests(TestCase):
         names it has.
         """
         self.assertEqual(4, len(self.METHOD))
-
-
-    def test_containsSymbolicNames(self):
-        """
-        The object returned by L{names} contains the names passed in.
-        """
-        self.assertIn(u"PUT", self.METHOD)
-
-
-    def test_withoutOtherContents(self):
-        """
-        Names not passed to L{names} are not contained by the returned object.
-        """
-        self.assertNotIn(u"bar", self.METHOD)

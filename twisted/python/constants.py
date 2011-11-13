@@ -74,13 +74,6 @@ class _Container(object):
         return '<%s: %s>' % (self.name, ' '.join(self._enumerants))
 
 
-    def __contains__(self, name):
-        """
-        The contents of a L{_Container} are the names of its constants.
-        """
-        return name in self._enumerants
-
-
     def __iter__(self):
         """
         Iteration over a L{_Container} results in all of the objects it contains
