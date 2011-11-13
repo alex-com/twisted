@@ -17,7 +17,7 @@ class DumbContainer(_Container):
 
 class _ContainerTests(TestCase):
     """
-    Tests for the L{twisted.python.symbolic._Container} helper class which is
+    Tests for the L{twisted.python.constants._Container} helper class which is
     used to represent a group of related symbolic names.
     """
     def test_representation(self):
@@ -32,7 +32,7 @@ class _ContainerTests(TestCase):
 
 class _NamedConstantTests(TestCase):
     """
-    Tests for the L{twisted.python.symbolic._NamedConstant} helper class which is used to
+    Tests for the L{twisted.python.constants._NamedConstant} helper class which is used to
     represent individual values.
     """
     def setUp(self):
@@ -93,7 +93,7 @@ class _NamedConstantTests(TestCase):
 
 class NamesTests(TestCase):
     """
-    Tests for L{twisted.python.symbolic.names}, a factory for named constants.
+    Tests for L{twisted.python.constants.names}, a factory for named constants.
     """
     def setUp(self):
         # Some constants, as one might use with an HTTP API, to use in tests for
