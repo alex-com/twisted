@@ -133,9 +133,9 @@ reactor.run()
 
     <p>Multicast allows a process to contact multiple hosts with a single
     packet, without knowing the specific IP address of any of the hosts. This
-    in contrast with normal, or unicast, UDP, where each datagram has a single
+    is in contrast to normal, or unicast, UDP, where each datagram has a single
     IP as its destination. Multicast datagrams are sent to special multicast
-    group addresses (the IPv4 range 224.0.0.0 to 239.255.255.255), along with
+    group addresses (in the IPv4 range 224.0.0.0 to 239.255.255.255), along with
     a corresponding port. In order to receive multicast datagrams, you must
     join that specific group address. However, any UDP socket can send to
     multicast addresses.</p>
