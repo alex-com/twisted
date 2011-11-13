@@ -2,7 +2,7 @@
 # See LICENSE for details.
 
 """
-Unit tests for L{twisted.python.constant}.
+Unit tests for L{twisted.python.constants}.
 """
 
 from twisted.trial.unittest import TestCase
