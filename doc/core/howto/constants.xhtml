@@ -55,6 +55,20 @@
 [&lt;METHOD=GET>, &lt;METHOD=PUT>, &lt;METHOD=POST>, &lt;METHOD=DELETE>, &lt;METHOD=OPTIONS>]
   </pre>
 
+  <p>And constants can also be compared, either for equality or identity:</p>
+
+  <pre class="python">
+>>> METHOD.GET is METHOD.GET
+True
+>>> METHOD.GET == METHOD.GET
+True
+>>> METHOD.GET is METHOD.PUT
+False
+>>> METHOD.GET == METHOD.PUT
+False
+>>>
+  </pre>
+
 </body>
 
 </html>
