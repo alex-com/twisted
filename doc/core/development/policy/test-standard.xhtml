@@ -119,7 +119,7 @@ $ bin/trial twisted
     specifying at a high level the intent of the test. That is, a description
     that users of the method would understand.</p>
 
-    <h2>Test Implementation Tips</h2>
+    <h2>Test Implementation Guidelines</h2>
 
     <p>Here are some guidelines to follow when writing tests for the Twisted
     test suite.  Many tests predate these guidelines and so do not follow them.
@@ -129,7 +129,7 @@ $ bin/trial twisted
     <h3>Real I/O</h3>
 
     <p>Most unit tests should avoid performing real, platform-implemented I/O
-    operations.  Real I/O is slow, unreliable, and unweildy.  When implementing
+    operations.  Real I/O is slow, unreliable, and unwieldy.  When implementing
     a protocol, <code>twisted.test.proto_helpers.StringTransport</code> can be
     used instead of a real TCP transport.  <code>StringTransport</code> is fast,
     deterministic, and can easily be used to exercise all possible network
