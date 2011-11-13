@@ -468,6 +468,14 @@ SUrCyZXsNh6VXwjs3gKQ
         self.assertFalse(key.verify(self.dsaSignature, 'a'))
         self.assertFalse(key.verify(self.rsaSignature, ''))
 
+    def test_verify_DSA_no_prefix(self):
+        """
+        #1902: Some commercial SSH servers send DSA keys as 2 20-byte numbers;
+        they should still be verified.
+        """
+        key = keys.Key.fromString(keydata.publicDSA_openssh)
+        self.assertTrue(key.verify(self.dsaSignature[-40:], ''))
+
     def test_repr(self):
         """
         Test the pretty representation of Key.
