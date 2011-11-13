@@ -35,18 +35,14 @@ else:
 
 from twisted.trial import unittest
 from twisted.internet import defer
-from twisted.internet.address import IPv4Address
 from twisted.protocols import loopback
 from twisted.python import randbytes
 from twisted.python.reflect import qual
 from twisted.python.hashlib import md5, sha1
-from twisted.conch.ssh import service, common
+from twisted.conch.ssh import address, service, common
 from twisted.test import proto_helpers
 
 from twisted.conch.error import ConchError
-
-from twisted.internet.test.test_address import AddressTestCaseMixin
-
 
 class MockTransportBase(transport.SSHTransportBase):
     """
@@ -316,31 +312,6 @@ class MockOldFactoryPrivateKeys(MockFactory):
             keys[name] = key.keyObject
         return keys
 
-class SSHTransportAddressTestCase(unittest.TestCase, AddressTestCaseMixin):
-    def _stringRepresentation(self, stringFunction):
-        """
-        The string representation of L{SSHTransportAddress} should be
-        "SSHTransportAddress(<stringFunction on address>)".
-        """
-        addr = self.buildAddress()
-        stringValue = stringFunction(addr)
-        addressValue = stringFunction(addr.address)
-        self.assertEqual(stringValue,
-                         "SSHTransportAddress(%s)" % addressValue)
-
-    def buildAddress(self):
-        """
-        Create an arbitrary new L{SSHTransportAddress}.  A new instance is
-        created for each call, but always for the same address.
-        """
-        return transport.SSHTransportAddress(IPv4Address("TCP", "127.0.0.1", 22))
-
-    def buildDifferentAddress(self):
-        """
-        Like L{buildAddress}, but with a different fixed address.
-        """
-        return transport.SSHTransportAddress(IPv4Address("TCP", "127.0.0.2", 22))
-        
 
 class TransportTestCase(unittest.TestCase):
     """
@@ -1185,7 +1156,7 @@ class ServerAndClientSSHTransportBaseCase:
         L{SSHTransportAddress} with the L{IAddress} of the peer.
         """
         self.assertEqual(self.proto.getPeer(),
-                         transport.SSHTransportAddress(self.proto.transport.getPeer()))
+                         address.SSHTransportAddress(self.proto.transport.getPeer()))
 
     def test_getHost(self):
         """
@@ -1193,7 +1164,7 @@ class ServerAndClientSSHTransportBaseCase:
         L{SSHTransportAddress} with the L{IAddress} of the host.
         """
         self.assertEqual(self.proto.getHost(),
-                         transport.SSHTransportAddress(self.proto.transport.getHost()))
+                         address.SSHTransportAddress(self.proto.transport.getHost()))
 
 
 
