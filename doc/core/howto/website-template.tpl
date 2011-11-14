@@ -39,15 +39,6 @@
     <span class="version">Version: </span>
 
     <div>
-        <!-- Site Meter -->
-        <script type="text/javascript" src="http://sm7.sitemeter.com/js/counter.js?site=sm7twistedmatrix">
-        </script>
-        <noscript>
-        <a href="http://sm7.sitemeter.com/stats.asp?site=sm7twistedmatrix" target="_top">
-        <img src="http://sm7.sitemeter.com/meter.asp?site=sm7twistedmatrix" alt="Site Meter" border="0"/></a>
-        </noscript>
-        <!-- Copyright (c)2006 Site Meter -->
-
         <!-- If the documentation isn't current, insert a current link. -->
         <script type="text/javascript">
           if (window.location.pathname.indexOf('/current/') == -1) {
@@ -56,12 +47,19 @@
               link.href = window.location.pathname.replace(/\/\d+\.\d+\.\d+/, '/current');
               <!-- And make it visible -->
               var container = document.getElementById('current-docs-container');
-              container.style.display = "";
+              container.style.display = '';
               delete link;
               delete container;
           }
         </script>
-
+        <!-- Site Meter -->
+        <script type="text/javascript" src="http://sm7.sitemeter.com/js/counter.js?site=sm7twistedmatrix">
+        </script>
+        <noscript>
+        <a href="http://sm7.sitemeter.com/stats.asp?site=sm7twistedmatrix" target="_top">
+        <img src="http://sm7.sitemeter.com/meter.asp?site=sm7twistedmatrix" alt="Site Meter" border="0"/></a>
+        </noscript>
+        <!-- Copyright (c)2006 Site Meter -->
     </div>
 
   </body>
