@@ -29,11 +29,16 @@
   defined.</p>
 
   <pre class="python">
->>> from twisted.python.constants import names
->>> METHOD = names.METHOD(u'GET', u'PUT', 'POST', u'DELETE', u'OPTIONS')
->>> METHOD
-&lt;METHOD: GET PUT POST DELETE OPTIONS>
->>>
+>>> from twisted.python.constants import NamedConstant, NamedConstants
+>>> class METHOD(NamedConstants):
+...     """
+...     Constants representing various HTTP request methods.
+...     """
+...     GET = NamedConstant()
+...     PUT = NamedConstant()
+...     POST = NamedConstant()
+...     DELETE = NamedConstant()
+...
   </pre>
 
   <p>Given this definition, constants can be looked up by name using attribute
@@ -47,11 +52,11 @@
 >>>
   </pre>
 
-  <p>The constants can also be enumerated by iterating
-  over <code>METHOD</code>.</p>
+  <p>The constants can also be enumerated using the <code>iterconstants</code>
+  method.</p>
 
   <pre class="python">
->>> list(METHOD)
+>>> list(METHOD.iterconstants())
 [&lt;METHOD=GET>, &lt;METHOD=PUT>, &lt;METHOD=POST>, &lt;METHOD=DELETE>, &lt;METHOD=OPTIONS>]
   </pre>
 
