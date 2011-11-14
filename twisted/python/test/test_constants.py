@@ -7,30 +7,10 @@ Unit tests for L{twisted.python.constants}.
 
 from twisted.trial.unittest import TestCase
 
-from twisted.python.constants import _Container, _NamedConstant, names
+from twisted.python.constants import _NamedConstant, NamedConstant, NamedConstants
 
 
-class DumbContainer(_Container):
-    def _constantFactory(self, name, value=None):
-        return name
-
-
-class _ContainerTests(TestCase):
-    """
-    Tests for the L{twisted.python.constants._Container} helper class which is
-    used to represent a group of related symbolic names.
-    """
-    def test_representation(self):
-        """
-        The string representation of a L{_Container} instances includes its name
-        and the names of all its values.
-        """
-        container = DumbContainer(u"foo", (u"value1", u"value2"), {})
-        self.assertEqual("<foo: value1 value2>", repr(container))
-
-
-
-class _NamedConstantTests(TestCase):
+class NamedConstantTests(TestCase):
     """
     Tests for the L{twisted.python.constants._NamedConstant} helper class which is used to
     represent individual values.
@@ -39,7 +19,9 @@ class _NamedConstantTests(TestCase):
         """
         Create a dummy container into which constants can be placed.
         """
-        self.container = _Container(u"foo", (), {})
+        class foo(NamedConstants):
+            pass
+        self.container = foo
 
 
     def test_name(self):
@@ -91,36 +73,24 @@ class _NamedConstantTests(TestCase):
 
 
 
-class NamesTests(TestCase):
+class NamedConstantsTests(TestCase):
     """
-    Tests for L{twisted.python.constants.names}, a factory for named constants.
+    Tests for L{twisted.python.constants.NamedConstants}, a factory for named constants.
     """
-    def setUp(self):
-        # Some constants, as one might use with an HTTP API, to use in tests for
-        # the names factory.
-        self.METHOD = names.METHOD(u"GET", u"PUT", u"POST", u"DELETE")
-
-
-    def test_rejectValues(self):
+    class METHOD(NamedConstants):
         """
-        Constants constructed using L{names} may not have associated values.
+        A container for some named constants to use in unit tests for
+        L{NamedConstants}.
         """
-        # HTTP should be created with values instead, it won't work with names.
-        self.assertRaises(TypeError, names.HTTP, OK=200)
-
-
-    def test_representation(self):
-        """
-        The string representation of the object created using L{names} includes
-        the name it was created with, given by the attribute of L{names} used,
-        and all of the names passed in.
-        """
-        self.assertEqual("<METHOD: GET PUT POST DELETE>", repr(self.METHOD))
+        GET = NamedConstant()
+        PUT = NamedConstant()
+        POST = NamedConstant()
+        DELETE = NamedConstant()
 
 
     def test_symbolicAttributes(self):
         """
-        Each name passed to L{names} is available as an attribute on the
+        Each name passed to L{NamedConstants} is available as an attribute on the
         returned object.
         """
         self.assertTrue(hasattr(self.METHOD, "GET"))
@@ -131,19 +101,27 @@ class NamesTests(TestCase):
 
     def test_withoutOtherAttributes(self):
         """
-        Names not passed to L{names} are not available as attributes on the
+        Names not passed to L{NamedConstants} are not available as attributes on the
         returned object.
         """
         self.assertFalse(hasattr(self.METHOD, "foo"))
 
 
-    def test_nameRepresentation(self):
+    def test_lookupByName(self):
         """
-        The string representation of the object representing one of the named
-        constants includes the name of the collection it is part of as well as
-        its own name.
+        Constants can be looked up by name using L{NamedConstants.lookupByName}.
         """
-        self.assertEqual("<METHOD=GET>", repr(self.METHOD.GET))
+        self.assertIdentical(self.METHOD.lookupByName(u"GET"), self.METHOD.GET)
+
+
+    def test_notLookupMissingByName(self):
+        """
+        Names not defined with a L{Constant} instance cannot be looked up using
+        L{NamedConstants.lookupByName}.
+        """
+        self.assertRaises(ValueError, self.METHOD.lookupByName, u"lookupByName")
+        self.assertRaises(ValueError, self.METHOD.lookupByName, u"__init__")
+        self.assertRaises(ValueError, self.METHOD.lookupByName, u"foo")
 
 
     def test_name(self):
@@ -156,7 +134,7 @@ class NamesTests(TestCase):
 
     def test_attributeIdentity(self):
         """
-        Repeated access of an attribute of an object created using L{names}
+        Repeated access of an attribute of an object created using L{NamedConstants}
         results in the same object.
         """
         self.assertIdentical(self.METHOD.GET, self.METHOD.GET)
@@ -164,18 +142,10 @@ class NamesTests(TestCase):
 
     def test_iteration(self):
         """
-        Iteration over the object returned by L{names} produces each of its
-        attribute values, in the order given to L{names}.
+        Iteration over the object returned by L{NamedConstants} produces each of its
+        attribute values, in the order given to L{NamedConstants}.
         """
         self.assertEqual(
-            [self.METHOD.GET, self.METHOD.PUT, self.METHOD.POST,
-             self.METHOD.DELETE],
-            list(self.METHOD))
-
-
-    def test_length(self):
-        """
-        The length of an object created with L{names} is equal to the number of
-        names it has.
-        """
-        self.assertEqual(4, len(self.METHOD))
+            [self.METHOD.GET, self.METHOD.PUT,
+             self.METHOD.POST, self.METHOD.DELETE],
+            list(self.METHOD.iterconstants()))

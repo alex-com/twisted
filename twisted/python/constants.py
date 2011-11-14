@@ -7,16 +7,21 @@ Symbolic constant support, including collections and constants with text,
 numeric, and bit flag values.
 """
 
-__all__ = ['names']
+__all__ = ['NamedConstant', 'NamedConstants']
+
+from itertools import count
 
 
 _unspecified = object()
+_constantOrder = count().next
 
 
 class _NamedConstant(object):
     """
     A L{_NamedConstant} represents a single constant within some context.
 
+    @ivar container: The L{NamedConstants} instance to which this constant
+        belongs.
     @ivar name: The symbolic name of this constant.
     """
     def __init__(self, container, name):
@@ -29,104 +34,81 @@ class _NamedConstant(object):
         Return text identifying both which constant this is and which collection
         it belongs to.
         """
-        return "<%s=%s>" % (self.container.name, self.name)
+        return "<%s=%s>" % (self.container.__name__, self.name)
 
 
 
-class _ValueConstant(_NamedConstant):
+class NamedConstant(object):
     """
-    A L{_ValueConstant} represents a single constant within some context with an
-    associated value.
-
-    @ivar value: The associated value.
+    L{NamedConstant} defines an attribute to be a named constant within a
+    collection defined by a L{NamedConstants} subclass.
     """
-    def __init__(self, container, name, value):
-        _NamedConstant.__init__(self, container, name)
-        self.value = value
+    def __init__(self):
+        self.index = _constantOrder()
+
+
+    def __get__(self, oself, cls):
+        if not cls._initialized:
+            cls._initialize()
+        return cls._enumerants[self]
 
 
 
-class _Container(object):
+class NamedConstants(object):
     """
-    A L{_Container} represents a collection of constants which are conceptually
-    related to each other.
-
-    @ivar name: The symbolic name of this collection.
-
-    @ivar _enumerants: A C{tuple} of the names of all of the constants in this
-        container.
+    A L{NamedContainer} contains named constants.
     """
-    def __init__(self, name, positional, keyword):
-        self.name = name
-        for enumerant in positional:
-            setattr(self, enumerant, self._constantFactory(enumerant))
-        for (enumerant, value) in keyword.iteritems():
-            setattr(self, enumerant, self._constantFactory(enumerant, value))
-        self._enumerants = positional + tuple(
-            sorted(keyword, key=keyword.__getitem__))
+    _initialized = False
 
-
-    def __repr__(self):
-        """
-        Return text identifying this container and the names of all of its
-        constants.
-        """
-        return '<%s: %s>' % (self.name, ' '.join(self._enumerants))
-
-
-    def __iter__(self):
+    def iterconstants(cls):
         """
         Iteration over a L{_Container} results in all of the objects it contains
         (the names of its constants).
         """
-        return iter([getattr(self, name) for name in self._enumerants])
+        # XXX Maybe need to _initialize here
+        constants = cls._enumerants.items()
+        constants.sort(key=lambda (key, value): key.index)
+        return iter([value for (key, value) in constants])
+    iterconstants = classmethod(iterconstants)
 
 
-    def __len__(self):
+    def lookupByName(cls, name):
         """
-        The length of a L{_Container} is the number of constants it contains.
+        Retrieve a constant by its name or raise a L{ValueError} if there is no
+        constant associated with that name.
         """
-        return len(self._enumerants)
+        # XXX Maybe need to _initialize here
+        if name in cls._enumerantNames:
+            return getattr(cls, name)
+        raise ValueError(name)
+    lookupByName = classmethod(lookupByName)
 
 
+    def _initialize(cls):
+        names = set()
+        constants = []
+        for (name, descriptor) in cls.__dict__.iteritems():
+            if isinstance(descriptor, NamedConstant):
+                names.add(name)
+                constants.append((descriptor.index, name, descriptor))
+        constants.sort()
+        enumerants = {}
+        for (index, enumerant, descriptor) in constants:
+            enumerants[descriptor] = cls._constantFactory(enumerant)
+        cls._enumerants = enumerants
+        cls._enumerantNames = names
+        cls._initialized = True
+    _initialize = classmethod(_initialize)
 
-class _NamesContainer(_Container):
-    """
-    A L{_NamesContainer} contains L{_NamedConstant}s.
-    """
-    def _constantFactory(self, name, value=_unspecified):
+
+    def _constantFactory(cls, name):
         """
         Construct a new constant to add to this container.
 
         @param name: The name of the constant to create.
 
-        @param value: An API placeholder.  No value is allowed.
-
-        @raise TypeError: If a value is supplied.
-
         @return: The newly created constant.
         @rtype: L{_NamedConstant}
         """
-        if value is not _unspecified:
-            raise TypeError("Cannot construct names with values")
-        return _NamedConstant(self, name)
-
-
-
-class _ContainerFactory(object):
-    """
-    An internal helper for constructing new constant collections.  A collection
-    is represented by a container with constants in it.  L{_ContainerFactory}
-    allows the collections to be created by attribute access.
-
-    @ivar containerType: A callable which is used to create new containers.
-    """
-    def __init__(self, containerType):
-        self.containerType = containerType
-
-
-    def __getattr__(self, name):
-        return lambda *args, **kwargs: self.containerType(name, args, kwargs)
-
-
-names = _ContainerFactory(_NamesContainer)
+        return _NamedConstant(cls, name)
+    _constantFactory = classmethod(_constantFactory)
