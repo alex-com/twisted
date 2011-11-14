@@ -24,6 +24,9 @@ class NamedConstant(object):
     @ivar name: A C{str} giving the name of this constant; only set once the
         constant is initialized by L{NamedConstants}.
 
+    @ivar _container: The L{NamedConstants} subclass this constant belongs to;
+        only set once the constant is initialized by that subclass.
+
     @ivar _index: A C{int} allocated from a shared counter in order to keep
         track of the order in which L{NamedConstants} are instantiated.
     """
@@ -45,14 +48,14 @@ class NamedConstant(object):
         Return text identifying both which constant this is and which collection
         it belongs to.
         """
-        return "<%s=%s>" % (self.container.__name__, self.name)
+        return "<%s=%s>" % (self._container.__name__, self.name)
 
 
     def _realize(self, container, name, value):
         """
         Complete the initialization of this L{NamedConstant}.
 
-        @param container: The L{NamedConstant} subclass this constant is part
+        @param container: The L{NamedConstants} subclass this constant is part
             of.
 
         @param name: The name of this constant in its container.
@@ -60,7 +63,7 @@ class NamedConstant(object):
         @param value: The value of this constant; not used, as named constants
             have no value apart from their identity.
         """
-        self.container = container
+        self._container = container
         self.name = name
 
 
