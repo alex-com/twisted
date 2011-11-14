@@ -14,6 +14,7 @@ else:
 
 import os, base64
 
+from twisted.python import util
 from twisted.python.failure import Failure
 from twisted.trial.unittest import TestCase
 from twisted.python.filepath import FilePath
@@ -127,10 +128,8 @@ class HelperTests(TestCase):
 
         self.mockos.euid = 2345
         self.mockos.egid = 1234
-        self.patch(os, "geteuid", self.mockos.geteuid)
-        self.patch(os, "getegid", self.mockos.getegid)
-        self.patch(os, "seteuid", self.mockos.seteuid)
-        self.patch(os, "setegid", self.mockos.setegid)
+        self.patch(checkers, 'os', self.mockos)
+        self.patch(util, 'os', self.mockos)
 
         self.assertEquals(
             checkers._shadowGetByName('bob'), userdb.getspnam('bob'))
@@ -148,13 +147,11 @@ class HelperTests(TestCase):
         userdb.addUser('bob', 'passphrase', 1, 2, 3, 4, 5, 6, 7)
         self.patch(checkers, 'spwd', None)
         self.patch(checkers, 'shadow', userdb)
+        self.patch(checkers, 'os', self.mockos)
+        self.patch(util, 'os', self.mockos)
 
         self.mockos.euid = 2345
         self.mockos.egid = 1234
-        self.patch(os, "geteuid", self.mockos.geteuid)
-        self.patch(os, "getegid", self.mockos.getegid)
-        self.patch(os, "seteuid", self.mockos.seteuid)
-        self.patch(os, "setegid", self.mockos.setegid)
 
         self.assertEquals(
             checkers._shadowGetByName('bob'), userdb.getspnam('bob'))
@@ -169,6 +166,8 @@ class HelperTests(TestCase):
         """
         self.patch(checkers, 'spwd', None)
         self.patch(checkers, 'shadow', None)
+        self.patch(checkers, 'os', self.mockos)
+
         self.assertIdentical(checkers._shadowGetByName('bob'), None)
         self.assertEquals(self.mockos.seteuidCalls, [])
         self.assertEquals(self.mockos.setegidCalls, [])
@@ -190,6 +189,8 @@ class SSHPublicKeyDatabaseTestCase(TestCase):
         self.mockos = MockOS()
         self.mockos.path = FilePath(self.mktemp())
         self.mockos.path.makedirs()
+        self.patch(checkers, 'os', self.mockos)
+        self.patch(util, 'os', self.mockos)
         self.sshDir = self.mockos.path.child('.ssh')
         self.sshDir.makedirs()
 
@@ -198,9 +199,6 @@ class SSHPublicKeyDatabaseTestCase(TestCase):
             'user', 'password', 1, 2, 'first last',
             self.mockos.path.path, '/bin/shell')
         self.checker._userdb = userdb
-
-        self.patch(os, "seteuid", self.mockos.seteuid)
-        self.patch(os, "setegid", self.mockos.setegid)
 
 
     def _testCheckKey(self, filename):
@@ -245,16 +243,20 @@ class SSHPublicKeyDatabaseTestCase(TestCase):
         keyFile.chmod(0000)
         self.addCleanup(keyFile.chmod, 0777)
         # And restore the right mode when seteuid is called
-        savedSeteuid = os.seteuid
+        savedSeteuid = self.mockos.seteuid
         def seteuid(euid):
             keyFile.chmod(0777)
             return savedSeteuid(euid)
-        self.patch(os, "seteuid", seteuid)
+        self.mockos.euid = 2345
+        self.mockos.egid = 1234
+        self.patch(self.mockos, "seteuid", seteuid)
+        self.patch(checkers, 'os', self.mockos)
+        self.patch(util, 'os', self.mockos)
         user = UsernamePassword("user", "password")
         user.blob = "foobar"
         self.assertTrue(self.checker.checkKey(user))
-        self.assertEqual(self.mockos.seteuidCalls, [0, 1, 0, os.getuid()])
-        self.assertEqual(self.mockos.setegidCalls, [2, os.getgid()])
+        self.assertEqual(self.mockos.seteuidCalls, [0, 1, 0, 2345])
+        self.assertEqual(self.mockos.setegidCalls, [2, 1234])
 
 
     def test_requestAvatarId(self):
@@ -476,12 +478,11 @@ class UNIXPasswordDatabaseTests(TestCase):
         self.patch(checkers, 'spwd', spwd)
 
         mockos = MockOS()
+        self.patch(checkers, 'os', mockos)
+        self.patch(util, 'os', mockos)
+
         mockos.euid = 2345
         mockos.egid = 1234
-        self.patch(os, "geteuid", mockos.geteuid)
-        self.patch(os, "getegid", mockos.getegid)
-        self.patch(os, "seteuid", mockos.seteuid)
-        self.patch(os, "setegid", mockos.setegid)
 
         cred = UsernamePassword("alice", "password")
         self.assertLoggedIn(checker.requestAvatarId(cred), 'alice')
