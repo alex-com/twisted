@@ -42,49 +42,47 @@ class NamedConstant(object):
     """
     L{NamedConstant} defines an attribute to be a named constant within a
     collection defined by a L{NamedConstants} subclass.
+
+    @ivar index: A C{int} allocated from a shared counter in order to keep track
+        of the order in which L{NamedConstants} are instantiated.
     """
     def __init__(self):
         self.index = _constantOrder()
 
 
     def __get__(self, oself, cls):
-        if not cls._initialized:
-            cls._initialize()
+        """
+        Retrieve the L{_NamedConstant} instance which corresponds to this
+        constant from the cache on C{cls}.
+        """
         return cls._enumerants[self]
 
 
 
-class NamedConstants(object):
+class _EnumerantsInitializer(object):
     """
-    A L{NamedContainer} contains named constants.
+    L{_EnumerantsInitializer} is a descriptor used to initialize a cache of
+    objects representing named constants for a particular L{NamedConstants}
+    subclass.
     """
-    _initialized = False
-
-    def iterconstants(cls):
+    def __get__(self, oself, cls):
         """
-        Iteration over a L{_Container} results in all of the objects it contains
-        (the names of its constants).
+        Initialize the cache on C{cls} and then return it.
+
+        Additionally, replace this descriptor on C{cls} with the cache so that
+        future access will go directly to it.
         """
-        # XXX Maybe need to _initialize here
-        constants = cls._enumerants.items()
-        constants.sort(key=lambda (key, value): key.index)
-        return iter([value for (key, value) in constants])
-    iterconstants = classmethod(iterconstants)
+        self._initialize(cls)
+        return cls._enumerants
 
 
-    def lookupByName(cls, name):
+    def _initialize(self, cls):
         """
-        Retrieve a constant by its name or raise a L{ValueError} if there is no
-        constant associated with that name.
+        Find all of the L{NamedConstant} instances in the definition of C{cls}
+        and construct L{_NamedConstant} instances to go with them.  Attach the
+        resulting C{dict} to C{cls}, along with a set of the names of all the
+        constants.
         """
-        # XXX Maybe need to _initialize here
-        if name in cls._enumerantNames:
-            return getattr(cls, name)
-        raise ValueError(name)
-    lookupByName = classmethod(lookupByName)
-
-
-    def _initialize(cls):
         names = set()
         constants = []
         for (name, descriptor) in cls.__dict__.iteritems():
@@ -97,8 +95,40 @@ class NamedConstants(object):
             enumerants[descriptor] = cls._constantFactory(enumerant)
         cls._enumerants = enumerants
         cls._enumerantNames = names
-        cls._initialized = True
-    _initialize = classmethod(_initialize)
+
+
+
+class NamedConstants(object):
+    """
+    A L{NamedContainer} contains named constants.
+
+    @ivar _enumerants: A C{dict} mapping L{NamedConstant} instances found in the
+        class definition to L{_NamedConstant} instances which know their own
+        name.  This is initialized in via the L{_EnumerantsInitializer}
+        descriptor the first time it is accessed.
+    """
+    _enumerants = _EnumerantsInitializer()
+
+    def iterconstants(cls):
+        """
+        Iteration over a L{_Container} results in all of the objects it contains
+        (the names of its constants).
+        """
+        constants = cls._enumerants.items()
+        constants.sort(key=lambda (key, value): key.index)
+        return iter([value for (key, value) in constants])
+    iterconstants = classmethod(iterconstants)
+
+
+    def lookupByName(cls, name):
+        """
+        Retrieve a constant by its name or raise a L{ValueError} if there is no
+        constant associated with that name.
+        """
+        if name in cls._enumerantNames:
+            return getattr(cls, name)
+        raise ValueError(name)
+    lookupByName = classmethod(lookupByName)
 
 
     def _constantFactory(cls, name):
