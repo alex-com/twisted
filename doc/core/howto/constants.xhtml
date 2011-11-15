@@ -29,22 +29,21 @@
   defined.</p>
 
   <pre class="python">
->>> from twisted.python.constants import NamedConstant, NamedConstants
->>> class METHOD(NamedConstants):
-...     """
-...     Constants representing various HTTP request methods.
-...     """
-...     GET = NamedConstant()
-...     PUT = NamedConstant()
-...     POST = NamedConstant()
-...     DELETE = NamedConstant()
-...
+from twisted.python.constants import NamedConstant, NamedConstants
+class METHOD(NamedConstants):
+    """
+    Constants representing various HTTP request methods.
+    """
+    GET = NamedConstant()
+    PUT = NamedConstant()
+    POST = NamedConstant()
+    DELETE = NamedConstant()
   </pre>
 
   <p>Given this definition, constants can be looked up by name using attribute
   access on the <code>METHOD</code> object:</p>
 
-  <pre class="python">
+  <pre class="shell">
 >>> METHOD.GET
 &lt;METHOD=GET>
 >>> METHOD.PUT
@@ -55,14 +54,14 @@
   <p>The constants can also be enumerated using the <code>iterconstants</code>
   method.</p>
 
-  <pre class="python">
+  <pre class="shell">
 >>> list(METHOD.iterconstants())
 [&lt;METHOD=GET>, &lt;METHOD=PUT>, &lt;METHOD=POST>, &lt;METHOD=DELETE>, &lt;METHOD=OPTIONS>]
   </pre>
 
   <p>And constants can also be compared, either for equality or identity:</p>
 
-  <pre class="python">
+  <pre class="shell">
 >>> METHOD.GET is METHOD.GET
 True
 >>> METHOD.GET == METHOD.GET
@@ -70,6 +69,40 @@ True
 >>> METHOD.GET is METHOD.PUT
 False
 >>> METHOD.GET == METHOD.PUT
+False
+>>>
+  </pre>
+
+  <p>Custom functionality can also be associated with constants defined this
+  way.  A subclass of <code>NamedConstants</code> may define class methods to
+  implement such functionality.  Consider this redefinition
+  of <code>METHOD</code>:</p>
+
+  <pre class="python">
+from twisted.python.constants import NamedConstant, NamedConstants
+class METHOD(NamedConstants):
+    """
+    Constants representing various HTTP request methods.
+    """
+    GET = NamedConstant()
+    PUT = NamedConstant()
+    POST = NamedConstant()
+    DELETE = NamedConstant()
+
+    @classmethod
+    def isIdempotent(cls, method):
+        """
+        Return True if the given method is side-effect free, False otherwise.
+        """
+        return method is cls.GET
+  </pre>
+
+  <p>This functionality can be used as any class methods are used:</p>
+
+  <pre class="shell">
+>>> METHOD.isIdempotent(METHOD.GET)
+True
+>>> METHOD.isIdempotent(METHOD.POST)
 False
 >>>
   </pre>
