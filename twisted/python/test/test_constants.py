@@ -90,7 +90,8 @@ class NamedConstantsTests(TestCase):
         """
         Create a fresh new L{NamedConstants} subclass for each unit test to use.
         Since L{NamedConstants} is stateful, re-using the same subclass across
-        test methods makes covering certain cases difficult.
+        test methods makes exercising all of the implementation code paths
+        difficult.
         """
         class METHOD(NamedConstants):
             """
