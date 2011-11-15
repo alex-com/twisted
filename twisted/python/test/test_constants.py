@@ -69,7 +69,9 @@ class NamedConstantTests(TestCase):
 
     def test_hash(self):
         """
-        Two different L{NamedConstant} instances have different hashes.
+        Because two different L{NamedConstant} instances do not compare as equal
+        to each other, they also have different hashes to avoid collisions when
+        added to a C{dict} or C{set}.
         """
         first = NamedConstant()
         first._realize(self.container, u"bar", None)
