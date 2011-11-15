@@ -21,6 +21,10 @@ class NamedConstant(object):
     L{NamedConstant} defines an attribute to be a named constant within a
     collection defined by a L{NamedConstants} subclass.
 
+    L{NamedConstant} is only for use in the definition of L{NamedConstants}
+    subclasses.  Do not instantiate L{NamedConstant} elsewhere and do not
+    subclass it.
+
     @ivar name: A C{str} giving the name of this constant; only set once the
         constant is initialized by L{NamedConstants}.
 
