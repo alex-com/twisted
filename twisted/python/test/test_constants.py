@@ -106,6 +106,15 @@ class NamedConstantsTests(TestCase):
         self.METHOD = METHOD
 
 
+    def test_notInstantiable(self):
+        """
+        A subclass of L{NamedConstants} raises L{TypeError} if an attempt is
+        made to instantiate it.
+        """
+        exc = self.assertRaises(TypeError, self.METHOD)
+        self.assertEqual("METHOD may not be instantiated.", str(exc))
+
+
     def test_symbolicAttributes(self):
         """
         Each name associated with a L{NamedConstant} instance in the definition

@@ -98,6 +98,14 @@ class NamedConstants(object):
     _initialized = False
     _enumerants = _EnumerantsInitializer()
 
+    def __new__(cls):
+        """
+        L{NamedConstants}-derived classes are not intended to be instantiated.
+        The class object itself is used directly.
+        """
+        raise TypeError("%s may not be instantiated." % (cls.__name__,))
+
+
     def iterconstants(cls):
         """
         Iteration over a L{NamedConstants} results in all of the constants it
