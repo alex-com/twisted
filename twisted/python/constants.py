@@ -143,7 +143,6 @@ class NamedConstants(object):
             for (name, descriptor) in cls.__dict__.iteritems():
                 if isinstance(descriptor, NamedConstant):
                     constants.append((descriptor._index, name, descriptor))
-            constants.sort()
             enumerants = {}
             for (index, enumerant, descriptor) in constants:
                 value = cls._constantFactory(enumerant)
