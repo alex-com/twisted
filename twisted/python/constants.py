@@ -36,8 +36,7 @@ class NamedConstant(object):
 
     def __get__(self, oself, cls):
         """
-        Retrieve the L{_NamedConstant} instance which corresponds to this
-        constant from the cache on C{cls}.
+        Ensure this constant has been initialized before returning it.
         """
         cls._initialize()
         return self
@@ -88,20 +87,21 @@ class _EnumerantsInitializer(object):
 
 class NamedConstants(object):
     """
-    A L{NamedContainer} contains named constants.
+    A L{NamedConstants} contains constants which differ only their names and
+    identities.
 
-    @ivar _enumerants: A C{dict} mapping L{NamedConstant} instances found in the
-        class definition to L{_NamedConstant} instances which know their own
-        name.  This is initialized in via the L{_EnumerantsInitializer}
-        descriptor the first time it is accessed.
+    @ivar _enumerants: A C{dict} mapping the names of L{NamedConstant} instances
+        found in the class definition to those instances.  This is initialized
+        in via the L{_EnumerantsInitializer} descriptor the first time it is
+        accessed.
     """
     _initialized = False
     _enumerants = _EnumerantsInitializer()
 
     def iterconstants(cls):
         """
-        Iteration over a L{_Container} results in all of the objects it contains
-        (the names of its constants).
+        Iteration over a L{NamedConstants} results in all of the constants it
+        contains.
         """
         constants = cls._enumerants.values()
         constants.sort(key=lambda descriptor: descriptor._index)
@@ -111,7 +111,7 @@ class NamedConstants(object):
 
     def lookupByName(cls, name):
         """
-        Retrieve a constant by its name or raise a L{ValueError} if there is no
+        Retrieve a constant by its name or raise a C{ValueError} if there is no
         constant associated with that name.
         """
         if name in cls._enumerants:
@@ -144,12 +144,12 @@ class NamedConstants(object):
 
     def _constantFactory(cls, name):
         """
-        Construct a new constant to add to this container.
+        Construct the value for a new constant to add to this container.
 
         @param name: The name of the constant to create.
 
-        @return: The newly created constant.
-        @rtype: L{_NamedConstant}
+        @return: L{NamedConstant} instances have no value apart from identity,
+            so return a meaningless dummy value.
         """
         return _unspecified
     _constantFactory = classmethod(_constantFactory)
