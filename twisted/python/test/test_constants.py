@@ -30,8 +30,8 @@ class NamedConstantTests(TestCase):
         for the C{name} parameter to C{_realize}.
         """
         name = NamedConstant()
-        name._realize(self.container, u"bar", None)
-        self.assertEqual(u"bar", name.name)
+        name._realize(self.container, "bar", None)
+        self.assertEqual("bar", name.name)
 
 
     def test_representation(self):
@@ -40,7 +40,7 @@ class NamedConstantTests(TestCase):
         the container the instances belongs to as well as the instance's name.
         """
         name = NamedConstant()
-        name._realize(self.container, u"bar", None)
+        name._realize(self.container, "bar", None)
         self.assertEqual("<foo=bar>", repr(name))
 
 
@@ -49,7 +49,7 @@ class NamedConstantTests(TestCase):
         A L{NamedConstant} instance compares equal to itself.
         """
         name = NamedConstant()
-        name._realize(self.container, u"bar", None)
+        name._realize(self.container, "bar", None)
         self.assertTrue(name == name)
         self.assertFalse(name != name)
 
@@ -60,9 +60,9 @@ class NamedConstantTests(TestCase):
         other.
         """
         first = NamedConstant()
-        first._realize(self.container, u"bar", None)
+        first._realize(self.container, "bar", None)
         second = NamedConstant()
-        second._realize(self.container, u"bar", None)
+        second._realize(self.container, "bar", None)
         self.assertFalse(first == second)
         self.assertTrue(first != second)
 
@@ -74,9 +74,9 @@ class NamedConstantTests(TestCase):
         added to a C{dict} or C{set}.
         """
         first = NamedConstant()
-        first._realize(self.container, u"bar", None)
+        first._realize(self.container, "bar", None)
         second = NamedConstant()
-        second._realize(self.container, u"bar", None)
+        second._realize(self.container, "bar", None)
         self.assertNotEqual(hash(first), hash(second))
 
 
@@ -148,7 +148,7 @@ class NamedConstantsTests(TestCase):
         """
         Constants can be looked up by name using L{NamedConstants.lookupByName}.
         """
-        method = self.METHOD.lookupByName(u"GET")
+        method = self.METHOD.lookupByName("GET")
         self.assertIdentical(self.METHOD.GET, method)
 
 
@@ -157,9 +157,9 @@ class NamedConstantsTests(TestCase):
         Names not defined with a L{NamedConstant} instance cannot be looked up
         using L{NamedConstants.lookupByName}.
         """
-        self.assertRaises(ValueError, self.METHOD.lookupByName, u"lookupByName")
-        self.assertRaises(ValueError, self.METHOD.lookupByName, u"__init__")
-        self.assertRaises(ValueError, self.METHOD.lookupByName, u"foo")
+        self.assertRaises(ValueError, self.METHOD.lookupByName, "lookupByName")
+        self.assertRaises(ValueError, self.METHOD.lookupByName, "__init__")
+        self.assertRaises(ValueError, self.METHOD.lookupByName, "foo")
 
 
     def test_name(self):
@@ -167,7 +167,7 @@ class NamedConstantsTests(TestCase):
         The C{name} attribute of one of the named constants gives that
         constant's name.
         """
-        self.assertEqual(u"GET", self.METHOD.GET.name)
+        self.assertEqual("GET", self.METHOD.GET.name)
 
 
     def test_attributeIdentity(self):
