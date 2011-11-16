@@ -51,12 +51,32 @@ class METHOD(NamedConstants):
 >>>
   </pre>
 
+  <p>If it's necessary to look up constants based on user input of some sort, a
+  safe way to do it is using <code>lookupByName</code>:</p>
+
+  <pre class="shell">
+>>> METHOD.lookupByName('GET')
+&lt;METHOD=GET>
+>>> METHOD.lookupByName('__doc__')
+Traceback (most recent call last):
+  File "<stdin>", line 1, in &lt;module>
+  File "twisted/python/constants.py", line 145, in lookupByName
+    raise ValueError(name)
+ValueError: __init__
+>>>
+  </pre>
+
+  <p>As demonstrated, it is safe because any name not associated with a constant
+  (even those special names initialized by Python itself) will result
+  in <code>ValueError</code> being raised, not some other object not intended to
+  be used the way the constants are used.</p>
+
   <p>The constants can also be enumerated using the <code>iterconstants</code>
   method.</p>
 
   <pre class="shell">
 >>> list(METHOD.iterconstants())
-[&lt;METHOD=GET>, &lt;METHOD=PUT>, &lt;METHOD=POST>, &lt;METHOD=DELETE>, &lt;METHOD=OPTIONS>]
+[&lt;METHOD=GET>, &lt;METHOD=PUT>, &lt;METHOD=POST>, &lt;METHOD=DELETE>]
   </pre>
 
   <p>And constants can also be compared, either for equality or identity:</p>
