@@ -42,7 +42,7 @@ class NamedConstant(object):
         """
         Ensure this constant has been initialized before returning it.
         """
-        cls._initialize()
+        cls._initializeEnumerants()
         return self
 
 
@@ -84,7 +84,7 @@ class _EnumerantsInitializer(object):
         Additionally, replace this descriptor on C{cls} with the cache so that
         future access will go directly to it.
         """
-        cls._initialize()
+        cls._initializeEnumerants()
         return cls._enumerants
 
 
@@ -94,12 +94,15 @@ class NamedConstants(object):
     A L{NamedConstants} contains constants which differ only their names and
     identities.
 
+    @ivar _enumerantsInitialized: A C{bool} tracking whether C{_enumerants} has
+        been initialized yet or not.
+
     @ivar _enumerants: A C{dict} mapping the names of L{NamedConstant} instances
         found in the class definition to those instances.  This is initialized
-        in via the L{_EnumerantsInitializer} descriptor the first time it is
+        via the L{_EnumerantsInitializer} descriptor the first time it is
         accessed.
     """
-    _initialized = False
+    _enumerantsInitialized = False
     _enumerants = _EnumerantsInitializer()
 
     def __new__(cls):
@@ -114,6 +117,9 @@ class NamedConstants(object):
         """
         Iteration over a L{NamedConstants} results in all of the constants it
         contains.
+
+        @return: an iterator the elements of which are the L{NamedConstant}
+            instances defined in the body of this L{NamedConstants} subclass.
         """
         constants = cls._enumerants.values()
         constants.sort(key=lambda descriptor: descriptor._index)
@@ -125,6 +131,14 @@ class NamedConstants(object):
         """
         Retrieve a constant by its name or raise a C{ValueError} if there is no
         constant associated with that name.
+
+        @param name: A C{str} giving the name of one of the constants defined by
+            C{cls}.
+
+        @raise ValueError: If C{name} is not the name of one of the constants
+            defined by C{cls}.
+
+        @return: The L{NamedConstant} associated with C{name}.
         """
         if name in cls._enumerants:
             return getattr(cls, name)
@@ -132,13 +146,13 @@ class NamedConstants(object):
     lookupByName = classmethod(lookupByName)
 
 
-    def _initialize(cls):
+    def _initializeEnumerants(cls):
         """
         Find all of the L{NamedConstant} instances in the definition of C{cls},
         initialize them with constant values, and build a mapping from their
         names to them to attach to C{cls}.
         """
-        if not cls._initialized:
+        if not cls._enumerantsInitialized:
             constants = []
             for (name, descriptor) in cls.__dict__.iteritems():
                 if isinstance(descriptor, NamedConstant):
@@ -149,8 +163,8 @@ class NamedConstants(object):
                 descriptor._realize(cls, enumerant, value)
                 enumerants[enumerant] = descriptor
             cls._enumerants = enumerants
-            cls._initialized = True
-    _initialize = classmethod(_initialize)
+            cls._enumerantsInitialized = True
+    _initializeEnumerants = classmethod(_initializeEnumerants)
 
 
     def _constantFactory(cls, name):
