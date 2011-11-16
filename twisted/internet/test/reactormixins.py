@@ -9,7 +9,8 @@ __metaclass__ = type
 
 import signal
 
-from twisted.internet.defer import TimeoutError
+from twisted.internet.defer import TimeoutError, Deferred
+from twisted.internet.protocol import ServerFactory, ClientFactory, Protocol
 from twisted.trial.unittest import TestCase, SkipTest
 from twisted.python.runtime import platform
 from twisted.python.reflect import namedAny, fullyQualifiedName
@@ -21,6 +22,19 @@ if platform.isWindows():
     process = None
 else:
     from twisted.internet import process
+
+
+
+class ConnectableProtocl(Protocol):
+    """
+    A protocol to be used with L{ReactorBuilder.connectProtocols}.
+
+    The protocol and its pair should eventually disconnect from each other.
+    """
+
+    def connectionLost(self, reason):
+        self.factory.result.callback(reason)
+
 
 
 class ReactorBuilder:
@@ -204,6 +218,64 @@ class ReactorBuilder:
         if timedOut:
             raise TimeoutError(
                 "reactor still running after %s seconds" % (timeout,))
+
+
+    def connectProtocols(self, serverProtocolFactory, clientProtocolFactory,
+                         sslContexts=(None, None), timeout=None):
+        """
+        Connect two protocols using TCP or SSL and a new reactor instance.
+
+        The protocol should run through some set of tests, then disconnect.
+
+        @param serverProtocolFactory: A callable that returns an instance of
+            L{ConnectableProtocol}.
+
+        @param clientProtocolFactory: A callable that returns an instance of
+            L{ConnectableProtocol}.
+
+        @param sslContexts: A tuple of C{(None, None)} means the connection
+            will be TCP, a tuple of SSL server and client contexts will result in
+            SSL connection.
+
+        @param timeout: The timeout for the reactor.
+
+        @return: A tuple of the server protocol instance used in the test, the
+            client protocol instance, the server disconnection reason
+            C{Failure} and the client disconnection C{Failure}.
+        """
+        sslServerContext, sslClientContext = sslContexts
+        serverFactory = ServerFactory()
+        serverFactory.protocol = serverProtocolFactory
+        serverFactory.result = Deferred()
+        clientFactory = ServerFactory()
+        clientFactory.protocol = clientProtocolFactory
+        clientFactory.result = Deferred()
+
+        # Listen on a port:
+        reactor = self.buildReactor()
+        if sslServerContext:
+            port = reactor.listenSSL(0, serverFactory, sslServerContext,
+                                     interface="127.0.0.1")
+        else:
+            port = reactor.listenTCP(0, serverFactory, interface="127.0.0.1")
+
+        # Connect to the port:
+        if sslServerContext:
+            reactor.connectSSL("127.0.0.1", port.getHost().port, clientFactory,
+                               sslClientContext)
+        else:
+            reactor.connectTCP("127.0.0.1", port.getHost().port, clientFactory)
+
+        # Shutdown reactor once both connections are lost:
+        result = []
+        def gotResults((serverProtocol, serverReason),
+                       (clientProtocol, clientReason)):
+            port.stopListening()
+            reactor.stop()
+            result.extend([serverProtocol, clientProtocol,
+                           serverReason, clientReason])
+        self.runReactor(reactor, timeout=timeout)
+        return tuple(result)
 
 
     def makeTestCaseClasses(cls):
