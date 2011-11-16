@@ -323,6 +323,13 @@ class ReactorBuilder:
         gatherResults([serverFactory.result, clientFactory.result]).addCallback(
             gotResults)
         self.runReactor(reactor, timeout=timeout)
+
+        # Make sure everything was shutdown correctly:
+        self.assertEqual(reactor.removeAll(), [])
+        # The reactor always has a timeout added in buildReactor():
+        delayedCalls = reactor.getDelayedCalls()
+        self.assertEqual(len(delayedCalls), 1, map(str, delayedCalls))
+
         return tuple(result)
 
 

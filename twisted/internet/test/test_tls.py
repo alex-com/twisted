@@ -9,7 +9,7 @@ __metaclass__ = type
 
 from zope.interface import implements
 
-from twisted.internet.test.reactormixins import ReactorBuilder
+from twisted.internet.test.reactormixins import ReactorBuilder, EndpointCreator
 from twisted.internet.protocol import ServerFactory, ClientFactory, Protocol
 from twisted.internet.interfaces import (
     IReactorSSL, ITLSTransport, IStreamClientEndpoint)
@@ -129,11 +129,9 @@ class StartTLSClientEndpoint(object):
 
 
 
-class StartTLSClientTestsMixin(TLSMixin, ReactorBuilder, ConnectionTestsMixin,
-                               ContextGeneratingMixin):
+class StartTLS(EndpointCreator, ContextGeneratingMixin):
     """
-    Tests for TLS connections established using L{ITLSTransport.startTLS} (as
-    opposed to L{IReactorSSL.connectSSL} or L{IReactorSSL.listenSSL}).
+    Create L{ITLSTransport.startTLS} endpoints.
     """
     def serverEndpoint(self, reactor):
         """
@@ -155,12 +153,19 @@ class StartTLSClientTestsMixin(TLSMixin, ReactorBuilder, ConnectionTestsMixin,
 
 
 
-class SSLClientTestsMixin(TLSMixin, ReactorBuilder, ContextGeneratingMixin,
-                          ConnectionTestsMixin):
+class StartTLSClientTestsMixin(StartTLS, TLSMixin, ReactorBuilder,
+                               ConnectionTestsMixin):
     """
-    Mixin defining tests relating to L{ITLSTransport}.
+    Tests for TLS connections established using L{ITLSTransport.startTLS} (as
+    opposed to L{IReactorSSL.connectSSL} or L{IReactorSSL.listenSSL}).
     """
 
+
+
+class SSL(EndpointCreator, ContextGeneratingMixin):
+    """
+    Create SSL endpoints.
+    """
     def serverEndpoint(self, reactor):
         """
         Create an SSL server endpoint on a TCP/IP-stack allocated port.
@@ -179,6 +184,13 @@ class SSLClientTestsMixin(TLSMixin, ReactorBuilder, ContextGeneratingMixin,
             reactor, '127.0.0.1', serverAddress.port,
             ClientContextFactory())
 
+
+
+class SSLClientTestsMixin(TLSMixin, ReactorBuilder, SSL,
+                          ConnectionTestsMixin):
+    """
+    Mixin defining tests relating to L{ITLSTransport}.
+    """
 
     def test_disconnectAfterWriteAfterStartTLS(self):
         """
@@ -290,7 +302,11 @@ globals().update(TLSPortTestsBuilder().makeTestCaseClasses())
 
 
 class AbortSSLConnectionTest(ReactorBuilder, AbortConnectionMixin, ContextGeneratingMixin):
+    """
+    C{abortConnection} tests using SSL.
+    """
     requiredInterfaces = (IReactorSSL,)
+    endpoints = SSL()
 
     def buildReactor(self):
         reactor = ReactorBuilder.buildReactor(self)
@@ -310,25 +326,6 @@ class AbortSSLConnectionTest(ReactorBuilder, AbortConnectionMixin, ContextGenera
     def setUp(self):
         if FILETYPE_PEM is None:
             raise SkipTest("OpenSSL not available.")
-        self.serverContext = self.getServerContext()
-        self.clientContext = self.getClientContext()
-        self.clientContext.method = self.serverContext.method
-
-
-    def listen(self, reactor, server):
-        """
-        Listen using SSL.
-        """
-        return reactor.listenSSL(
-            0, server, self.serverContext, interface="127.0.0.1")
-
-
-    def connect(self, clientcreator, serverport):
-        """
-        Connect using SSL.
-        """
-        return clientcreator.connectSSL(
-            serverport.getHost().host, serverport.getHost().port,
-            self.clientContext)
 
 globals().update(AbortSSLConnectionTest.makeTestCaseClasses())
+

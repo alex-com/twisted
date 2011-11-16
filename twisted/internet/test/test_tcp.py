@@ -1212,18 +1212,7 @@ globals().update(WriteSequenceTests.makeTestCaseClasses())
 
 
 
-class AbortServerProtocol(Protocol):
-    """
-    Generic server protocol for abortConnection() tests.
-    """
-
-    def connectionLost(self, reason):
-        self.factory.done.callback(reason)
-        del self.factory.done
-
-
-
-class ServerAbortsTwice(AbortServerProtocol):
+class ServerAbortsTwice(ConnectableProtocol):
     """
     Call abortConnection() twice.
     """
@@ -1234,7 +1223,7 @@ class ServerAbortsTwice(AbortServerProtocol):
 
 
 
-class ServerAbortsThenLoses(AbortServerProtocol):
+class ServerAbortsThenLoses(ConnectableProtocol):
     """
     Call abortConnection() followed by loseConnection().
     """
@@ -1245,7 +1234,7 @@ class ServerAbortsThenLoses(AbortServerProtocol):
 
 
 
-class AbortServerWritingProtocol(AbortServerProtocol):
+class AbortServerWritingProtocol(ConnectableProtocol):
     """
     Protocol that writes data upon connection.
     """
@@ -1271,7 +1260,7 @@ class ReadAbortServerProtocol(AbortServerWritingProtocol):
 
 
 
-class NoReadServer(AbortServerProtocol):
+class NoReadServer(ConnectableProtocol):
     """
     Stop reading immediately on connection.
 
@@ -1284,7 +1273,7 @@ class NoReadServer(AbortServerProtocol):
 
 
 
-class EventualNoReadServer(AbortServerProtocol):
+class EventualNoReadServer(ConnectableProtocol):
     """
     Like NoReadServer, except we Wait until some bytes have been delivered
     before stopping reading. This means TLS handshake has finished, where
@@ -1319,40 +1308,16 @@ class EventualNoReadServer(AbortServerProtocol):
 
 
 
-class AbortServerFactory(ServerFactory):
-    """
-    Server factory for abortConnection() tests.
-    """
-
-    def __init__(self, done, serverClass, reactor):
-        self.done = done
-        self.serverClass = serverClass
-        self.reactor = reactor
-
-    def buildProtocol(self, addr):
-        p = self.serverClass()
-        p.factory = self
-        self.proto = p
-        return p
-
-
-class BaseAbortingClient(Protocol):
+class BaseAbortingClient(ConnectableProtocol):
     """
     Base class for abort-testing clients.
     """
-
     inReactorMethod = False
-
-    def __init__(self, done, reactor):
-        self.done = done
-        self.reactor = reactor
-
 
     def connectionLost(self, reason):
         if self.inReactorMethod:
             raise RuntimeError("BUG: connectionLost was called re-entrantly!")
-        self.done.callback(reason)
-        del self.done
+        ConnectableProtocol.connectionLost(self, reason)
 
 
 
@@ -1412,18 +1377,13 @@ class AbortingThenLosingClient(AbortingClient):
 
 
 
-class ProducerAbortingClient(Protocol):
+class ProducerAbortingClient(ConnectableProtocol):
     """
     Call abortConnection from doWrite, via resumeProducing.
     """
 
     inReactorMethod = True
-
-    def __init__(self, done, reactor):
-        self.done = done
-        self.reactor = reactor
-        self.producerStopped = False
-
+    producerStopped = False
 
     def write(self):
         self.transport.write("lalala" * 127000)
@@ -1452,12 +1412,11 @@ class ProducerAbortingClient(Protocol):
             raise RuntimeError("BUG: stopProducing() was never called.")
         if self.inReactorMethod:
             raise RuntimeError("BUG: connectionLost called re-entrantly!")
-        self.done.callback(reason)
-        del self.done
+        ConnectableProtocol.connectionLost(self, reason)
 
 
 
-class StreamingProducerClient(Protocol):
+class StreamingProducerClient(ConnectableProtocol):
     """
     Call abortConnection() when the other side has stopped reading.
 
@@ -1469,14 +1428,9 @@ class StreamingProducerClient(Protocol):
     Since it's very difficult to know when this actually happens, we just
     write a lot of data, and assume at that point no more writes will happen.
     """
-
-    def __init__(self, done, reactor):
-        self.done = done
-        self.paused = False
-        self.reactor = reactor
-        self.extraWrites = 0
-        self.inReactorMethod = False
-
+    paused = False
+    extraWrites = 0
+    inReactorMethod = False
 
     def connectionMade(self):
         self.write()
@@ -1532,9 +1486,8 @@ class StreamingProducerClient(Protocol):
 
     def connectionLost(self, reason):
         # Tell server to start reading again so it knows to go away:
-        self.serverFactory.proto.transport.startReading()
-        self.done.callback(reason)
-        del self.done
+        self.otherProtocol.transport.startReading()
+        ConnectableProtocol.connectionLost(self, reason)
 
 
 
@@ -1599,8 +1552,7 @@ class ResumeThrowsClient(ProducerAbortingClient):
         # Base class assertion about stopProducing being called isn't valid;
         # if the we blew up in resumeProducing, consumers are justified in
         # giving up on the producer and not calling stopProducing.
-        self.done.callback(reason)
-        del self.done
+        ConnectableProtocol.connectionLost(self, reason)
 
 
 
@@ -1608,6 +1560,8 @@ class AbortConnectionMixin(object):
     """
     Unit tests for L{ITransport.abortConnection}.
     """
+    # Override in subclasses, should be a EndpointCreator instance:
+    endpoints = None
 
     def runAbortTest(self, clientClass, serverClass,
                      clientConnectionLostReason=None):
@@ -1618,45 +1572,6 @@ class AbortConnectionMixin(object):
         We then run the reactor until both sides have disconnected, and then
         verify that the right exception resulted.
         """
-        reactor = self.buildReactor()
-        serverDoneDeferred = Deferred()
-        clientDoneDeferred = Deferred()
-
-        server = AbortServerFactory(serverDoneDeferred, serverClass, reactor)
-        serverport = self.listen(reactor, server)
-
-        c = ClientCreator(reactor, clientClass, clientDoneDeferred, reactor)
-        d = self.connect(c, serverport)
-        def addServer(client):
-            client.serverFactory = server
-        d.addCallback(addServer)
-
-        serverReason = []
-        clientReason = []
-        serverDoneDeferred.addBoth(serverReason.append)
-        clientDoneDeferred.addBoth(clientReason.append)
-        d.addCallback(lambda x: clientDoneDeferred)
-        d.addCallback(lambda x: serverDoneDeferred)
-
-        d.addCallback(lambda x: serverport.stopListening())
-        def verifyReactorIsClean(ignore):
-            if clientConnectionLostReason is not None:
-                self.flushLoggedErrors(clientConnectionLostReason)
-            self.assertEqual(reactor.removeAll(), [])
-            # The reactor always has a timeout added in buildReactor():
-            delayedCalls = reactor.getDelayedCalls()
-            self.assertEqual(len(delayedCalls), 1, map(str, delayedCalls))
-        d.addCallback(verifyReactorIsClean)
-
-        d.addCallback(lambda ignored: reactor.stop())
-        # If we get error, make sure test still exits:
-        def errorHandler(err):
-            log.err(err)
-            reactor.stop()
-        d.addErrback(errorHandler)
-
-        self.runReactor(reactor, timeout=10)
-
         clientExpectedExceptions = (ConnectionAborted, ConnectionLost)
         serverExpectedExceptions = (ConnectionLost, ConnectionDone)
         # In TLS tests we may get SSL.Error instead of ConnectionLost,
@@ -1669,12 +1584,18 @@ class AbortConnectionMixin(object):
             clientExpectedExceptions = clientExpectedExceptions + (SSL.Error,)
             serverExpectedExceptions = serverExpectedExceptions + (SSL.Error,)
 
-        if clientConnectionLostReason:
-            self.assertIsInstance(clientReason[0].value,
-                                  (clientConnectionLostReason,) + clientExpectedExceptions)
+        serverProtocol, clientProtocol, serverReason, clientReason = (
+            self.connectProtocols(serverClass, clientClass, self.endpoints,
+                                  timeout=10))
+
+        if clientConnectionLostReason is not None:
+            self.flushLoggedErrors(clientConnectionLostReason)
+            self.assertIsInstance(
+                clientReason.value,
+                (clientConnectionLostReason,) + clientExpectedExceptions)
         else:
-            self.assertIsInstance(clientReason[0].value, clientExpectedExceptions)
-        self.assertIsInstance(serverReason[0].value, serverExpectedExceptions)
+            self.assertIsInstance(clientReason.value, clientExpectedExceptions)
+        self.assertIsInstance(serverReason.value, serverExpectedExceptions)
 
 
     def test_dataReceivedAbort(self):
@@ -1732,7 +1653,7 @@ class AbortConnectionMixin(object):
         connectionLost should not be called re-entrantly.
         """
         self.runAbortTest(ProducerAbortingClient,
-                          AbortServerProtocol)
+                          ConnectableProtocol)
 
 
     def test_resumeProducingAbortLater(self):
@@ -1795,7 +1716,7 @@ class AbortConnectionMixin(object):
         unexpected exceptions.
         """
         self.runAbortTest(ResumeThrowsClient,
-                          AbortServerProtocol,
+                          ConnectableProtocol,
                           clientConnectionLostReason=ZeroDivisionError)
 
 
@@ -1806,19 +1727,6 @@ class AbortConnectionTestCase(ReactorBuilder, AbortConnectionMixin):
     TCP-specific L{AbortConnectionMixin} tests.
     """
 
-    def listen(self, reactor, server):
-        """
-        Listen with the given protocol factory.
-        """
-        return reactor.listenTCP(0, server, interface="127.0.0.1")
-
-
-    def connect(self, clientcreator, serverport, *a, **k):
-        """
-        Connect a client to the listening server port.  Return the resulting
-        Deferred.
-        """
-        return clientcreator.connectTCP(serverport.getHost().host,
-                                        serverport.getHost().port)
+    endpoints = TCP()
 
 globals().update(AbortConnectionTestCase.makeTestCaseClasses())
