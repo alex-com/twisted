@@ -17,7 +17,7 @@ from twisted.python.failure import Failure
 from twisted.python import log
 
 from twisted.trial.unittest import SkipTest, TestCase
-from twisted.internet.test.reactormixins import ReactorBuilder
+from twisted.internet.test.reactormixins import ReactorBuilder, EndpointCreator
 from twisted.internet.test.reactormixins import ConnectableProtocol
 from twisted.internet.error import DNSLookupError, ConnectionLost
 from twisted.internet.error import ConnectionDone, ConnectionAborted
@@ -823,11 +823,36 @@ class StopStartReadingProtocol(Protocol):
             self.factory.stop.callback(self.data)
 
 
+class TCPEndpointCreator(EndpointCreator):
+    """
+    Create TCP endpoints for C{ReactorBuilder.connectProtocols}-based tests.
+    """
+
+    def serverEndpoint(self, reactor):
+        """
+        Create a L{TCP4ServerEndpoint} listening on localhost on a
+        TCP/IP-selected port.
+        """
+        return TCP4ServerEndpoint(reactor, 0, interface='127.0.0.1')
+
+
+    def clientEndpoint(self, reactor, serverAddress):
+        """
+        Create a L{TCP4ClientEndpoint} which will connect to localhost
+        on the port given by C{serverAddress}.
+
+        @type serverAddress: L{IPv4Address}
+        """
+        return TCP4ClientEndpoint(
+            reactor, '127.0.0.1', serverAddress.port)
+
+
 
 class TCPConnectionTestsBuilder(ReactorBuilder):
     """
     Builder defining tests relating to L{twisted.internet.tcp.Connection}.
     """
+
     def test_stopStartReading(self):
         """
         This test verifies transport socket read state after multiple
@@ -916,7 +941,9 @@ class TCPConnectionTestsBuilder(ReactorBuilder):
                 self.transport.write("some bytes for you")
                 self.transport.loseConnection()
 
-        pauser, _, _, _ = self.connectProtocols(Pauser, Client, timeout=1)
+        pauser, _, _, _ = self.connectProtocols(Pauser, Client,
+                                                TCPEndpointCreator(),
+                                                timeout=1)
         self.assertEqual(pauser.events, ["paused", "resumed", "lost"])
 
 
@@ -942,7 +969,8 @@ class TCPConnectionTestsBuilder(ReactorBuilder):
                 self.transport.loseConnection()
 
         # If test fails, reactor won't stop and we'll hit timeout:
-        self.connectProtocols(ListenerProtocol, Client, timeout=1)
+        self.connectProtocols(ListenerProtocol, Client,
+                              TCPEndpointCreator(), timeout=1)
 
 
 

@@ -39,6 +39,28 @@ class ConnectableProtocol(Protocol):
 
 
 
+class EndpointCreator:
+    """
+    Create client and server endpoints that know how to connect to each other.
+    """
+
+    def serverEndpoint(self, reactor):
+        """
+        Return an object providing C{IStreamServerEndpoint} for use in creating
+        a server to use to establish the connection type to be tested.
+        """
+        raise NotImplementedError()
+
+
+    def clientEndpoint(self, reactor, serverAddress):
+        """
+        Return an object providing C{IStreamClientEndpoint} for use in creating
+        a client to use to establish the connection type to be tested.
+        """
+        raise NotImplementedError()
+
+
+
 class ReactorBuilder:
     """
     L{TestCase} mixin which provides a reactor-creation API.  This mixin
@@ -223,7 +245,7 @@ class ReactorBuilder:
 
 
     def connectProtocols(self, serverProtocolFactory, clientProtocolFactory,
-                         sslContexts=(None, None), timeout=None):
+                         endpointCreator, timeout=None):
         """
         Connect two protocols using TCP or SSL and a new reactor instance.
 
@@ -235,9 +257,7 @@ class ReactorBuilder:
         @param clientProtocolFactory: A callable that returns an instance of
             L{ConnectableProtocol}.
 
-        @param sslContexts: A tuple of C{(None, None)} means the connection
-            will be TCP, a tuple of SSL server and client contexts will result in
-            SSL connection.
+        @param endpointCreator: An instance of L{EndpointCreator}.
 
         @param timeout: The timeout for the reactor.
 
@@ -247,7 +267,6 @@ class ReactorBuilder:
         """
         reactor = self.buildReactor()
 
-        sslServerContext, sslClientContext = sslContexts
         serverFactory = ServerFactory()
         serverFactory.reactor = reactor
         serverFactory.protocol = serverProtocolFactory
@@ -256,26 +275,23 @@ class ReactorBuilder:
         clientFactory.reactor = reactor
         clientFactory.protocol = clientProtocolFactory
         clientFactory.result = Deferred()
+        port = []
+
+        def gotPort(p):
+            # Connect to the port:
+            port.append(p)
+            clientEndpoint = endpointCreator.clientEndpoint(reactor, p.getHost())
+            clientEndpoint.connect(clientFactory)
 
         # Listen on a port:
-        if sslServerContext:
-            port = reactor.listenSSL(0, serverFactory, sslServerContext,
-                                     interface="127.0.0.1")
-        else:
-            port = reactor.listenTCP(0, serverFactory, interface="127.0.0.1")
-
-        # Connect to the port:
-        if sslServerContext:
-            reactor.connectSSL("127.0.0.1", port.getHost().port, clientFactory,
-                               sslClientContext)
-        else:
-            reactor.connectTCP("127.0.0.1", port.getHost().port, clientFactory)
+        serverEndpoint = endpointCreator.serverEndpoint(reactor)
+        serverEndpoint.listen(serverFactory).addCallback(gotPort)
 
         # Shutdown reactor once both connections are lost:
         result = []
         def gotResults(((serverProtocol, serverReason),
                         (clientProtocol, clientReason))):
-            port.stopListening()
+            port[0].stopListening()
             reactor.stop()
             result.extend([serverProtocol, clientProtocol,
                            serverReason, clientReason])
