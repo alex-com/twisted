@@ -94,10 +94,10 @@ class NamedConstants(object):
     A L{NamedConstants} contains constants which differ only in their names and
     identities.
 
-    @ivar _enumerantsInitialized: A C{bool} tracking whether C{_enumerants} has
+    @cvar _enumerantsInitialized: A C{bool} tracking whether C{_enumerants} has
         been initialized yet or not.
 
-    @ivar _enumerants: A C{dict} mapping the names of L{NamedConstant} instances
+    @cvar _enumerants: A C{dict} mapping the names of L{NamedConstant} instances
         found in the class definition to those instances.  This is initialized
         via the L{_EnumerantsInitializer} descriptor the first time it is
         accessed.
