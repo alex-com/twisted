@@ -32,7 +32,7 @@ class NamedConstant(object):
         only set once the constant is initialized by that subclass.
 
     @ivar _index: A C{int} allocated from a shared counter in order to keep
-        track of the order in which L{NamedConstants} are instantiated.
+        track of the order in which L{NamedConstant}s are instantiated.
     """
     def __init__(self):
         self._index = _constantOrder()
@@ -91,7 +91,7 @@ class _EnumerantsInitializer(object):
 
 class NamedConstants(object):
     """
-    A L{NamedConstants} contains constants which differ only their names and
+    A L{NamedConstants} contains constants which differ only in their names and
     identities.
 
     @ivar _enumerantsInitialized: A C{bool} tracking whether C{_enumerants} has
