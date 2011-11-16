@@ -18,6 +18,7 @@ from twisted.python import log
 
 from twisted.trial.unittest import SkipTest, TestCase
 from twisted.internet.test.reactormixins import ReactorBuilder
+from twisted.internet.test.reactormixins import ConnectableProtocol
 from twisted.internet.error import DNSLookupError, ConnectionLost
 from twisted.internet.error import ConnectionDone, ConnectionAborted
 from twisted.internet.interfaces import (
@@ -892,38 +893,31 @@ class TCPConnectionTestsBuilder(ReactorBuilder):
         The reactor needs to remember that notification until Bob resumes the
         transport.
         """
-        reactor = self.buildReactor()
-        events = []
-        class Pauser(Protocol):
+        class Pauser(ConnectableProtocol):
+            def __init__(self):
+                self.events = []
+
             def dataReceived(self, bytes):
-                events.append("paused")
+                self.events.append("paused")
                 self.transport.pauseProducing()
-                reactor.callLater(0, self.resume)
+                self.factory.reactor.callLater(0, self.resume)
 
             def resume(self):
-                events.append("resumed")
+                self.events.append("resumed")
                 self.transport.resumeProducing()
 
             def connectionLost(self, reason):
                 # This is the event you have been waiting for.
-                events.append("lost")
-                reactor.stop()
+                self.events.append("lost")
+                ConnectableProtocol.connectionLost(self, reason)
 
-        serverFactory = ServerFactory()
-        serverFactory.protocol = Pauser
-        port = reactor.listenTCP(0, serverFactory)
+        class Client(ConnectableProtocol):
+            def connectionMade(self):
+                self.transport.write("some bytes for you")
+                self.transport.loseConnection()
 
-        cc = TCP4ClientEndpoint(reactor, '127.0.0.1', port.getHost().port)
-        cf = ClientFactory()
-        cf.protocol = Protocol
-        clientDeferred = cc.connect(cf)
-        def connected(client):
-            client.transport.write("some bytes for you")
-            client.transport.loseConnection()
-        clientDeferred.addCallback(connected)
-
-        self.runReactor(reactor)
-        self.assertEqual(events, ["paused", "resumed", "lost"])
+        pauser, _, _, _ = self.connectProtocols(Pauser, Client, timeout=1)
+        self.assertEqual(pauser.events, ["paused", "resumed", "lost"])
 
 
     def test_doubleHalfClose(self):
@@ -934,9 +928,7 @@ class TCPConnectionTestsBuilder(ReactorBuilder):
 
         This rather obscure case used to fail (see ticket #3037).
         """
-        reactor = self.buildReactor()
-
-        class ListenerProtocol(Protocol):
+        class ListenerProtocol(ConnectableProtocol):
             implements(IHalfCloseableProtocol)
 
             def readConnectionLost(self):
@@ -945,24 +937,12 @@ class TCPConnectionTestsBuilder(ReactorBuilder):
             def writeConnectionLost(self):
                 self.transport.loseConnection()
 
-            def connectionLost(self, reason):
-                reactor.stop()
-
-        factory = ServerFactory()
-        factory.protocol = ListenerProtocol
-        port = reactor.listenTCP(0, factory, interface="127.0.0.1")
-        self.addCleanup(port.stopListening)
-
-        cc = TCP4ClientEndpoint(reactor, '127.0.0.1', port.getHost().port)
-        cf = ClientFactory()
-        cf.protocol = Protocol
-        clientDeferred = cc.connect(cf)
-        def connected(client):
-            client.transport.loseWriteConnection()
-        clientDeferred.addCallback(connected)
+        class Client(ConnectableProtocol):
+            def connectionMade(self):
+                self.transport.loseConnection()
 
         # If test fails, reactor won't stop and we'll hit timeout:
-        self.runReactor(reactor, timeout=1)
+        self.connectProtocols(ListenerProtocol, Client, timeout=1)
 
 
 

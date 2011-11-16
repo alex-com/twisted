@@ -9,7 +9,7 @@ __metaclass__ = type
 
 import signal
 
-from twisted.internet.defer import TimeoutError, Deferred
+from twisted.internet.defer import TimeoutError, Deferred, gatherResults
 from twisted.internet.protocol import ServerFactory, ClientFactory, Protocol
 from twisted.trial.unittest import TestCase, SkipTest
 from twisted.python.runtime import platform
@@ -25,15 +25,17 @@ else:
 
 
 
-class ConnectableProtocl(Protocol):
+class ConnectableProtocol(Protocol):
     """
     A protocol to be used with L{ReactorBuilder.connectProtocols}.
+
+    The reactor can be accessed via C{self.factory.reactor}.
 
     The protocol and its pair should eventually disconnect from each other.
     """
 
     def connectionLost(self, reason):
-        self.factory.result.callback(reason)
+        self.factory.result.callback((self, reason))
 
 
 
@@ -243,16 +245,19 @@ class ReactorBuilder:
             client protocol instance, the server disconnection reason
             C{Failure} and the client disconnection C{Failure}.
         """
+        reactor = self.buildReactor()
+
         sslServerContext, sslClientContext = sslContexts
         serverFactory = ServerFactory()
+        serverFactory.reactor = reactor
         serverFactory.protocol = serverProtocolFactory
         serverFactory.result = Deferred()
-        clientFactory = ServerFactory()
+        clientFactory = ClientFactory()
+        clientFactory.reactor = reactor
         clientFactory.protocol = clientProtocolFactory
         clientFactory.result = Deferred()
 
         # Listen on a port:
-        reactor = self.buildReactor()
         if sslServerContext:
             port = reactor.listenSSL(0, serverFactory, sslServerContext,
                                      interface="127.0.0.1")
@@ -268,12 +273,14 @@ class ReactorBuilder:
 
         # Shutdown reactor once both connections are lost:
         result = []
-        def gotResults((serverProtocol, serverReason),
-                       (clientProtocol, clientReason)):
+        def gotResults(((serverProtocol, serverReason),
+                        (clientProtocol, clientReason))):
             port.stopListening()
             reactor.stop()
             result.extend([serverProtocol, clientProtocol,
                            serverReason, clientReason])
+        gatherResults([serverFactory.result, clientFactory.result]).addCallback(
+            gotResults)
         self.runReactor(reactor, timeout=timeout)
         return tuple(result)
 
