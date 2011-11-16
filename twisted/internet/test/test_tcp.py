@@ -823,7 +823,7 @@ class StopStartReadingProtocol(Protocol):
             self.factory.stop.callback(self.data)
 
 
-class TCPEndpointCreator(EndpointCreator):
+class TCP(EndpointCreator):
     """
     Create TCP endpoints for C{ReactorBuilder.connectProtocols}-based tests.
     """
@@ -925,7 +925,7 @@ class TCPConnectionTestsBuilder(ReactorBuilder):
             def dataReceived(self, bytes):
                 self.events.append("paused")
                 self.transport.pauseProducing()
-                self.factory.reactor.callLater(0, self.resume)
+                self.reactor.callLater(0, self.resume)
 
             def resume(self):
                 self.events.append("resumed")
@@ -941,9 +941,7 @@ class TCPConnectionTestsBuilder(ReactorBuilder):
                 self.transport.write("some bytes for you")
                 self.transport.loseConnection()
 
-        pauser, _, _, _ = self.connectProtocols(Pauser, Client,
-                                                TCPEndpointCreator(),
-                                                timeout=1)
+        pauser, _, _, _ = self.connectProtocols(Pauser, Client, TCP())
         self.assertEqual(pauser.events, ["paused", "resumed", "lost"])
 
 
@@ -969,8 +967,7 @@ class TCPConnectionTestsBuilder(ReactorBuilder):
                 self.transport.loseConnection()
 
         # If test fails, reactor won't stop and we'll hit timeout:
-        self.connectProtocols(ListenerProtocol, Client,
-                              TCPEndpointCreator(), timeout=1)
+        self.connectProtocols(ListenerProtocol, Client, TCP())
 
 
 

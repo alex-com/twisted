@@ -29,13 +29,27 @@ class ConnectableProtocol(Protocol):
     """
     A protocol to be used with L{ReactorBuilder.connectProtocols}.
 
-    The reactor can be accessed via C{self.factory.reactor}.
-
     The protocol and its pair should eventually disconnect from each other.
+
+
+    @ivar reactor: The reactor used in this test.
+
+    @ivar _result: The C{Deferred} which will be fired when the connection is
+        lost.
     """
 
+    def gotOtherProtocol(self, otherProtocol):
+        """
+        Called with the other side of the connection, also a
+        L{ConnectableProtocol}).
+
+        This may be called before or after C{connectionMade}.
+        """
+        self.otherProtocol = otherProtocol
+
+
     def connectionLost(self, reason):
-        self.factory.result.callback((self, reason))
+        self._result.callback((self, reason))
 
 
 
@@ -245,7 +259,7 @@ class ReactorBuilder:
 
 
     def connectProtocols(self, serverProtocolFactory, clientProtocolFactory,
-                         endpointCreator, timeout=None):
+                         endpointCreator, timeout=1):
         """
         Connect two protocols using TCP or SSL and a new reactor instance.
 
@@ -266,13 +280,24 @@ class ReactorBuilder:
             C{Failure} and the client disconnection C{Failure}.
         """
         reactor = self.buildReactor()
+        protocols = []
 
-        serverFactory = ServerFactory()
-        serverFactory.reactor = reactor
+        class Factory(ClientFactory):
+            def buildProtocol(self, addr):
+                p = self.protocol()
+                p.reactor = reactor
+                p._result = self.result
+                # Hook up client and server protocols:
+                protocols.append(p)
+                if len(protocols) == 2:
+                    protocols[0].gotOtherProtocol(protocols[1])
+                    protocols[1].gotOtherProtocol(protocols[0])
+                return p
+
+        serverFactory = Factory()
         serverFactory.protocol = serverProtocolFactory
         serverFactory.result = Deferred()
-        clientFactory = ClientFactory()
-        clientFactory.reactor = reactor
+        clientFactory = Factory()
         clientFactory.protocol = clientProtocolFactory
         clientFactory.result = Deferred()
         port = []
