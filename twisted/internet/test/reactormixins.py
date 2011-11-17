@@ -305,7 +305,8 @@ class ReactorBuilder:
         def gotPort(p):
             # Connect to the port:
             port.append(p)
-            clientEndpoint = endpointCreator.clientEndpoint(reactor, p.getHost())
+            clientEndpoint = endpointCreator.clientEndpoint(
+                reactor, p.getHost())
             clientEndpoint.connect(clientFactory)
 
         # Listen on a port:
@@ -316,12 +317,11 @@ class ReactorBuilder:
         result = []
         def gotResults(((serverProtocol, serverReason),
                         (clientProtocol, clientReason))):
-            port[0].stopListening()
-            reactor.stop()
             result.extend([serverProtocol, clientProtocol,
                            serverReason, clientReason])
+            return port[0].stopListening()
         gatherResults([serverFactory.result, clientFactory.result]).addCallback(
-            gotResults)
+            gotResults).addCallback(lambda ign: reactor.stop())
         self.runReactor(reactor, timeout=timeout)
 
         # Make sure everything was shutdown correctly:
