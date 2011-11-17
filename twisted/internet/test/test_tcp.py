@@ -30,7 +30,6 @@ from twisted.internet.endpoints import TCP4ServerEndpoint, TCP4ClientEndpoint
 from twisted.internet.protocol import ServerFactory, ClientFactory, Protocol
 from twisted.internet.interfaces import (
     IPushProducer, IPullProducer, IHalfCloseableProtocol)
-from twisted.internet.protocol import ClientCreator
 from twisted.internet.tcp import Connection, Server
 
 from twisted.internet.test.connectionmixins import (
@@ -352,10 +351,12 @@ class TCPConnectionTests(TestCase):
         test_tlsAfterStartTLS.skip = "No SSL support available"
 
 
-class TCPClientTestsBuilder(ReactorBuilder, ConnectionTestsMixin):
+
+class TCPCreator(EndpointCreator):
     """
-    Builder defining tests relating to L{IReactorTCP.connectTCP}.
+    Create TCP endpoints for C{ReactorBuilder.connectProtocols}-based tests.
     """
+
     def serverEndpoint(self, reactor):
         """
         Create a L{TCP4ServerEndpoint} listening on localhost on a
@@ -374,6 +375,13 @@ class TCPClientTestsBuilder(ReactorBuilder, ConnectionTestsMixin):
         return TCP4ClientEndpoint(
             reactor, '127.0.0.1', serverAddress.port)
 
+
+
+class TCPClientTestsBuilder(ReactorBuilder, ConnectionTestsMixin):
+    """
+    Builder defining tests relating to L{IReactorTCP.connectTCP}.
+    """
+    endpoints = TCPCreator()
 
     def test_interface(self):
         """
@@ -823,30 +831,6 @@ class StopStartReadingProtocol(Protocol):
             self.factory.stop.callback(self.data)
 
 
-class TCP(EndpointCreator):
-    """
-    Create TCP endpoints for C{ReactorBuilder.connectProtocols}-based tests.
-    """
-
-    def serverEndpoint(self, reactor):
-        """
-        Create a L{TCP4ServerEndpoint} listening on localhost on a
-        TCP/IP-selected port.
-        """
-        return TCP4ServerEndpoint(reactor, 0, interface='127.0.0.1')
-
-
-    def clientEndpoint(self, reactor, serverAddress):
-        """
-        Create a L{TCP4ClientEndpoint} which will connect to localhost
-        on the port given by C{serverAddress}.
-
-        @type serverAddress: L{IPv4Address}
-        """
-        return TCP4ClientEndpoint(
-            reactor, '127.0.0.1', serverAddress.port)
-
-
 
 class TCPConnectionTestsBuilder(ReactorBuilder):
     """
@@ -941,7 +925,7 @@ class TCPConnectionTestsBuilder(ReactorBuilder):
                 self.transport.write("some bytes for you")
                 self.transport.loseConnection()
 
-        pauser, _, _, _ = self.connectProtocols(Pauser, Client, TCP())
+        pauser, _, _, _ = self.connectProtocols(Pauser, Client, TCPCreator())
         self.assertEqual(pauser.events, ["paused", "resumed", "lost"])
 
 
@@ -967,7 +951,7 @@ class TCPConnectionTestsBuilder(ReactorBuilder):
                 self.transport.loseConnection()
 
         # If test fails, reactor won't stop and we'll hit timeout:
-        self.connectProtocols(ListenerProtocol, Client, TCP())
+        self.connectProtocols(ListenerProtocol, Client, TCPCreator())
 
 
 
@@ -1727,6 +1711,6 @@ class AbortConnectionTestCase(ReactorBuilder, AbortConnectionMixin):
     TCP-specific L{AbortConnectionMixin} tests.
     """
 
-    endpoints = TCP()
+    endpoints = TCPCreator()
 
 globals().update(AbortConnectionTestCase.makeTestCaseClasses())

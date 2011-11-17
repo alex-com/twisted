@@ -120,16 +120,20 @@ class StartTLSClientEndpoint(object):
         immediately start TLS on it.  Return a L{Deferred} which fires with the
         protocol instance.
         """
-        d = self.wrapped.connect(factory)
-        def connected(protocol):
-            protocol.transport.startTLS(self.contextFactory)
-            return protocol
-        d.addCallback(connected)
-        return d
+        class WrapperFactory(ServerFactory):
+            def buildProtocol(self_, addr):
+                protocol = factory.buildProtocol(addr)
+                def connectionMade(orig=protocol.connectionMade):
+                    protocol.transport.startTLS(self.contextFactory)
+                    orig()
+                protocol.connectionMade = connectionMade
+                return protocol
+
+        return self.wrapped.connect(WrapperFactory())
 
 
 
-class StartTLS(EndpointCreator, ContextGeneratingMixin):
+class StartTLSCreator(EndpointCreator, ContextGeneratingMixin):
     """
     Create L{ITLSTransport.startTLS} endpoints.
     """
@@ -153,16 +157,16 @@ class StartTLS(EndpointCreator, ContextGeneratingMixin):
 
 
 
-class StartTLSClientTestsMixin(StartTLS, TLSMixin, ReactorBuilder,
-                               ConnectionTestsMixin):
+class StartTLSClientTestsMixin(TLSMixin, ReactorBuilder, ConnectionTestsMixin):
     """
     Tests for TLS connections established using L{ITLSTransport.startTLS} (as
     opposed to L{IReactorSSL.connectSSL} or L{IReactorSSL.listenSSL}).
     """
+    endpoints = StartTLSCreator()
 
 
 
-class SSL(EndpointCreator, ContextGeneratingMixin):
+class SSLCreator(EndpointCreator, ContextGeneratingMixin):
     """
     Create SSL endpoints.
     """
@@ -186,11 +190,12 @@ class SSL(EndpointCreator, ContextGeneratingMixin):
 
 
 
-class SSLClientTestsMixin(TLSMixin, ReactorBuilder, SSL,
-                          ConnectionTestsMixin):
+class SSLClientTestsMixin(TLSMixin, ReactorBuilder, ConnectionTestsMixin,
+                          ContextGeneratingMixin):
     """
     Mixin defining tests relating to L{ITLSTransport}.
     """
+    endpoints = SSLCreator()
 
     def test_disconnectAfterWriteAfterStartTLS(self):
         """
@@ -306,7 +311,7 @@ class AbortSSLConnectionTest(ReactorBuilder, AbortConnectionMixin, ContextGenera
     C{abortConnection} tests using SSL.
     """
     requiredInterfaces = (IReactorSSL,)
-    endpoints = SSL()
+    endpoints = SSLCreator()
 
     def buildReactor(self):
         reactor = ReactorBuilder.buildReactor(self)

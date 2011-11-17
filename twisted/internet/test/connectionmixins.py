@@ -9,14 +9,15 @@ from gc import collect
 from weakref import ref
 
 from twisted.python import context, log
-from twisted.python.reflect import fullyQualifiedName
 from twisted.python.log import ILogContext, msg, err
 from twisted.internet.defer import Deferred, gatherResults
 from twisted.internet.protocol import ServerFactory, Protocol
+from twisted.internet.test.reactormixins import ConnectableProtocol
+
 
 def serverFactoryFor(protocol):
     """
-    Helper function which returns a L{ServerFactory} which will build instances
+   Helper function which returns a L{ServerFactory} which will build instances
     of C{protocol}.
 
     @param protocol: A callable which returns an L{IProtocol} provider to be
@@ -29,28 +30,9 @@ def serverFactoryFor(protocol):
 # ServerFactory is good enough for client endpoints, too.
 factoryFor = serverFactoryFor
 
-class _AcceptOneClient(ServerFactory):
-    """
-    This factory fires a L{Deferred} with a protocol instance shortly after it
-    is constructed (hopefully long enough afterwards so that it has been
-    connected to a transport).
-
-    @ivar reactor: The reactor used to schedule the I{shortly}.
-    @ivar result: A L{Deferred} which will be fired with the protocol instance.
-    """
-    def __init__(self, reactor, result):
-        self.reactor = reactor
-        self.result = result
 
 
-    def buildProtocol(self, addr):
-        protocol = ServerFactory.buildProtocol(self, addr)
-        self.reactor.callLater(0, self.result.callback, protocol)
-        return protocol
-
-
-
-class ClosingLaterProtocol(Protocol):
+class ClosingLaterProtocol(ConnectableProtocol):
     """
     ClosingLaterProtocol exchanges one byte with its peer and then disconnects
     itself.  This is mostly a work-around for the fact that connectionMade is
@@ -82,82 +64,40 @@ class ConnectionTestsMixin(object):
     This mixin defines test methods which should apply to most L{ITransport}
     implementations.
     """
-    def serverEndpoint(self, reactor):
-        """
-        Return an object providing L{IStreamServerEndpoint} for use in creating
-        a server to use to establish the connection type to be tested.
-        """
-        raise NotImplementedError("%s.serverEndpoint() not implemented" % (
-                fullyQualifiedName(self.__class__),))
-
-
-    def clientEndpoint(self, reactor, serverAddress):
-        """
-        Return an object providing L{IStreamClientEndpoint} for use in creating
-        a client to use to establish the connection type to be tested.
-        """
-        raise NotImplementedError("%s.clientEndpoint() not implemented" % (
-                fullyQualifiedName(self.__class__),))
-
-
-    def loopback(self, reactor, clientProtocol, serverProtocol):
-        """
-        Create a loopback connection of the type to be tested, using
-        C{clientProtocol} and C{serverProtocol} to handle each end of the
-        connection.
-
-        @return: A L{Deferred} which fires when the connection is established.
-            The result is a two-tuple of the client protocol instance and
-            server protocol instance.
-        """
-        accepted = Deferred()
-        factory = _AcceptOneClient(reactor, accepted)
-        factory.protocol = serverProtocol
-        server = self.serverEndpoint(reactor)
-        listening = server.listen(factory)
-        def startedListening(port):
-            address = port.getHost()
-            client = self.clientEndpoint(reactor, address)
-            return gatherResults([
-                    client.connect(factoryFor(clientProtocol)), accepted])
-        listening.addCallback(startedListening)
-        return listening
-
+    # This should be a reactormixins.EndpointCreator instance.
+    endpoints = None
 
     def test_logPrefix(self):
         """
         Client and server transports implement L{ILoggingContext.logPrefix} to
         return a message reflecting the protocol they are running.
         """
-        class CustomLogPrefixProtocol(Protocol):
+        class CustomLogPrefixProtocol(ConnectableProtocol):
             def __init__(self, prefix):
                 self._prefix = prefix
-                self.system = Deferred()
+                self.system = None
+
+            def connectionMade(self):
+                self.transport.write("a")
 
             def logPrefix(self):
                 return self._prefix
 
             def dataReceived(self, bytes):
-                self.system.callback(context.get(ILogContext)["system"])
+                self.system = context.get(ILogContext)["system"]
+                self.transport.write("b")
+                # Only close connection if both sides have received data, so
+                # that both sides have system set.
+                if "b" in bytes:
+                    self.transport.loseConnection()
 
-        reactor = self.buildReactor()
-        d = self.loopback(
-            reactor,
+        server, client, _, _ = self.connectProtocols(
+            lambda: CustomLogPrefixProtocol("Custom Server"),
             lambda: CustomLogPrefixProtocol("Custom Client"),
-            lambda: CustomLogPrefixProtocol("Custom Server"))
-        def connected((client, server)):
-            client.transport.write("foo")
-            server.transport.write("bar")
-            return gatherResults([client.system, server.system])
-        d.addCallback(connected)
-
-        def gotSystem((client, server)):
-            self.assertIn("Custom Client", client)
-            self.assertIn("Custom Server", server)
-        d.addCallback(gotSystem)
-        d.addErrback(err)
-        d.addCallback(lambda ignored: reactor.stop())
-        self.runReactor(reactor)
+            self.endpoints,
+            timeout=1)
+        self.assertIn("Custom Client", client.system)
+        self.assertIn("Custom Server", server.system)
 
 
     def test_writeAfterDisconnect(self):
@@ -171,11 +111,11 @@ class ConnectionTestsMixin(object):
 
         serverConnectionLostDeferred = Deferred()
         protocol = lambda: ClosingLaterProtocol(serverConnectionLostDeferred)
-        portDeferred = self.serverEndpoint(reactor).listen(
+        portDeferred = self.endpoints.serverEndpoint(reactor).listen(
             serverFactoryFor(protocol))
         def listening(port):
             msg("Listening on %r" % (port.getHost(),))
-            endpoint = self.clientEndpoint(reactor, port.getHost())
+            endpoint = self.endpoints.clientEndpoint(reactor, port.getHost())
 
             lostConnectionDeferred = Deferred()
             protocol = lambda: ClosingLaterProtocol(
@@ -217,11 +157,11 @@ class ConnectionTestsMixin(object):
         clientRef = ref(clientProtocol)
 
         reactor = self.buildReactor()
-        portDeferred = self.serverEndpoint(reactor).listen(
+        portDeferred = self.endpoints.serverEndpoint(reactor).listen(
             serverFactoryFor(Protocol))
         def listening(port):
             msg("Listening on %r" % (port.getHost(),))
-            endpoint = self.clientEndpoint(reactor, port.getHost())
+            endpoint = self.endpoints.clientEndpoint(reactor, port.getHost())
 
             client = endpoint.connect(factoryFor(lambda: clientProtocol))
             def disconnect(proto):

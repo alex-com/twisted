@@ -10,7 +10,7 @@ __metaclass__ = type
 import signal
 
 from twisted.internet.defer import TimeoutError, Deferred, gatherResults
-from twisted.internet.protocol import ServerFactory, ClientFactory, Protocol
+from twisted.internet.protocol import ClientFactory, Protocol
 from twisted.trial.unittest import TestCase, SkipTest
 from twisted.python.runtime import platform
 from twisted.python.reflect import namedAny, fullyQualifiedName
