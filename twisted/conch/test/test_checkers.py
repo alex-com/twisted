@@ -505,7 +505,7 @@ class UNIXPasswordDatabaseTests(TestCase):
 
         @param d: a L{Deferred} from an L{IChecker.requestAvatarId} method.
         @type d: L{Deferred}
-        @rtype: L{Deferred}
+        @rtype: L{None}
         """
         self.assertRaises(
             checkers.UnauthorizedLogin, self.assertLoggedIn, d, 'bogus value')
