@@ -116,7 +116,7 @@ class UserDatabase(object):
 class _ShadowRecord(object):
     """
     L{_ShadowRecord} holds the shadow user data for a single user in
-    L{ShadowDatabase}.  It corresponds to L{spwd.struct_spwd}.  See that class
+    L{ShadowDatabase}.  It corresponds to C{spwd.struct_spwd}.  See that class
     for attribute documentation.
     """
     def __init__(self, username, password, lastChange, min, max, warn, inact,
@@ -136,7 +136,7 @@ class _ShadowRecord(object):
         return 9
 
 
-    def __getitem__(self, index):
+    def __getitem__(self, index):c
         return (
             self.sp_nam, self.sp_pwd, self.sp_lstchg, self.sp_min,
             self.sp_max, self.sp_warn, self.sp_inact, self.sp_expire,
@@ -147,7 +147,7 @@ class _ShadowRecord(object):
 class ShadowDatabase(object):
     """
     L{ShadowDatabase} holds a shadow user database in memory and makes it
-    available via the same API as L{spwd}.
+    available via the same API as C{spwd}.
 
     @ivar _users: A C{list} of L{_ShadowRecord} instances holding all user data
         added to this database.
