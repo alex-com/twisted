@@ -151,6 +151,8 @@ class ShadowDatabase(object):
 
     @ivar _users: A C{list} of L{_ShadowRecord} instances holding all user data
         added to this database.
+
+    @since: 12.0
     """
     def __init__(self):
         self._users = []
