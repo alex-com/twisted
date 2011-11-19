@@ -136,7 +136,7 @@ class _ShadowRecord(object):
         return 9
 
 
-    def __getitem__(self, index):c
+    def __getitem__(self, index):
         return (
             self.sp_nam, self.sp_pwd, self.sp_lstchg, self.sp_min,
             self.sp_max, self.sp_warn, self.sp_inact, self.sp_expire,
