@@ -9,7 +9,7 @@ from twisted.python.failure import Failure
 from twisted.trial.unittest import TestCase
 from twisted.web.util import (
     _hasSubstring, redirectTo, VariableElement, SourceLineElement,
-    SourceFragmentElement, FrameElement)
+    SourceFragmentElement, FrameElement, StackElement)
 
 from twisted.web.http import FOUND
 from twisted.web.server import Request
@@ -88,15 +88,15 @@ class FailureElementTests(TestCase):
         """
         Create a L{Failure} which can be used by the rendering tests.
         """
-        def lineNumberProbe():
-            pass
-        self.base = lineNumberProbe.func_code.co_firstlineno
+        def lineNumberProbeAlsoBroken():
+            raise Exception("This is a problem")
+        self.base = lineNumberProbeAlsoBroken.func_code.co_firstlineno
 
         try:
-            raise Exception("This is a problem.")
+            lineNumberProbeAlsoBroken()
         except:
-            f = Failure()
-            self.frame = f.frames[0]
+            self.failure = Failure()
+            self.frame = self.failure.frames[-1]
 
 
     def test_variableElement(self):
@@ -144,9 +144,9 @@ class FailureElementTests(TestCase):
             self.frame)
 
         source = [
-            'try:',
-            '    raise Exception("This is a problem.")',
-            'except:',
+            'def lineNumberProbeAlsoBroken():',
+            '    raise Exception("This is a problem")',
+            'self.base = lineNumberProbeAlsoBroken.func_code.co_firstlineno',
         ]
         d = flattenString(None, element)
         d.addCallback(
@@ -154,10 +154,10 @@ class FailureElementTests(TestCase):
             ''.join([
                     '<div class="snippet%sLine"><span>%d</span><span>%s</span>'
                     '</div>' % (
-                        ["", "Highlight"][lineNumber == self.base + 5],
+                        ["", "Highlight"][lineNumber == self.base + 1],
                         lineNumber, " " * 8 + sourceLine)
                     for (lineNumber, sourceLine)
-                    in enumerate(source, self.base + 4)]))
+                    in enumerate(source, self.base)]))
         return d
 
 
@@ -187,7 +187,7 @@ class FailureElementTests(TestCase):
             self.frame)
         d = flattenString(None, element)
         d.addCallback(
-            self.assertEqual, "<span>" + str(self.base + 5) + "</span>")
+            self.assertEqual, "<span>" + str(self.base + 1) + "</span>")
         return d
 
 
@@ -201,7 +201,7 @@ class FailureElementTests(TestCase):
             self.frame)
         d = flattenString(None, element)
         d.addCallback(
-            self.assertEqual, "<span>setUp</span>")
+            self.assertEqual, "<span>lineNumberProbeAlsoBroken</span>")
         return d
 
 
@@ -218,3 +218,20 @@ class FailureElementTests(TestCase):
         self.assertIsInstance(result, SourceFragmentElement)
         self.assertIdentical(result.frame, self.frame)
         self.assertEqual([tag], result.loader.load())
+
+
+    def test_stackElement(self):
+        """
+        The I{frames} renderer of L{StackElement} renders each stack frame in
+        the list of frames used to initialize the L{StackElement}.
+        """
+        element = StackElement(None, self.failure.frames[:2])
+        renderer = element.lookupRenderMethod("frames")
+        tag = tags.div()
+        result = renderer(None, tag)
+        self.assertIsInstance(result, list)
+        self.assertEqual(2, len(result))
+        self.assertIsInstance(result[0], FrameElement)
+        self.assertIdentical(result[0].frame, self.failure.frames[0])
+        self.assertIsInstance(result[1], FrameElement)
+        self.assertIdentical(result[1].frame, self.failure.frames[1])

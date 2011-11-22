@@ -542,6 +542,23 @@ class FrameElement(Element):
         return SourceFragmentElement(TagLoader(tag), self.frame)
 
 
+class StackElement(Element):
+    """
+    L{StackElement} renders an L{IRenderable} which can render a list of frames.
+    """
+    def __init__(self, loader, stackFrames):
+        Element.__init__(self, loader)
+        self.stackFrames = stackFrames
+
+
+    @renderer
+    def frames(self, request, tag):
+        return [
+            FrameElement(TagLoader(tag.clone()), frame)
+            for frame
+            in self.stackFrames]
+
+
 # class FailureElement(object):
 #     """
 #     L{FailureElement} is an L{IRenderable} which can render detailed information
