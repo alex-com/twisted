@@ -496,8 +496,50 @@ class SourceFragmentElement(Element):
 
 class FrameElement(Element):
     """
-    L{FrameElement} is an L{IRenderable} which can render
+    L{FrameElement} is an L{IRenderable} which can render details about one
+    frame from a L{Failure}.
+
+    @ivar frame: A L{Failure}-style frame object for which to load a source line
+        to render.  This is really a tuple holding some information from a frame
+        object.  See L{Failure.frames} for specifics.
     """
+    def __init__(self, loader, frame):
+        Element.__init__(self, loader)
+        self.frame = frame
+
+
+    @renderer
+    def filename(self, request, tag):
+        """
+        Render the name of the file this frame references as a child of C{tag}.
+        """
+        return tag(self.frame[1])
+
+
+    @renderer
+    def lineNumber(self, request, tag):
+        """
+        Render the source line number this frame references as a child of
+        C{tag}.
+        """
+        return tag(str(self.frame[2]))
+
+
+    @renderer
+    def function(self, request, tag):
+        """
+        Render the function name this frame references as a child of C{tag}.
+        """
+        return tag(self.frame[0])
+
+
+    @renderer
+    def source(self, request, tag):
+        """
+        Render the source code surrounding the line this frame references,
+        replacing C{tag}.
+        """
+        return SourceFragmentElement(TagLoader(tag), self.frame)
 
 
 # class FailureElement(object):

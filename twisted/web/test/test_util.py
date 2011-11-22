@@ -9,7 +9,7 @@ from twisted.python.failure import Failure
 from twisted.trial.unittest import TestCase
 from twisted.web.util import (
     _hasSubstring, redirectTo, VariableElement, SourceLineElement,
-    SourceFragmentElement)
+    SourceFragmentElement, FrameElement)
 
 from twisted.web.http import FOUND
 from twisted.web.server import Request
@@ -84,6 +84,21 @@ class FailureElementTests(TestCase):
     Tests for L{FailureElement} and related helpers which can render a
     L{Failure} as an HTML string.
     """
+    def setUp(self):
+        """
+        Create a L{Failure} which can be used by the rendering tests.
+        """
+        def lineNumberProbe():
+            pass
+        self.base = lineNumberProbe.func_code.co_firstlineno
+
+        try:
+            raise Exception("This is a problem.")
+        except:
+            f = Failure()
+            self.frame = f.frames[0]
+
+
     def test_variableElement(self):
         """
         L{VariableElement} renders the name and value of the variable (local,
@@ -121,22 +136,12 @@ class FailureElementTests(TestCase):
         L{SourceFragmentElement} renders source lines at and around the line
         number indicated by a frame object.
         """
-        def lineNumberProbe():
-            pass
-        base = lineNumberProbe.func_code.co_firstlineno
-
-        try:
-            raise Exception("This is a problem.")
-        except:
-            f = Failure()
-            frame = f.frames[0]
-
         element = SourceFragmentElement(
             TagLoader(tags.div(
                     tags.span(render="lineNumber"),
                     tags.span(render="sourceLine"),
                     render="sourceLines")),
-            frame)
+            self.frame)
 
         source = [
             'try:',
@@ -147,10 +152,69 @@ class FailureElementTests(TestCase):
         d.addCallback(
             self.assertEqual,
             ''.join([
-                    '<div class="snippet%sLine"><span>%d</span><span>%s</span></div>' % (
-                        ["", "Highlight"][lineNumber == base + 5],
+                    '<div class="snippet%sLine"><span>%d</span><span>%s</span>'
+                    '</div>' % (
+                        ["", "Highlight"][lineNumber == self.base + 5],
                         lineNumber, " " * 8 + sourceLine)
                     for (lineNumber, sourceLine)
-                    in enumerate(source, base + 4)]))
+                    in enumerate(source, self.base + 4)]))
         return d
 
+
+    def test_frameElementFilename(self):
+        """
+        The I{filename} renderer of L{FrameElement} renders the filename
+        associated with the frame object used to initialize the L{FrameElement}.
+        """
+        element = FrameElement(
+            TagLoader(tags.span(render="filename")),
+            self.frame)
+        d = flattenString(None, element)
+        d.addCallback(
+            # __file__ differs depending on whether an up-to-date .pyc file
+            # already existed.
+            self.assertEqual, "<span>" + __file__.rstrip('c') + "</span>")
+        return d
+
+
+    def test_frameElementLineNumber(self):
+        """
+        The I{lineNumber} renderer of L{FrameElement} renders the line number
+        associated with the frame object used to initialize the L{FrameElement}.
+        """
+        element = FrameElement(
+            TagLoader(tags.span(render="lineNumber")),
+            self.frame)
+        d = flattenString(None, element)
+        d.addCallback(
+            self.assertEqual, "<span>" + str(self.base + 5) + "</span>")
+        return d
+
+
+    def test_frameElementFunction(self):
+        """
+        The I{function} renderer of L{FrameElement} renders the line number
+        associated with the frame object used to initialize the L{FrameElement}.
+        """
+        element = FrameElement(
+            TagLoader(tags.span(render="function")),
+            self.frame)
+        d = flattenString(None, element)
+        d.addCallback(
+            self.assertEqual, "<span>setUp</span>")
+        return d
+
+
+    def test_frameElementSource(self):
+        """
+        The I{source} renderer of L{FrameElement} renders the source code near
+        the source filename/line number associated with the frame object used to
+        initialize the L{FrameElement}.
+        """
+        element = FrameElement(None, self.frame)
+        renderer = element.lookupRenderMethod("source")
+        tag = tags.div()
+        result = renderer(None, tag)
+        self.assertIsInstance(result, SourceFragmentElement)
+        self.assertIdentical(result.frame, self.frame)
+        self.assertEqual([tag], result.loader.load())
