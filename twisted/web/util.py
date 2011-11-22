@@ -553,6 +553,9 @@ class StackElement(Element):
 
     @renderer
     def frames(self, request, tag):
+        """
+        Render the list of frames in this L{StackElement}, replacing C{tag}.
+        """
         return [
             FrameElement(TagLoader(tag.clone()), frame)
             for frame

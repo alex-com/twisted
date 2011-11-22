@@ -230,8 +230,10 @@ class FailureElementTests(TestCase):
         tag = tags.div()
         result = renderer(None, tag)
         self.assertIsInstance(result, list)
-        self.assertEqual(2, len(result))
         self.assertIsInstance(result[0], FrameElement)
         self.assertIdentical(result[0].frame, self.failure.frames[0])
         self.assertIsInstance(result[1], FrameElement)
         self.assertIdentical(result[1].frame, self.failure.frames[1])
+        # They must not share the same tag object.
+        self.assertNotEqual(result[0].loader.load(), result[1].loader.load())
+        self.assertEqual(2, len(result))
