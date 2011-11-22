@@ -11,6 +11,7 @@ import types
 from twisted.python import failure
 
 from twisted.web import html, resource
+from twisted.web.template import TagLoader, Element, renderer
 
 
 def redirectTo(URL, request):
@@ -379,6 +380,151 @@ def formatFailure(myFailure):
                        html.escape(str(myFailure.value))))
 
     return io.getvalue()
+
+
+class VariableElement(Element):
+    """
+    L{VariableElement} is an L{IRenderable} which can render the name and value
+    of a single variable.
+
+    @ivar name: The name of the variable.
+    @ivar value: The value of the variable.
+    """
+    def __init__(self, loader, name, value):
+        Element.__init__(self, loader)
+        self.name = name
+        self.value = value
+
+
+    @renderer
+    def variableName(self, request, tag):
+        """
+        Render the name of this variable as a child of C{tag}.
+        """
+        return tag(self.name)
+
+
+    @renderer
+    def variableValue(self, request, tag):
+        """
+        Render the value of this variable as a child of C{tag}.
+        """
+        return tag(self.value)
+
+
+
+class SourceLineElement(Element):
+    """
+    L{SourceLineElement} is an L{IRenderable} which can render a single line of source code.
+
+    @ivar number: A C{int} giving the line number of the source code to be
+        rendered.
+    @ivar source: A C{str} giving the source code to be rendered.
+    """
+    def __init__(self, loader, number, source):
+        Element.__init__(self, loader)
+        self.number = number
+        self.source = source
+
+
+    @renderer
+    def sourceLine(self, request, tag):
+        """
+        Render the line of source as a child of C{tag}.
+        """
+        return tag(self.source)
+
+
+    @renderer
+    def lineNumber(self, request, tag):
+        """
+        Renderthe line number as a child of C{tag}.
+        """
+        return tag(str(self.number))
+
+
+
+class SourceFragmentElement(Element):
+    """
+    L{SourceFragmentElement} is an L{IRenderable} which can render several lines
+    of source code near the line number of a particular frame object.
+
+    @ivar frame: A L{Failure}-style frame object for which to load a source line
+        to render.  This is really a tuple holding some information from a frame
+        object.  See L{Failure.frames} for specifics.
+    """
+    def __init__(self, loader, frame):
+        Element.__init__(self, loader)
+        self.frame = frame
+
+
+    def _getSourceLines(self):
+        """
+        Find the source line references by C{self.frame} and yield, in source
+        line order, it and the previous and following lines.
+
+        @return: A generator which yields two-tuples.  Each tuple gives a source
+            line number and the contents of that source line.
+        """
+        filename = self.frame[1]
+        lineNumber = self.frame[2]
+        for snipLineNumber in range(lineNumber - 1, lineNumber + 2):
+            yield (snipLineNumber,
+                   linecache.getline(filename, snipLineNumber).rstrip())
+
+
+    @renderer
+    def sourceLines(self, request, tag):
+        """
+        Render the source line indicated by C{self.frame} and several
+        surrounding lines.  The active line will be given a I{class} of
+        C{"snippetHighlightLine"}.  Other lines will be given a I{class} of
+        C{"snippetLine"}.
+        """
+        lines = []
+        for (lineNumber, sourceLine) in self._getSourceLines():
+            newTag = tag.clone()
+            if lineNumber == self.frame[2]:
+                cssClass = "snippetHighlightLine"
+            else:
+                cssClass = "snippetLine"
+            loader = TagLoader(newTag(**{"class": cssClass}))
+            lines.append(SourceLineElement(loader, lineNumber, sourceLine))
+        return lines
+
+
+
+class FrameElement(Element):
+    """
+    L{FrameElement} is an L{IRenderable} which can render
+    """
+
+
+# class FailureElement(object):
+#     """
+#     L{FailureElement} is an L{IRenderable} which can render detailed information
+#     about a L{Failure}.
+
+#     @ivar failure: The L{Failure} instance which will be rendered.
+#     """
+#     def __init__(self, failure):
+#         self.failure = failure
+
+"""
+<html>
+  <body>
+      <!-- Stack trace -->
+      <div class="stackTrace">
+        <!-- Frame -->
+        <div class="location">%s, line %s in <span class="function">%s</span></div>
+          <!-- VariableElement -->
+          <tr class="varRow"><td class="varName">%s</td><td class="varValue">%s</td></tr>
+        <
+    
+  </body>
+</html>
+"""
+
 
 
 
