@@ -562,15 +562,28 @@ class StackElement(Element):
             in self.stackFrames]
 
 
-# class FailureElement(object):
-#     """
-#     L{FailureElement} is an L{IRenderable} which can render detailed information
-#     about a L{Failure}.
+class FailureElement(Element):
+    """
+    L{FailureElement} is an L{IRenderable} which can render detailed information
+    about a L{Failure}.
 
-#     @ivar failure: The L{Failure} instance which will be rendered.
-#     """
-#     def __init__(self, failure):
-#         self.failure = failure
+    @ivar failure: The L{Failure} instance which will be rendered.
+    """
+    def __init__(self, loader, failure):
+        Element.__init__(self, loader)
+        self.failure = failure
+
+
+    @renderer
+    def traceback(self, request, tag):
+        """
+        Render all the frames in the wrapped L{Failure}'s traceback stack,
+        replacing C{tag}.
+        """
+        return StackElement(TagLoader(tag), self.failure.frames)
+
+
+
 
 """
 <html>

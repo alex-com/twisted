@@ -9,7 +9,7 @@ from twisted.python.failure import Failure
 from twisted.trial.unittest import TestCase
 from twisted.web.util import (
     _hasSubstring, redirectTo, VariableElement, SourceLineElement,
-    SourceFragmentElement, FrameElement, StackElement)
+    SourceFragmentElement, FrameElement, StackElement, FailureElement)
 
 from twisted.web.http import FOUND
 from twisted.web.server import Request
@@ -237,3 +237,18 @@ class FailureElementTests(TestCase):
         # They must not share the same tag object.
         self.assertNotEqual(result[0].loader.load(), result[1].loader.load())
         self.assertEqual(2, len(result))
+
+
+    def test_failureElementTraceback(self):
+        """
+        The I{traceback} renderer of L{FailureElement} renders the failure's
+        stack frames using L{StackElement}.
+        """
+        element = FailureElement(None, self.failure)
+        renderer = element.lookupRenderMethod("traceback")
+        tag = tags.div()
+        result = renderer(None, tag)
+        self.assertIsInstance(result, StackElement)
+        self.assertIdentical(result.stackFrames, self.failure.frames)
+        self.assertEqual([tag], result.loader.load())
+
