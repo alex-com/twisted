@@ -229,37 +229,6 @@ def htmlIndent(snippetLine):
                    '\t', '&nbsp; &nbsp; &nbsp; &nbsp; ')
     return ret
 
-class VariableElement(Element):
-    """
-    L{VariableElement} is an L{IRenderable} which can render the name and value
-    of a single variable.
-
-    @ivar name: The name of the variable.
-    @ivar value: The value of the variable.
-    """
-    def __init__(self, loader, name, value):
-        Element.__init__(self, loader)
-        self.name = name
-        self.value = value
-
-
-    @renderer
-    def variableName(self, request, tag):
-        """
-        Render the name of this variable as a child of C{tag}.
-        """
-        return tag(self.name)
-
-
-    @renderer
-    def variableValue(self, request, tag):
-        """
-        Render the value of this variable as a child of C{tag}.
-        """
-        return tag(repr(self.value))
-
-
-
 class SourceLineElement(Element):
     """
     L{SourceLineElement} is an L{IRenderable} which can render a single line of
@@ -340,30 +309,6 @@ class SourceFragmentElement(Element):
             lines.append(SourceLineElement(loader, lineNumber, sourceLine))
         return lines
 
-
-
-class VariablesElement(Element):
-    """
-    L{VariablesElement} is an L{IRenderable} which can render a number of
-    variable names and values taken from a local or global scope.
-
-    @ivar vars: An iterable of two-tuples of variable names and values.
-    """
-    def __init__(self, loader, vars):
-        Element.__init__(self, loader)
-        self.vars = vars
-
-
-    @renderer
-    def variables(self, request, tag):
-        """
-        Render each of the variables in C{self.vars}, replacing tag.
-        """
-        return [
-            VariableElement(TagLoader(tag.clone()), name, value)
-            for (name, value)
-            in self.vars
-            ]
 
 
 class FrameElement(Element):

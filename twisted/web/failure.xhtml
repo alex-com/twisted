@@ -47,28 +47,6 @@
     span.code {
       font-family: "Courier New", courier, monotype;
     }
-
-    div.variables {
-      margin-bottom: 0.5em;
-    }
-
-    table.variables {
-      border-collapse: collapse;
-      margin-left: 1em;
-    }
-
-    td.varName {
-      vertical-align: top;
-      font-weight: bold;
-      padding-left: 0.5em;
-      padding-right: 0.5em;
-    }
-
-    td.varValue {
-      padding-left: 0.5em;
-      padding-right: 0.5em;
-    }
-
   </style>
 
   <div class="error">
@@ -84,24 +62,6 @@
           <span class="lineno" t:render="lineNumber" />
           <code class="code" t:render="sourceLine" />
         </div>
-      </div>
-      <div class="variables" t:render="locals">
-        <span>Local Variables</span>
-        <table class="variables" t:render="variables">
-          <tr>
-            <td class="varName" t:render="variableName" />
-            <td class="varValue" t:render="variableValue" />
-          </tr>
-        </table>
-      </div>
-      <div class="variables" t:render="globals">
-        <span>Global Variables</span>
-        <table class="variables" t:render="variables">
-          <tr>
-            <td class="varName" t:render="variableName" />
-            <td class="varValue" t:render="variableValue" />
-          </tr>
-        </table>
       </div>
     </div>
   </div>

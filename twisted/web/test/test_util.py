@@ -8,8 +8,8 @@ Tests for L{twisted.web.util}.
 from twisted.python.failure import Failure
 from twisted.trial.unittest import TestCase
 from twisted.web.util import (
-    _hasSubstring, redirectTo, VariableElement, SourceLineElement,
-    SourceFragmentElement, VariablesElement, FrameElement, StackElement,
+    _hasSubstring, redirectTo, SourceLineElement,
+    SourceFragmentElement, FrameElement, StackElement,
     FailureElement)
 
 from twisted.web.http import FOUND
@@ -100,23 +100,6 @@ class FailureElementTests(TestCase):
         except:
             self.failure = Failure(captureVars=True)
             self.frame = self.failure.frames[-1]
-
-
-    def test_variableElement(self):
-        """
-        L{VariableElement} renders the name and value of the variable (local,
-        global, or attribute) it wraps.
-        """
-        element = VariableElement(
-            TagLoader(tags.div(
-                    tags.span(render="variableName"),
-                    tags.span(render="variableValue"))),
-            "spam", ["eggs"])
-        d = flattenString(None, element)
-        d.addCallback(
-            self.assertEqual,
-            "<div><span>spam</span><span>['eggs']</span></div>")
-        return d
 
 
     def test_sourceLineElement(self):
@@ -222,57 +205,6 @@ class FailureElementTests(TestCase):
         self.assertIsInstance(result, SourceFragmentElement)
         self.assertIdentical(result.frame, self.frame)
         self.assertEqual([tag], result.loader.load())
-
-
-    def test_frameElementLocals(self):
-        """
-        The I{locals} renderer of L{FrameElement} renders the names and values
-        of nearby local variables from the frame object used to initialize the
-        L{FrameElement}.
-        """
-        element = FrameElement(None, self.frame)
-        renderer = element.lookupRenderMethod("locals")
-        tag = tags.div()
-        result = renderer(None, tag)
-        self.assertIsInstance(result, VariablesElement)
-        self.assertIdentical(result.vars, self.frame[3])
-        self.assertEqual([tag], result.loader.load())
-
-
-    def test_frameElementGlobals(self):
-        """
-        The I{globals} renderer of L{FrameElement} renders the names and values
-        of nearby global variables from the frame object used to initialize the
-        L{FrameElement}.
-        """
-        element = FrameElement(None, self.frame)
-        renderer = element.lookupRenderMethod("globals")
-        tag = tags.div()
-        result = renderer(None, tag)
-        self.assertIsInstance(result, VariablesElement)
-        self.assertIdentical(result.vars, self.frame[4])
-        self.assertEqual([tag], result.loader.load())
-
-
-    def test_variablesElementVariables(self):
-        """
-        The I{variables} renderer of L{VariablesElement} renders the name and
-        values of all the variables used to initialize it.
-        """
-        element = VariablesElement(None, [("spam", "eggs"), ("foo", "bar")])
-        renderer = element.lookupRenderMethod("variables")
-        tag = tags.div()
-        result = renderer(None, tag)
-        self.assertIsInstance(result, list)
-        self.assertIsInstance(result[0], VariableElement)
-        self.assertEqual(result[0].name, "spam")
-        self.assertEqual(result[0].value, "eggs")
-        self.assertIsInstance(result[1], VariableElement)
-        self.assertEqual(result[1].name, "foo")
-        self.assertEqual(result[1].value, "bar")
-        # They must not share the same tag object.
-        self.assertNotEqual(result[0].loader.load(), result[1].loader.load())
-        self.assertEqual(2, len(result))
 
 
     def test_stackElement(self):
