@@ -107,34 +107,6 @@ class DeferredResource(resource.Resource):
 
 stylesheet = """
 <style type="text/css">
-    div.firstFrame {
-      padding: 1em;
-      background: white;
-      border-top: thin black dashed;
-      border-bottom: thin black dashed;
-    }
-
-    table.variables {
-      border-collapse: collapse;
-      margin-left: 1em;
-    }
-
-    td.varName {
-      vertical-align: top;
-      font-weight: bold;
-      padding-left: 0.5em;
-      padding-right: 0.5em;
-    }
-
-    td.varValue {
-      padding-left: 0.5em;
-      padding-right: 0.5em;
-    }
-
-    div.variables {
-      margin-bottom: 0.5em;
-    }
-
     span.heading {
       font-weight: bold;
     }
@@ -284,7 +256,7 @@ class VariableElement(Element):
         """
         Render the value of this variable as a child of C{tag}.
         """
-        return tag(self.value)
+        return tag(repr(self.value))
 
 
 
@@ -370,6 +342,30 @@ class SourceFragmentElement(Element):
 
 
 
+class VariablesElement(Element):
+    """
+    L{VariablesElement} is an L{IRenderable} which can render a number of
+    variable names and values taken from a local or global scope.
+
+    @ivar vars: An iterable of two-tuples of variable names and values.
+    """
+    def __init__(self, loader, vars):
+        Element.__init__(self, loader)
+        self.vars = vars
+
+
+    @renderer
+    def variables(self, request, tag):
+        """
+        Render each of the variables in C{self.vars}, replacing tag.
+        """
+        return [
+            VariableElement(TagLoader(tag.clone()), name, value)
+            for (name, value)
+            in self.vars
+            ]
+
+
 class FrameElement(Element):
     """
     L{FrameElement} is an L{IRenderable} which can render details about one
@@ -416,6 +412,23 @@ class FrameElement(Element):
         replacing C{tag}.
         """
         return SourceFragmentElement(TagLoader(tag), self.frame)
+
+
+    @renderer
+    def locals(self, request, tag):
+        """
+        Render the local variables this frame references, replacing C{tag}.
+        """
+        return VariablesElement(TagLoader(tag), self.frame[3])
+
+
+    @renderer
+    def globals(self, request, tag):
+        """
+        Render the global variables this frame references, replacing C{tag}.
+        """
+        return VariablesElement(TagLoader(tag), self.frame[4])
+
 
 
 class StackElement(Element):

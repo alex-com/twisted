@@ -131,7 +131,7 @@ class Request(pb.Copyable, http.Request, components.Componentized):
             resrc = self.site.getResourceFor(self)
             self.render(resrc)
         except:
-            self.processingFailed(failure.Failure())
+            self.processingFailed(failure.Failure(captureVars=True))
 
     def write(self, data):
         """
