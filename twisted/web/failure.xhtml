@@ -1,0 +1,17 @@
+<div xmlns:t="http://twistedmatrix.com/ns/twisted.web.template/0.1">
+  <div>
+    <span t:render="type">Type: </span>
+    <span t:render="value">Value: </span>
+  </div>
+  <div t:render="traceback">
+    <div t:render="frames">
+      <span t:render="filename" />:<span t:render="lineNumber" />, <span t:render="function" />
+      <div t:render="source">
+        <div t:render="sourceLines">
+          <span t:render="lineNumber" />
+          <code t:render="sourceLine" />
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -244,7 +244,7 @@ class FailureElementTests(TestCase):
         The I{traceback} renderer of L{FailureElement} renders the failure's
         stack frames using L{StackElement}.
         """
-        element = FailureElement(None, self.failure)
+        element = FailureElement(self.failure)
         renderer = element.lookupRenderMethod("traceback")
         tag = tags.div()
         result = renderer(None, tag)
@@ -252,3 +252,26 @@ class FailureElementTests(TestCase):
         self.assertIdentical(result.stackFrames, self.failure.frames)
         self.assertEqual([tag], result.loader.load())
 
+
+    def test_failureElementType(self):
+        """
+        The I{type} renderer of L{FailureElement} renders the failure's
+        exception type.
+        """
+        element = FailureElement(
+            self.failure, TagLoader(tags.span(render="type")))
+        d = flattenString(None, element)
+        d.addCallback(
+            self.assertEqual, "<span>exceptions.Exception</span>")
+
+
+    def test_failureElementValue(self):
+        """
+        The I{value} renderer of L{FailureElement} renders the value's exception
+        value.
+        """
+        element = FailureElement(
+            self.failure, TagLoader(tags.span(render="value")))
+        d = flattenString(None, element)
+        d.addCallback(
+            self.assertEqual, '<span>This is a problem</span>')

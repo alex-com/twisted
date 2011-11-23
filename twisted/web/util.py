@@ -9,9 +9,12 @@ import string, re
 import types
 
 from twisted.python import failure
+from twisted.python.filepath import FilePath
+from twisted.python.reflect import fullyQualifiedName
 
 from twisted.web import html, resource
-from twisted.web.template import TagLoader, Element, renderer
+from twisted.web.template import (
+    TagLoader, XMLFile, Element, renderer, flattenString)
 
 
 def redirectTo(URL, request):
@@ -295,93 +298,6 @@ def htmlIndent(snippetLine):
                    '\t', '&nbsp; &nbsp; &nbsp; &nbsp; ')
     return ret
 
-def formatFailure(myFailure):
-
-    exceptionHTML = """
-<p class="error">%s: %s</p>
-"""
-
-    frameHTML = """
-<div class="location">%s, line %s in <span class="function">%s</span></div>
-"""
-
-    snippetLineHTML = """
-<div class="snippetLine"><span class="lineno">%s</span><span class="code">%s</span></div>
-"""
-
-    snippetHighlightLineHTML = """
-<div class="snippetHighlightLine"><span class="lineno">%s</span><span class="code">%s</span></div>
-"""
-
-    variableHTML = """
-<tr class="varRow"><td class="varName">%s</td><td class="varValue">%s</td></tr>
-"""
-
-    if not isinstance(myFailure, failure.Failure):
-        return html.PRE(str(myFailure))
-    io = StringIO()
-    w = io.write
-    w(stylesheet)
-    w('<a href="#tbend">')
-    w(exceptionHTML % (html.escape(str(myFailure.type)),
-                       html.escape(str(myFailure.value))))
-    w('</a>')
-    w('<div class="stackTrace">')
-    first = 1
-    for method, filename, lineno, localVars, globalVars in myFailure.frames:
-        if filename == '<string>':
-            continue
-        if first:
-            w('<div class="firstFrame">')
-            first = 0
-        else:
-            w('<div class="frame">')
-        w(frameHTML % (filename, lineno, method))
-
-        w('<div class="snippet">')
-        textSnippet = ''
-        for snipLineNo in range(lineno-2, lineno+2):
-            snipLine = linecache.getline(filename, snipLineNo)
-            textSnippet += snipLine
-            snipLine = htmlIndent(snipLine)
-            if snipLineNo == lineno:
-                w(snippetHighlightLineHTML % (snipLineNo, snipLine))
-            else:
-                w(snippetLineHTML % (snipLineNo, snipLine))
-        w('</div>')
-
-        # Instance variables
-        for name, var in localVars:
-            if name == 'self' and hasattr(var, '__dict__'):
-                usedVars = [ (key, value) for (key, value) in var.__dict__.items()
-                             if _hasSubstring('self.' + key, textSnippet) ]
-                if usedVars:
-                    w('<div class="variables"><b>Self</b>')
-                    w('<table class="variables">')
-                    for key, value in usedVars:
-                        w(variableHTML % (key, htmlrepr(value)))
-                    w('</table></div>')
-                break
-
-        # Local and global vars
-        for nm, varList in ('Locals', localVars), ('Globals', globalVars):
-            usedVars = [ (name, var) for (name, var) in varList
-                         if _hasSubstring(name, textSnippet) ]
-            if usedVars:
-                w('<div class="variables"><b>%s</b><table class="variables">' % nm)
-                for name, var in usedVars:
-                    w(variableHTML % (name, htmlrepr(var)))
-                w('</table></div>')
-
-        w('</div>') # frame
-    w('</div>') # stacktrace
-    w('<a name="tbend"> </a>')
-    w(exceptionHTML % (html.escape(str(myFailure.type)),
-                       html.escape(str(myFailure.value))))
-
-    return io.getvalue()
-
-
 class VariableElement(Element):
     """
     L{VariableElement} is an L{IRenderable} which can render the name and value
@@ -415,7 +331,8 @@ class VariableElement(Element):
 
 class SourceLineElement(Element):
     """
-    L{SourceLineElement} is an L{IRenderable} which can render a single line of source code.
+    L{SourceLineElement} is an L{IRenderable} which can render a single line of
+    source code.
 
     @ivar number: A C{int} giving the line number of the source code to be
         rendered.
@@ -569,9 +486,27 @@ class FailureElement(Element):
 
     @ivar failure: The L{Failure} instance which will be rendered.
     """
-    def __init__(self, loader, failure):
+    loader = XMLFile(FilePath(__file__).sibling('failure.xhtml').open())
+
+    def __init__(self, failure, loader=None):
         Element.__init__(self, loader)
         self.failure = failure
+
+
+    @renderer
+    def type(self, request, tag):
+        """
+        Render the exception type as a child of C{tag}.
+        """
+        return tag(fullyQualifiedName(self.failure.type))
+
+
+    @renderer
+    def value(self, request, tag):
+        """
+        Render the exception value as a child of C{tag}.
+        """
+        return tag(str(self.failure.value))
 
 
     @renderer
@@ -584,23 +519,96 @@ class FailureElement(Element):
 
 
 
+def formatFailure(myFailure):
+    result = []
+    flattenString(None, FailureElement(myFailure)).addBoth(result.append)
+    if isinstance(result[0], str):
+        return result[0]
+    result[0].raiseException()
 
-"""
-<html>
-  <body>
-      <!-- Stack trace -->
-      <div class="stackTrace">
-        <!-- Frame -->
-        <div class="location">%s, line %s in <span class="function">%s</span></div>
-          <!-- VariableElement -->
-          <tr class="varRow"><td class="varName">%s</td><td class="varValue">%s</td></tr>
-        <
-    
-  </body>
-</html>
+    exceptionHTML = """
+<p class="error">%s: %s</p>
 """
 
+    frameHTML = """
+<div class="location">%s, line %s in <span class="function">%s</span></div>
+"""
 
+    snippetLineHTML = """
+<div class="snippetLine"><span class="lineno">%s</span><span class="code">%s</span></div>
+"""
+
+    snippetHighlightLineHTML = """
+<div class="snippetHighlightLine"><span class="lineno">%s</span><span class="code">%s</span></div>
+"""
+
+    variableHTML = """
+<tr class="varRow"><td class="varName">%s</td><td class="varValue">%s</td></tr>
+"""
+
+    if not isinstance(myFailure, failure.Failure):
+        return html.PRE(str(myFailure))
+    io = StringIO()
+    w = io.write
+    w(stylesheet)
+    w('<a href="#tbend">')
+    w(exceptionHTML % (html.escape(str(myFailure.type)),
+                       html.escape(str(myFailure.value))))
+    w('</a>')
+    w('<div class="stackTrace">')
+    first = 1
+    for method, filename, lineno, localVars, globalVars in myFailure.frames:
+        if filename == '<string>':
+            continue
+        if first:
+            w('<div class="firstFrame">')
+            first = 0
+        else:
+            w('<div class="frame">')
+        w(frameHTML % (filename, lineno, method))
+
+        w('<div class="snippet">')
+        textSnippet = ''
+        for snipLineNo in range(lineno-2, lineno+2):
+            snipLine = linecache.getline(filename, snipLineNo)
+            textSnippet += snipLine
+            snipLine = htmlIndent(snipLine)
+            if snipLineNo == lineno:
+                w(snippetHighlightLineHTML % (snipLineNo, snipLine))
+            else:
+                w(snippetLineHTML % (snipLineNo, snipLine))
+        w('</div>')
+
+        # Instance variables
+        for name, var in localVars:
+            if name == 'self' and hasattr(var, '__dict__'):
+                usedVars = [ (key, value) for (key, value) in var.__dict__.items()
+                             if _hasSubstring('self.' + key, textSnippet) ]
+                if usedVars:
+                    w('<div class="variables"><b>Self</b>')
+                    w('<table class="variables">')
+                    for key, value in usedVars:
+                        w(variableHTML % (key, htmlrepr(value)))
+                    w('</table></div>')
+                break
+
+        # Local and global vars
+        for nm, varList in ('Locals', localVars), ('Globals', globalVars):
+            usedVars = [ (name, var) for (name, var) in varList
+                         if _hasSubstring(name, textSnippet) ]
+            if usedVars:
+                w('<div class="variables"><b>%s</b><table class="variables">' % nm)
+                for name, var in usedVars:
+                    w(variableHTML % (name, htmlrepr(var)))
+                w('</table></div>')
+
+        w('</div>') # frame
+    w('</div>') # stacktrace
+    w('<a name="tbend"> </a>')
+    w(exceptionHTML % (html.escape(str(myFailure.type)),
+                       html.escape(str(myFailure.value))))
+
+    return io.getvalue()
 
 
 def _hasSubstring(key, text):
