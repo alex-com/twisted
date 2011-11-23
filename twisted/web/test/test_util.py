@@ -112,9 +112,11 @@ class FailureElementTests(TestCase):
                     tags.span(render="sourceLine"))),
             50, "    print 'hello'")
         d = flattenString(None, element)
+        expected = (
+            u"<div><span>50</span><span>"
+            u" \N{NO-BREAK SPACE} \N{NO-BREAK SPACE}print 'hello'</span></div>")
         d.addCallback(
-            self.assertEqual,
-            "<div><span>50</span><span>    print 'hello'</span></div>")
+            self.assertEqual, expected.encode('utf-8'))
         return d
 
 
@@ -131,9 +133,12 @@ class FailureElementTests(TestCase):
             self.frame)
 
         source = [
-            '    message = "This is a problem"',
-            '    raise Exception(message)',
-            '# Figure out the line number from which the exception will be raised.',
+            u' \N{NO-BREAK SPACE} \N{NO-BREAK SPACE}message = '
+            u'"This is a problem"',
+
+            u' \N{NO-BREAK SPACE} \N{NO-BREAK SPACE}raise Exception(message)',
+            u'# Figure out the line number from which the exception will be '
+            u'raised.',
         ]
         d = flattenString(None, element)
         d.addCallback(
@@ -142,7 +147,9 @@ class FailureElementTests(TestCase):
                     '<div class="snippet%sLine"><span>%d</span><span>%s</span>'
                     '</div>' % (
                         ["", "Highlight"][lineNumber == self.base + 1],
-                        lineNumber, " " * 8 + sourceLine)
+                        lineNumber,
+                        (u" \N{NO-BREAK SPACE}" * 4 + sourceLine).encode(
+                            'utf-8'))
                     for (lineNumber, sourceLine)
                     in enumerate(source, self.base)]))
         return d

@@ -249,7 +249,7 @@ class SourceLineElement(Element):
         """
         Render the line of source as a child of C{tag}.
         """
-        return tag(self.source)
+        return tag(self.source.replace('  ', u' \N{NO-BREAK SPACE}'))
 
 
     @renderer
