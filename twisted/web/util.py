@@ -107,52 +107,11 @@ class DeferredResource(resource.Resource):
 
 stylesheet = """
 <style type="text/css">
-    p.error {
-      color: red;
-      font-family: Verdana, Arial, helvetica, sans-serif;
-      font-weight: bold;
-    }
-
-    div {
-      font-family: Verdana, Arial, helvetica, sans-serif;
-    }
-
-    div.stackTrace {
-    }
-
-    div.frame {
-      padding: 1em;
-      background: white;
-      border-bottom: thin black dashed;
-    }
-
     div.firstFrame {
       padding: 1em;
       background: white;
       border-top: thin black dashed;
       border-bottom: thin black dashed;
-    }
-
-    div.location {
-    }
-
-    div.snippet {
-      margin-bottom: 0.5em;
-      margin-left: 1em;
-      background: #FFFFDD;
-    }
-
-    div.snippetHighlightLine {
-      color: red;
-    }
-
-    span.code {
-      font-family: "Courier New", courier, monotype;
-    }
-
-    span.function {
-      font-weight: bold;
-      font-family: "Courier New", courier, monotype;
     }
 
     table.variables {
@@ -525,22 +484,6 @@ def formatFailure(myFailure):
     if isinstance(result[0], str):
         return result[0]
     result[0].raiseException()
-
-    exceptionHTML = """
-<p class="error">%s: %s</p>
-"""
-
-    frameHTML = """
-<div class="location">%s, line %s in <span class="function">%s</span></div>
-"""
-
-    snippetLineHTML = """
-<div class="snippetLine"><span class="lineno">%s</span><span class="code">%s</span></div>
-"""
-
-    snippetHighlightLineHTML = """
-<div class="snippetHighlightLine"><span class="lineno">%s</span><span class="code">%s</span></div>
-"""
 
     variableHTML = """
 <tr class="varRow"><td class="varName">%s</td><td class="varValue">%s</td></tr>
